@@ -1,0 +1,18 @@
+import { pgTable, serial, integer, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { usersTable } from "./users";
+import { questionsTable } from "./questions";
+
+export const notesTable = pgTable("notes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  questionId: integer("question_id").notNull().references(() => questionsTable.id),
+  noteText: text("note_text").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => [unique().on(t.userId, t.questionId)]);
+
+export const insertNoteSchema = createInsertSchema(notesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertNote = z.infer<typeof insertNoteSchema>;
+export type Note = typeof notesTable.$inferSelect;

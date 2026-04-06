@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600">
+  <!-- White hoist stripe (1/4 width) -->
+  <rect width="225" height="600" fill="white"/>
+  <!-- Dark green field -->
+  <rect x="225" width="675" height="600" fill="#01411C"/>
+  <!-- White crescent moon -->
+  <circle cx="520" cy="300" r="135" fill="white"/>
+  <circle cx="565" cy="265" r="110" fill="#01411C"/>
+  <!-- White star (5-pointed) -->
+  <polygon points="645,185 657,225 697,225 664,248 677,288 645,266 613,288 626,248 593,225 633,225"
+    fill="white" transform="rotate(-20, 645, 236)"/>
+</svg>

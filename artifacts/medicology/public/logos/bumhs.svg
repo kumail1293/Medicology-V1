@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <circle cx="40" cy="40" r="38" fill="#002868"/>
+  <circle cx="40" cy="40" r="38" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2.5"/>
+  <text x="40" y="43" font-family="'Segoe UI',Arial,sans-serif" font-size="22" font-weight="700"
+        fill="white" text-anchor="middle" dominant-baseline="middle">BUMHS</text>
+  <text x="40" y="62" font-family="'Segoe UI',Arial,sans-serif" font-size="8" font-weight="500"
+        fill="rgba(255,255,255,0.75)" text-anchor="middle" dominant-baseline="middle">KARACHI</text>
+</svg>

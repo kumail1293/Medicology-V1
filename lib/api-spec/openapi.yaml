@@ -1,0 +1,1596 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Medicology QBank API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: questions
+    description: Question bank
+  - name: practice
+    description: Practice sessions
+  - name: progress
+    description: User progress and analytics
+  - name: bookmarks
+    description: Bookmarks
+  - name: notes
+    description: Notes
+  - name: ai
+    description: AI explanations
+  - name: admin
+    description: Admin operations
+  - name: daily
+    description: Daily challenge
+  - name: storage
+    description: File storage
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: registerUser
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: loginUser
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    put:
+      operationId: updateCurrentUser
+      tags: [auth]
+      summary: Update own profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /questions:
+    get:
+      operationId: getQuestions
+      tags: [questions]
+      summary: Get questions with filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: subject
+          in: query
+          schema:
+            type: string
+        - name: system
+          in: query
+          schema:
+            type: string
+        - name: topic
+          in: query
+          schema:
+            type: string
+        - name: subtopic
+          in: query
+          schema:
+            type: string
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+        - name: university_tag
+          in: query
+          schema:
+            type: string
+        - name: exam_type
+          in: query
+          schema:
+            type: string
+            enum: [annual, modular]
+        - name: tags
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: random
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionsResponse"
+
+  /questions/filters:
+    get:
+      operationId: getQuestionFilters
+      tags: [questions]
+      summary: Get available filter options
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionFilters"
+
+  /questions/{id}:
+    get:
+      operationId: getQuestion
+      tags: [questions]
+      summary: Get a single question
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+
+  /practice/submit:
+    post:
+      operationId: submitAnswer
+      tags: [practice]
+      summary: Submit an answer for a question
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitAnswerRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmitAnswerResponse"
+
+  /practice/wrong:
+    get:
+      operationId: getWrongQuestions
+      tags: [practice]
+      summary: Get questions user answered wrong
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: subject
+          in: query
+          schema:
+            type: string
+        - name: topic
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionsResponse"
+
+  /progress/analytics:
+    get:
+      operationId: getAnalytics
+      tags: [progress]
+      summary: Get user analytics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analytics"
+
+  /progress/history:
+    get:
+      operationId: getProgressHistory
+      tags: [progress]
+      summary: Get user progress history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProgressRecord"
+
+  /bookmarks:
+    get:
+      operationId: getBookmarks
+      tags: [bookmarks]
+      summary: Get user bookmarks
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionsResponse"
+    post:
+      operationId: addBookmark
+      tags: [bookmarks]
+      summary: Add a bookmark
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookmarkRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /bookmarks/{questionId}:
+    delete:
+      operationId: removeBookmark
+      tags: [bookmarks]
+      summary: Remove a bookmark
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /notes:
+    get:
+      operationId: getNotes
+      tags: [notes]
+      summary: Get user notes
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Note"
+
+  /notes/{questionId}:
+    get:
+      operationId: getNoteForQuestion
+      tags: [notes]
+      summary: Get note for a question
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+    put:
+      operationId: upsertNote
+      tags: [notes]
+      summary: Create or update a note
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+
+  /ai/explain:
+    post:
+      operationId: explainQuestion
+      tags: [ai]
+      summary: Get AI explanation for a question
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExplainRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplainResponse"
+
+  /daily/challenge:
+    get:
+      operationId: getDailyChallenge
+      tags: [daily]
+      summary: Get today's daily challenge questions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyChallengeResponse"
+
+  /daily/complete:
+    post:
+      operationId: completeDailyChallenge
+      tags: [daily]
+      summary: Mark daily challenge as completed
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteDailyRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/questions:
+    get:
+      operationId: adminGetQuestions
+      tags: [admin]
+      summary: Admin - Get all questions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionsResponse"
+    post:
+      operationId: adminCreateQuestion
+      tags: [admin]
+      summary: Admin - Create a question
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuestionRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+
+  /admin/questions/{id}:
+    put:
+      operationId: adminUpdateQuestion
+      tags: [admin]
+      summary: Admin - Update a question
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuestionRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+    delete:
+      operationId: adminDeleteQuestion
+      tags: [admin]
+      summary: Admin - Delete a question
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/questions/bulk:
+    post:
+      operationId: adminBulkUpload
+      tags: [admin]
+      summary: Admin - Bulk upload questions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkUploadRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkUploadResponse"
+
+  /admin/stats:
+    get:
+      operationId: adminGetStats
+      tags: [admin]
+      summary: Admin - Platform statistics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      operationId: adminGetUsers
+      tags: [admin]
+      summary: Admin - Get all users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUsersResponse"
+    post:
+      operationId: adminCreateUser
+      tags: [admin]
+      summary: Admin - Create a member
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCreateMemberBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{id}:
+    put:
+      operationId: adminUpdateUser
+      tags: [admin]
+      summary: Admin - Update user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateUserBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+    delete:
+      operationId: adminDeleteUser
+      tags: [admin]
+      summary: Admin - Delete user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{id}/reset-password:
+    post:
+      operationId: adminResetUserPassword
+      tags: [admin]
+      summary: Admin - Reset user password
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /announcements/active:
+    get:
+      operationId: getActiveAnnouncements
+      tags: [admin]
+      summary: Get active announcements for current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnouncementsResponse"
+
+  /announcements/admin:
+    get:
+      operationId: adminGetAnnouncements
+      tags: [admin]
+      summary: Admin - Get all announcements
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnouncementsResponse"
+
+  /announcements:
+    post:
+      operationId: adminCreateAnnouncement
+      tags: [admin]
+      summary: Admin - Create announcement
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnouncementBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+
+  /announcements/{id}:
+    put:
+      operationId: adminUpdateAnnouncement
+      tags: [admin]
+      summary: Admin - Update announcement
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnouncementBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+    delete:
+      operationId: adminDeleteAnnouncement
+      tags: [admin]
+      summary: Admin - Delete announcement
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [admin]
+      summary: Request a presigned upload URL
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
+
+  /admin/flags:
+    get:
+      operationId: adminGetFlags
+      tags: [admin]
+      summary: Admin - Get all question flags
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminFlagsResponse"
+
+  /admin/flags/{id}:
+    delete:
+      operationId: adminDeleteFlag
+      tags: [admin]
+      summary: Admin - Delete a question flag
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error]
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required: [success]
+
+    RegisterRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        college:
+          type: string
+        university:
+          type: string
+        year:
+          type: integer
+          minimum: 1
+          maximum: 6
+      required: [name, email, password]
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        college:
+          type: string
+        university:
+          type: string
+        year:
+          type: integer
+        isAdmin:
+          type: boolean
+        role:
+          type: string
+        rewardPoints:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, email, college, year, isAdmin, role]
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required: [token, user]
+
+    QuestionOption:
+      type: object
+      properties:
+        A:
+          type: string
+        B:
+          type: string
+        C:
+          type: string
+        D:
+          type: string
+        E:
+          type: string
+      required: [A, B, C, D]
+
+    Question:
+      type: object
+      properties:
+        id:
+          type: integer
+        questionText:
+          type: string
+        imageUrl:
+          type: string
+        options:
+          $ref: "#/components/schemas/QuestionOption"
+        correctAnswer:
+          type: string
+        explanation:
+          type: string
+        explanationImageUrl:
+          type: string
+        wrongAnswerExplanations:
+          type: string
+        references:
+          type: string
+        subject:
+          type: string
+        system:
+          type: string
+        topic:
+          type: string
+        subtopic:
+          type: string
+        universityTag:
+          type: string
+        examType:
+          type: string
+        difficulty:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        isBookmarked:
+          type: boolean
+        userNote:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, questionText, options, correctAnswer, explanation, subject, topic, difficulty]
+
+    QuestionsResponse:
+      type: object
+      properties:
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Question"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required: [questions, total]
+
+    QuestionFilters:
+      type: object
+      properties:
+        subjects:
+          type: array
+          items:
+            type: string
+        systems:
+          type: array
+          items:
+            type: string
+        topics:
+          type: array
+          items:
+            type: string
+        universities:
+          type: array
+          items:
+            type: string
+        examTypes:
+          type: array
+          items:
+            type: string
+      required: [subjects, systems, topics, universities, examTypes]
+
+    SubmitAnswerRequest:
+      type: object
+      properties:
+        questionId:
+          type: integer
+        selectedAnswer:
+          type: string
+        timeTaken:
+          type: integer
+          description: Time taken in seconds
+        mode:
+          type: string
+          enum: [practice, tutor, test, exam]
+      required: [questionId, selectedAnswer, mode]
+
+    SubmitAnswerResponse:
+      type: object
+      properties:
+        isCorrect:
+          type: boolean
+        correctAnswer:
+          type: string
+        explanation:
+          type: string
+        wrongAnswerExplanations:
+          type: string
+        references:
+          type: string
+      required: [isCorrect, correctAnswer, explanation]
+
+    ProgressRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        questionId:
+          type: integer
+        selectedAnswer:
+          type: string
+        isCorrect:
+          type: boolean
+        timeTaken:
+          type: integer
+        mode:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        question:
+          $ref: "#/components/schemas/Question"
+      required: [id, questionId, selectedAnswer, isCorrect, mode]
+
+    SubjectPerformance:
+      type: object
+      properties:
+        subject:
+          type: string
+        total:
+          type: integer
+        correct:
+          type: integer
+        accuracy:
+          type: number
+      required: [subject, total, correct, accuracy]
+
+    TopicPerformance:
+      type: object
+      properties:
+        topic:
+          type: string
+        subject:
+          type: string
+        total:
+          type: integer
+        correct:
+          type: integer
+        accuracy:
+          type: number
+      required: [topic, subject, total, correct, accuracy]
+
+    Analytics:
+      type: object
+      properties:
+        totalAttempted:
+          type: integer
+        totalCorrect:
+          type: integer
+        accuracy:
+          type: number
+        streakDays:
+          type: integer
+        subjectPerformance:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubjectPerformance"
+        topicPerformance:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopicPerformance"
+        recentActivity:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              count:
+                type: integer
+              correct:
+                type: integer
+            required: [date, count, correct]
+      required: [totalAttempted, totalCorrect, accuracy, streakDays, subjectPerformance, topicPerformance, recentActivity]
+
+    BookmarkRequest:
+      type: object
+      properties:
+        questionId:
+          type: integer
+      required: [questionId]
+
+    Note:
+      type: object
+      properties:
+        id:
+          type: integer
+        questionId:
+          type: integer
+        noteText:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, questionId, noteText]
+
+    NoteRequest:
+      type: object
+      properties:
+        noteText:
+          type: string
+      required: [noteText]
+
+    ExplainRequest:
+      type: object
+      properties:
+        questionId:
+          type: integer
+        questionText:
+          type: string
+        options:
+          $ref: "#/components/schemas/QuestionOption"
+        correctAnswer:
+          type: string
+      required: [questionId, questionText, options, correctAnswer]
+
+    ExplainResponse:
+      type: object
+      properties:
+        explanation:
+          type: string
+        whyCorrect:
+          type: string
+        whyOthersWrong:
+          type: string
+      required: [explanation, whyCorrect, whyOthersWrong]
+
+    DailyChallengeResponse:
+      type: object
+      properties:
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Question"
+        date:
+          type: string
+        isCompleted:
+          type: boolean
+        streak:
+          type: integer
+      required: [questions, date, isCompleted, streak]
+
+    CompleteDailyRequest:
+      type: object
+      properties:
+        score:
+          type: integer
+        total:
+          type: integer
+      required: [score, total]
+
+    CreateQuestionRequest:
+      type: object
+      properties:
+        questionText:
+          type: string
+        options:
+          $ref: "#/components/schemas/QuestionOption"
+        correctAnswer:
+          type: string
+        imageUrl:
+          type: string
+        explanation:
+          type: string
+        explanationImageUrl:
+          type: string
+        wrongAnswerExplanations:
+          type: string
+        references:
+          type: string
+        subject:
+          type: string
+        system:
+          type: string
+        topic:
+          type: string
+        subtopic:
+          type: string
+        universityTag:
+          type: string
+        examType:
+          type: string
+          enum: [annual, modular]
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        tags:
+          type: array
+          items:
+            type: string
+      required: [questionText, options, correctAnswer, explanation, subject, topic, difficulty]
+
+    BulkUploadRequest:
+      type: object
+      properties:
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateQuestionRequest"
+      required: [questions]
+
+    BulkUploadResponse:
+      type: object
+      properties:
+        inserted:
+          type: integer
+        failed:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+      required: [inserted, failed]
+
+    AdminStats:
+      type: object
+      properties:
+        totalQuestions:
+          type: integer
+        totalUsers:
+          type: integer
+        answersToday:
+          type: integer
+        pendingFlags:
+          type: integer
+        pendingErrata:
+          type: integer
+      required: [totalQuestions, totalUsers, answersToday, pendingFlags, pendingErrata]
+
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        college:
+          type: string
+        university:
+          type: string
+        year:
+          type: integer
+        isAdmin:
+          type: boolean
+        role:
+          type: string
+        customPermissions:
+          type: object
+          additionalProperties:
+            type: boolean
+        rewardPoints:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, email, isAdmin, role, rewardPoints, createdAt]
+
+    AdminUsersResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+        total:
+          type: integer
+      required: [users, total]
+
+    AdminUpdateUserBody:
+      type: object
+      properties:
+        isAdmin:
+          type: boolean
+        role:
+          type: string
+          enum: [user, editor, teacher, reviewer, admin, superadmin]
+        customPermissions:
+          type: object
+          additionalProperties:
+            type: boolean
+        name:
+          type: string
+        email:
+          type: string
+        college:
+          type: string
+        university:
+          type: string
+        year:
+          type: integer
+
+    AdminCreateMemberBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        college:
+          type: string
+        university:
+          type: string
+        year:
+          type: integer
+        role:
+          type: string
+          enum: [user, editor, teacher, reviewer, admin, superadmin]
+        isAdmin:
+          type: boolean
+      required: [name, email, password, college, year]
+
+    ResetPasswordBody:
+      type: object
+      properties:
+        newPassword:
+          type: string
+      required: [newPassword]
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        college:
+          type: string
+        university:
+          type: string
+        year:
+          type: integer
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+
+    AdminFlag:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        questionId:
+          type: integer
+        userName:
+          type: string
+        questionText:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, userId, questionId, createdAt]
+
+    AdminFlagsResponse:
+      type: object
+      properties:
+        flags:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminFlag"
+        total:
+          type: integer
+      required: [flags, total]
+
+    Announcement:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [popup, banner, ticker]
+        title:
+          type: string
+        content:
+          type: string
+        buttonText:
+          type: string
+        buttonUrl:
+          type: string
+        targetRoles:
+          type: string
+        isActive:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, type, title, content, isActive, createdAt]
+
+    AnnouncementsResponse:
+      type: object
+      properties:
+        announcements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Announcement"
+        total:
+          type: integer
+      required: [announcements]
+
+    AnnouncementBody:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [popup, banner, ticker]
+        title:
+          type: string
+        content:
+          type: string
+        buttonText:
+          type: string
+        buttonUrl:
+          type: string
+        targetRoles:
+          type: string
+        isActive:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+      required: [type, title, content]
+
+    RequestUploadUrlBody:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+      required: [name, size, contentType]
+
+    RequestUploadUrlResponse:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+      required: [uploadURL, objectPath]
