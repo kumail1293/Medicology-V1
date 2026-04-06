@@ -20,8 +20,8 @@ dailyRouter.get('/', authenticate, async (req: AuthRequest, res) => {
       isCompleted: false,
       streak: 0,
     }).returning();
-    res.json({ challenge, questions });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+    return res.json({ challenge, questions });
+  } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 
 dailyRouter.get('/status', authenticate, async (req: AuthRequest, res) => {

@@ -23,9 +23,9 @@ authRouter.post('/register', async (req, res) => {
       name, email, passwordHash, college, university, year: Number(year),
     }).returning();
     const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role });
-    res.status(201).json({ token, user: { ...user, passwordHash: undefined } });
+    return res.status(201).json({ token, user: { ...user, passwordHash: undefined } });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -45,9 +45,9 @@ authRouter.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role });
-    res.json({ token, user: { ...user, passwordHash: undefined } });
+    return res.json({ token, user: { ...user, passwordHash: undefined } });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -55,10 +55,12 @@ authRouter.post('/login', async (req, res) => {
 authRouter.get('/me', authenticate, async (req: AuthRequest, res) => {
   try {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ ...user, passwordHash: undefined });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    return res.json({ ...user, passwordHash: undefined });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -71,9 +73,9 @@ authRouter.put('/me', authenticate, async (req: AuthRequest, res) => {
       .where(eq(usersTable.id, req.user!.id))
       .returning();
     const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role });
-    res.json({ token, user: { ...user, passwordHash: undefined } });
+    return res.json({ token, user: { ...user, passwordHash: undefined } });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -83,11 +85,13 @@ authRouter.put('/me/password', authenticate, async (req: AuthRequest, res) => {
     const { currentPassword, newPassword } = req.body;
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
     const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!valid) return res.status(400).json({ error: 'Current password incorrect' });
+    if (!valid) {
+      return res.status(400).json({ error: 'Current password incorrect' });
+    }
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, req.user!.id));
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });

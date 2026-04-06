@@ -12,7 +12,7 @@ sessionsRouter.post('/', authenticate, async (req: AuthRequest, res) => {
     const {
       mode = 'tutor', subject, topic, difficulty,
       universityTag, examType, limit = 20,
-      questionIds, unusedOnly, incorrectOnly
+      questionIds
     } = req.body;
 
     let finalQuestionIds = questionIds;
@@ -40,7 +40,6 @@ sessionsRouter.post('/', authenticate, async (req: AuthRequest, res) => {
       questionIds: finalQuestionIds,
       currentIndex: 0,
       answers: {},
-      flagged: [],
       status: 'active',
     }).returning();
 
@@ -58,7 +57,9 @@ sessionsRouter.get('/:id', authenticate, async (req: AuthRequest, res) => {
         eq(testSessionsTable.id, Number(req.params.id)),
         eq(testSessionsTable.userId, req.user!.id)
       ));
-    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
 
     const questions = await db.select().from(questionsTable)
       .where(inArray(questionsTable.id, session.questionIds as number[]));
@@ -67,26 +68,26 @@ sessionsRouter.get('/:id', authenticate, async (req: AuthRequest, res) => {
       questions.find(q => q.id === id)
     ).filter(Boolean);
 
-    res.json({ session, questions: orderedQuestions });
+    return res.json({ session, questions: orderedQuestions });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
 // Update session (save progress)
 sessionsRouter.put('/:id', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { answers, currentIndex, flagged, status, totalCorrect } = req.body;
+    const { answers, currentIndex, status, totalCorrect } = req.body;
     const [session] = await db.update(testSessionsTable)
-      .set({ answers, currentIndex, flagged, status, totalCorrect })
+      .set({ answers, currentIndex, status, totalCorrect })
       .where(and(
         eq(testSessionsTable.id, Number(req.params.id)),
         eq(testSessionsTable.userId, req.user!.id)
       ))
       .returning();
-    res.json({ session });
+    return res.json({ session });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -112,7 +113,6 @@ sessionsRouter.post('/create', authenticate, async (req: AuthRequest, res) => {
       questionIds: questionIds || [],
       currentIndex: 0,
       answers: {},
-      flaggedQuestions: [],
       status: 'active',
     }).returning();
     res.json({ session });

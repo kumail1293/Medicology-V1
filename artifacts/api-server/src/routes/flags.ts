@@ -9,13 +9,15 @@ export const flagsRouter = Router();
 flagsRouter.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
     const { questionId } = req.body;
-    if (!questionId) return res.status(400).json({ error: 'questionId required' });
+    if (!questionId) {
+      return res.status(400).json({ error: 'questionId required' });
+    }
     const [flag] = await db.insert(questionFlagsTable).values({
       userId: req.user!.id,
       questionId: Number(questionId),
     }).returning();
-    res.status(201).json({ flag });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+    return res.status(201).json({ flag });
+  } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 
 flagsRouter.get('/', authenticate, requireAdmin, async (req, res) => {

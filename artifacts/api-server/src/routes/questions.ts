@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { questionsTable } from '@workspace/db';
-import { eq, and, ilike, or, sql } from 'drizzle-orm';
+import { eq, and, ilike, sql } from 'drizzle-orm';
 import { authenticate } from '../middleware/auth.js';
 
 export const questionsRouter = Router();
@@ -12,10 +12,9 @@ questionsRouter.get('/', authenticate, async (req, res) => {
     const {
       subject, topic, system, subtopic, difficulty,
       universityTag, examType, limit = '20', offset = '0',
-      random, unused, search
+      random, search
     } = req.query as Record<string, string>;
 
-    let query = db.select().from(questionsTable);
     const conditions = [];
 
     if (subject) conditions.push(eq(questionsTable.subject, subject));
@@ -38,9 +37,9 @@ questionsRouter.get('/', authenticate, async (req, res) => {
     const [{ count }] = await db.select({ count: sql<number>`count(*)` })
       .from(questionsTable).where(where);
 
-    res.json({ questions, total: Number(count) });
+    return res.json({ questions, total: Number(count) });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -49,10 +48,12 @@ questionsRouter.get('/:id', authenticate, async (req, res) => {
   try {
     const [question] = await db.select().from(questionsTable)
       .where(eq(questionsTable.id, Number(req.params.id)));
-    if (!question) return res.status(404).json({ error: 'Question not found' });
-    res.json(question);
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    return res.json(question);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 

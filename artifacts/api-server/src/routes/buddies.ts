@@ -25,21 +25,25 @@ buddiesRouter.get('/', authenticate, async (req: AuthRequest, res) => {
     }));
 
     res.json({ buddies: buddyUsers });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+  } catch (err: any) { 
+    res.status(500).json({ error: err.message }); 
+  }
 });
 
 // Search users
 buddiesRouter.get('/search', authenticate, async (req: AuthRequest, res) => {
   try {
     const { q } = req.query as { q: string };
-    if (!q || q.length < 2) return res.json({ users: [] });
+    if (!q || q.length < 2) {
+      return res.json({ users: [] });
+    }
     const users = await db.select().from(usersTable)
       .where(or(
         ilike(usersTable.name, `%${q}%`),
         ilike(usersTable.email, `%${q}%`)
       )).limit(10);
-    res.json({ users: users.map(u => ({ ...u, passwordHash: undefined })) });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+    return res.json({ users: users.map(u => ({ ...u, passwordHash: undefined })) });
+  } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 
 // Get pending requests
@@ -56,7 +60,9 @@ buddiesRouter.get('/requests', authenticate, async (req: AuthRequest, res) => {
       return { ...r, requester: { ...user, passwordHash: undefined } };
     }));
     res.json({ requests: withRequester });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+  } catch (err: any) { 
+    res.status(500).json({ error: err.message }); 
+  }
 });
 
 // Send buddy request
@@ -68,14 +74,16 @@ buddiesRouter.post('/request', authenticate, async (req: AuthRequest, res) => {
         and(eq(studyBuddiesTable.requesterId, req.user!.id), eq(studyBuddiesTable.recipientId, recipientId)),
         and(eq(studyBuddiesTable.requesterId, recipientId), eq(studyBuddiesTable.recipientId, req.user!.id))
       ));
-    if (existing) return res.status(400).json({ error: 'Request already exists' });
+    if (existing) {
+      return res.status(400).json({ error: 'Request already exists' });
+    }
     const [buddy] = await db.insert(studyBuddiesTable).values({
       requesterId: req.user!.id,
       recipientId: Number(recipientId),
       status: 'pending',
     }).returning();
-    res.status(201).json({ buddy });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+    return res.status(201).json({ buddy });
+  } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 
 // Respond to request

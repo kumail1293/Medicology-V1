@@ -22,8 +22,8 @@ errataRouter.post('/', authenticate, async (req: AuthRequest, res) => {
       referenceUrl,
       status: 'pending',
     }).returning();
-    res.status(201).json({ errata });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+    return res.status(201).json({ errata });
+  } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 
 // Get my errata
