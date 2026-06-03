@@ -380,6 +380,29 @@ export default function Analytics() {
   if (isLoading) return <div className="p-12 text-center animate-pulse">Loading analytics...</div>;
   if (!analytics) return <div className="p-12 text-center">No data available</div>;
 
+  const subjectPerformance = analytics.subjectPerformance ?? [];
+  const topicPerformance = analytics.topicPerformance ?? [];
+
+  const topStrength = subjectPerformance.slice().sort((a, b) => b.accuracy - a.accuracy)[0] ?? null;
+  const topWeakness = subjectPerformance.slice().sort((a, b) => a.accuracy - b.accuracy)[0] ?? null;
+
+  const downloadCsv = () => {
+    const rows = [
+      ["Subject", "Accuracy", "Total Questions", "Correct Answers"],
+      ...subjectPerformance.map(sp => [sp.subject, `${sp.accuracy}%`, sp.total.toString(), sp.correct.toString()]),
+    ];
+    const csv = rows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `medicology-analytics-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <PageTransition className="space-y-8 pb-12 max-w-6xl mx-auto">
       <div className="flex items-center gap-4 mb-8">
@@ -393,12 +416,54 @@ export default function Analytics() {
       {/* Exam Readiness Banner */}
       <ExamReadinessBanner analytics={analytics} />
 
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="bg-card rounded-3xl p-6 shadow-sm border border-border">
+          <h3 className="text-base font-semibold mb-3">Top Strength</h3>
+          <p className="text-sm text-muted-foreground mb-4">Your strongest subject is based on accuracy and volume.</p>
+          {topStrength ? (
+            <div className="rounded-3xl border border-primary/20 bg-primary/5 p-4">
+              <p className="text-xs uppercase text-muted-foreground mb-2">{topStrength.subject}</p>
+              <p className="text-3xl font-bold">{Math.round(topStrength.accuracy)}%</p>
+              <p className="text-sm text-muted-foreground mt-2">{topStrength.total} questions completed</p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No strong subject data available yet. Practice more questions to populate this insight.</p>
+          )}
+        </div>
+
+        <div className="bg-card rounded-3xl p-6 shadow-sm border border-border flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-base font-semibold">Top Weakness</h3>
+                <p className="text-sm text-muted-foreground">Target this subject for faster improvement.</p>
+              </div>
+              <button
+                onClick={downloadCsv}
+                className="text-xs font-semibold text-primary hover:text-primary/80"
+              >
+                Export CSV
+              </button>
+            </div>
+            {topWeakness ? (
+              <div className="rounded-3xl border border-destructive/20 bg-destructive/5 p-4">
+                <p className="text-xs uppercase text-muted-foreground mb-2">{topWeakness.subject}</p>
+                <p className="text-3xl font-bold">{Math.round(topWeakness.accuracy)}%</p>
+                <p className="text-sm text-muted-foreground mt-2">{topWeakness.total} questions completed</p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No weakness detection available yet. Solve more questions to unlock insights.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Subject Heatmap tiles */}
         <div className="bg-card rounded-3xl p-6 sm:p-8 shadow-sm border border-border">
           <h2 className="text-xl font-bold mb-6">Subject Performance</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {analytics.subjectPerformance.map(sp => (
+            {subjectPerformance.map(sp => (
               <div key={sp.subject} className={clsx("p-4 rounded-2xl border text-center transition-all hover:scale-105 cursor-default", getHeatmapColor(sp.accuracy))}>
                 <div className="text-2xl font-bold mb-1">{Math.round(sp.accuracy)}%</div>
                 <div className="text-xs font-semibold uppercase tracking-wider">{sp.subject}</div>
@@ -413,7 +478,7 @@ export default function Analytics() {
           <h2 className="text-xl font-bold mb-6">Topic Accuracy Comparison</h2>
           <div className="flex-1 min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={analytics.topicPerformance.slice(0, 8)} layout="vertical" margin={{ top: 0, right: 0, left: 30, bottom: 0 }}>
+              <BarChart data={topicPerformance.slice(0, 8)} layout="vertical" margin={{ top: 0, right: 0, left: 30, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="hsl(var(--border))" />
                 <XAxis type="number" domain={[0, 100]} hide />
                 <YAxis dataKey="topic" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} width={120} />

@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { useGetQuestions, useGetQuestionFilters } from "@workspace/api-client-react";
+import {
+  useGetQuestions,
+  useGetQuestionFilters,
+  type GetQuestionsDifficulty,
+} from "@workspace/api-client-react";
 import { QuestionView } from "@/components/QuestionView";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,10 +30,13 @@ export default function PracticePage() {
     {
       subject: filters.subject !== "all" ? filters.subject : undefined,
       system: filters.system !== "all" ? filters.system : undefined,
-      difficulty: filters.difficulty !== "all" ? filters.difficulty : undefined,
+      difficulty:
+        filters.difficulty !== "all"
+          ? (filters.difficulty as GetQuestionsDifficulty)
+          : undefined,
       limit: 100,
     },
-    { query: { enabled: false } }
+    { query: { queryKey: ["practice-questions"], enabled: false } }
   );
 
   const handleStart = async () => {

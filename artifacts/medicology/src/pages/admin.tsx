@@ -469,7 +469,7 @@ function QuestionModal({ question, onClose, onSaved }: QuestionModalProps) {
                 <div key={opt}>
                   <label className={labelCls}>Option {opt} {opt !== 'E' ? '*' : '(optional)'}</label>
                   <input
-                    value={form[`option${opt}` as keyof QuestionFormData]}
+                    value={String(form[`option${opt}` as keyof QuestionFormData] ?? '')}
                     onChange={set(`option${opt}` as keyof QuestionFormData)}
                     required={opt !== 'E'}
                     className={inputCls}
@@ -1203,7 +1203,7 @@ function BulkUploadSection() {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
         const VALID_DIFFICULTY = ['easy', 'medium', 'hard'] as const;
-        const VALID_EXAM_TYPE = Object.values(CreateQuestionRequestExamTypeEnum) as const;
+        const VALID_EXAM_TYPE = Object.values(CreateQuestionRequestExamTypeEnum);
 
         const parsed = rows.map(row => {
           const q: Record<string, unknown> = {};

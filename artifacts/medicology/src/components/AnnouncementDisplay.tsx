@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useGetActiveAnnouncements, Announcement } from "@workspace/api-client-react";
 import { useAuth } from "../lib/auth";
 import { X, ExternalLink, Megaphone, ChevronLeft, ChevronRight } from "lucide-react";
@@ -118,7 +118,9 @@ export function AnnouncementDisplay() {
   });
   const [currentPopupIdx, setCurrentPopupIdx] = useState(0);
 
-  const { data } = useGetActiveAnnouncements({ query: { enabled: !!token } });
+  const { data } = useGetActiveAnnouncements({
+    query: { queryKey: ["active-announcements"], enabled: !!token },
+  });
   const announcements = data?.announcements ?? [];
 
   const banners = announcements.filter(a => a.type === "banner");

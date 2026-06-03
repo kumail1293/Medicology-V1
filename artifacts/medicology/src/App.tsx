@@ -8,22 +8,22 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, ProtectedRoute, AdminRoute } from "./lib/auth";
 import { SettingsProvider } from "./lib/settings";
 import { AppLayout } from "./components/layout";
+import { AdminLayout } from "./components/AdminLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PageSkeleton } from "./components/PageSkeleton";
 import { AnnouncementDisplay } from "./components/AnnouncementDisplay";
 
-// --- Eagerly loaded (always on the critical path) ---
 import Login from "./pages/login";
 import Register from "./pages/register";
 
-// --- Lazily loaded (split into separate chunks) ---
 const Dashboard        = lazy(() => import("./pages/dashboard"));
 const PracticePage     = lazy(() => import("./pages/practice"));
 const Exam             = lazy(() => import("./pages/exam"));
 const DailyChallenge   = lazy(() => import("./pages/daily"));
 const Analytics        = lazy(() => import("./pages/analytics"));
 const ReviewHub        = lazy(() => import("./pages/review"));
-const Admin            = lazy(() => import("./pages/admin"));
+const AdminDashboard   = lazy(() => import("./pages/admin-dashboard"));
+const AdminUsers       = lazy(() => import("./pages/admin-users"));
 const FlashcardsPage   = lazy(() => import("./pages/flashcards"));
 const SettingsPage     = lazy(() => import("./pages/settings"));
 const CreateTestPage   = lazy(() => import("./pages/create-test"));
@@ -60,7 +60,6 @@ function Router() {
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
 
-        {/* Session page is full-screen with its own Toolbar — no AppLayout */}
         <Route path="/session/:id">
           {() => <ProtectedRoute component={SessionV2} />}
         </Route>
@@ -107,9 +106,6 @@ function Router() {
         <Route path="/leaderboard">
           {() => <ProtectedRoute component={() => <AppLayout><LeaderboardPage /></AppLayout>} />}
         </Route>
-        <Route path="/admin">
-          {() => <AdminRoute component={() => <AppLayout><Admin /></AppLayout>} />}
-        </Route>
         <Route path="/profile">
           {() => <ProtectedRoute component={() => <AppLayout><ProfilePage /></AppLayout>} />}
         </Route>
@@ -124,6 +120,26 @@ function Router() {
         </Route>
         <Route path="/subscription">
           {() => <ProtectedRoute component={() => <AppLayout><SubscriptionPage /></AppLayout>} />}
+        </Route>
+
+        {/* Admin routes */}
+        <Route path="/admin">
+          {() => <AdminRoute component={() => <AdminLayout><AdminDashboard /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/users">
+          {() => <AdminRoute component={() => <AdminLayout><AdminUsers /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/questions">
+          {() => <AdminRoute component={() => <AdminLayout><div className="p-6"><h1 className="text-2xl font-bold">Questions</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/announcements">
+          {() => <AdminRoute component={() => <AdminLayout><div className="p-6"><h1 className="text-2xl font-bold">Announcements</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/flags">
+          {() => <AdminRoute component={() => <AdminLayout><div className="p-6"><h1 className="text-2xl font-bold">Flags &amp; Reports</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/settings">
+          {() => <AdminRoute component={() => <AdminLayout><div className="p-6"><h1 className="text-2xl font-bold">Admin Settings</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div></AdminLayout>} />}
         </Route>
 
         <Route path="/payment/callback" component={PaymentCallback} />

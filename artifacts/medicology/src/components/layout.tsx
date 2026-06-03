@@ -26,6 +26,7 @@ import {
   Calendar,
   ExternalLink,
   CreditCard,
+  Command,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -173,6 +174,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const banners = active.filter(a => a.type === 'banner');
   const tickers = active.filter(a => a.type === 'ticker');
 
+  const [paletteOpen, setPaletteOpen] = React.useState(false);
+
+  const quickActions = [
+    { label: "Dashboard", href: "/" },
+    { label: "Daily Challenge", href: "/daily" },
+    { label: "Study Planner", href: "/planner" },
+    { label: "Review Hub", href: "/review" },
+    { label: "Bookmarks", href: "/review" },
+    { label: "Analytics", href: "/analytics" },
+  ];
+
   const navItems = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Create Test", href: "/create-test", icon: Stethoscope },
@@ -201,6 +213,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     setLocation("/login");
   };
 
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen(open => !open);
+      }
+      if (event.key === 'Escape') {
+        setPaletteOpen(false);
+      }
+      if (event.shiftKey && event.key.toLowerCase() === 'd') {
+        event.preventDefault();
+        setLocation('/daily');
+      }
+      if (event.shiftKey && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        setLocation('/planner');
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [setLocation]);
+
   return (
     <div className={clsx("min-h-screen bg-background flex flex-col md:flex-row", tickers.length > 0 && "pb-8")}>
       {/* Popup Announcement */}
@@ -213,10 +248,61 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Ticker */}
       <TickerBar tickers={tickers} />
 
+      {/* Quick action palette */}
+      <AnimatePresence>
+        {paletteOpen && (
+          <motion.div
+            className="fixed inset-0 z-[210] flex items-center justify-center bg-black/40 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-xl rounded-3xl border border-border bg-card shadow-2xl p-6"
+            >
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <p className="text-sm uppercase tracking-[0.24em] text-muted-foreground">Quick Actions</p>
+                  <h2 className="text-xl font-bold">Jump anywhere</h2>
+                </div>
+                <button onClick={() => setPaletteOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {quickActions.map((action) => (
+                  <button
+                    key={action.href}
+                    onClick={() => {
+                      setPaletteOpen(false);
+                      setLocation(action.href);
+                    }}
+                    className="w-full text-left rounded-2xl border border-border px-4 py-4 bg-background hover:border-primary/50 hover:shadow-lg transition-all"
+                  >
+                    <p className="font-semibold">{action.label}</p>
+                    <p className="text-xs text-muted-foreground">Go to {action.label}</p>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-4 text-xs text-muted-foreground">Try Ctrl+K or ⌘+K to open this palette anytime.</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Mobile Header */}
       <div className="md:hidden glass-panel flex items-center justify-between p-4 shadow-sm">
-        <div className="flex items-center">
+        <div className="flex items-center gap-3">
           <img src={`${import.meta.env.BASE_URL}images/logo-colored.png`} alt="Medicology" className="h-10 w-auto object-contain" />
+          <button
+            onClick={() => setPaletteOpen(true)}
+            className="hidden sm:inline-flex items-center gap-2 rounded-full border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted transition-colors"
+          >
+            <Command size={14} /> Quick Actions
+          </button>
         </div>
         <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-foreground">
           {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}

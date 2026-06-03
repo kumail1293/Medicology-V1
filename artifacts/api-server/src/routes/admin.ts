@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
 import { questionsTable, usersTable, userProgressTable } from '@workspace/db';
-import { eq, ilike, and, or, sql } from 'drizzle-orm';
+import { eq, ilike, and, or, sql } from '../utils/drizzle.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import {
   validateBody,
@@ -45,6 +45,7 @@ adminRouter.get('/stats', async (req: AuthRequest, res: Response) => {
       pendingErrata: 0,
     });
   } catch (err: any) {
+    console.error('Error in admin stats:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -86,6 +87,7 @@ adminRouter.get(
 
       res.json({ questions, total: Number(count) });
     } catch (err: any) {
+      console.error('Error in admin get questions:', err);
       res.status(500).json({ error: err.message });
     }
   }
@@ -101,6 +103,7 @@ adminRouter.post(
       const [question] = await db.insert(questionsTable).values(data).returning();
       res.status(201).json(question);
     } catch (err: any) {
+      console.error('Error in admin create question:', err);
       res.status(500).json({ error: err.message });
     }
   }
@@ -128,6 +131,7 @@ adminRouter.put(
 
       return res.json(question);
     } catch (err: any) {
+      console.error('Error in admin update question:', err);
       return res.status(500).json({ error: err.message });
     }
   }
@@ -143,6 +147,7 @@ adminRouter.delete(
       await db.delete(questionsTable).where(eq(questionsTable.id, id));
       res.json({ success: true });
     } catch (err: any) {
+      console.error('Error in admin delete question:', err);
       res.status(500).json({ error: err.message });
     }
   }
@@ -172,6 +177,7 @@ adminRouter.get('/questions/duplicates', async (req: AuthRequest, res: Response)
 
     res.json({ groups });
   } catch (err: any) {
+    console.error('Error in admin check duplicates:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -186,6 +192,7 @@ adminRouter.delete(
       await db.delete(usersTable).where(eq(usersTable.id, id));
       res.json({ success: true });
     } catch (err: any) {
+      console.error('Error in admin delete user:', err);
       res.status(500).json({ error: err.message });
     }
   }
@@ -204,7 +211,163 @@ adminRouter.post(
       await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, id));
       res.json({ success: true });
     } catch (err: any) {
+      console.error('Error in admin reset password:', err);
       res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// Get all users (with pagination and search)
+adminRouter.get('/users', async (req: any, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 100);
+    const offset = parseInt(req.query.offset) || 0;
+    const search = req.query.search || '';
+
+    const conditions: any[] = [];
+    if (search) {
+      conditions.push(
+        or(
+          ilike(usersTable.name, `%${search}%`),
+          ilike(usersTable.email, `%${search}%`),
+          ilike(usersTable.college, `%${search}%`)
+        )
+      );
+    }
+
+    const users = await db
+      .select()
+      .from(usersTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .limit(limit)
+      .offset(offset)
+      .orderBy(usersTable.id);
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(usersTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    res.json({
+      users: users.map((u) => ({
+        ...u,
+        passwordHash: undefined, // Don't send password hashes
+      })),
+      total: Number(count),
+    });
+  } catch (err: any) {
+    console.error('Error in admin get users:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single user
+adminRouter.get(
+  '/users/:id',
+  validateParams(questionIdParamSchema),
+  async (req: any, res: Response) => {
+    try {
+      const { id } = req.validatedParams as { id: number };
+      const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      return res.json({
+        ...user,
+        passwordHash: undefined,
+      });
+    } catch (err: any) {
+      console.error('Error in admin get user:', err);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// Create user
+adminRouter.post('/users', async (req: any, res: Response) => {
+  try {
+    const bcrypt = await import('bcryptjs');
+    const { name, email, password, college, university, year, role } = req.body;
+
+    if (!name || !email || !password || !college || !year) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const passwordHash = await bcrypt.default.hash(password, 10);
+
+    const [user] = await db
+      .insert(usersTable)
+      .values({
+        name,
+        email,
+        passwordHash,
+        college,
+        university: university || null,
+        year,
+        role: role || 'user',
+        isAdmin: role === 'admin' || role === 'superadmin',
+      })
+      .returning();
+
+    res.status(201).json({
+      ...user,
+      passwordHash: undefined,
+    });
+  } catch (err: any) {
+    console.error('Error in admin create user:', err);
+    if (err.message.includes('unique')) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update user
+adminRouter.put(
+  '/users/:id',
+  validateParams(questionIdParamSchema),
+  async (req: any, res: Response) => {
+    try {
+      const { id } = req.validatedParams as { id: number };
+      const { name, email, college, university, year, role } = req.body;
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (email !== undefined) updateData.email = email;
+      if (college !== undefined) updateData.college = college;
+      if (university !== undefined) updateData.university = university;
+      if (year !== undefined) updateData.year = year;
+      if (role !== undefined) {
+        updateData.role = role;
+        updateData.isAdmin = role === 'admin' || role === 'superadmin';
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: 'No fields to update' });
+      }
+
+      const [user] = await db
+        .update(usersTable)
+        .set(updateData)
+        .where(eq(usersTable.id, id))
+        .returning();
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      return res.json({
+        ...user,
+        passwordHash: undefined,
+      });
+    } catch (err: any) {
+      console.error('Error in admin update user:', err);
+      if (err.message.includes('unique')) {
+        return res.status(400).json({ error: 'Email already exists' });
+      }
+      return res.status(500).json({ error: err.message });
     }
   }
 );

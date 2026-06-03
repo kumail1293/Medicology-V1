@@ -206,7 +206,7 @@ pnpm install --force
 - [Setup Guide for Testing](./SETUP_FOR_TESTING.md)
 - [Deployment Guide](./DEPLOYMENT_GUIDE.md)
 - [Deployment Checklist](./DEPLOYMENT_CHECKLIST.md)
-- [Environment Variables](./env.example)
+- [Environment Variables](./.env.example)
 
 ---
 

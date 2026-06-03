@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { questionFlagsTable, questionsTable } from '@workspace/db';
-import { eq } from 'drizzle-orm';
+import { eq } from '../utils/drizzle.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 
 export const flagsRouter = Router();
@@ -23,7 +23,7 @@ flagsRouter.post('/', authenticate, async (req: AuthRequest, res) => {
 flagsRouter.get('/', authenticate, requireAdmin, async (req, res) => {
   try {
     const flags = await db.select().from(questionFlagsTable).orderBy(questionFlagsTable.createdAt);
-    const flagsWithText = await Promise.all(flags.map(async f => {
+    const flagsWithText = await Promise.all(flags.map(async (f: any) => {
       const [q] = await db.select({ questionText: questionsTable.questionText }).from(questionsTable).where(eq(questionsTable.id, f.questionId));
       return { ...f, questionText: q?.questionText, userName: `User #${f.userId}` };
     }));

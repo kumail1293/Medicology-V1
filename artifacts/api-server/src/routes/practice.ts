@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { userProgressTable, questionsTable } from '@workspace/db';
-import { eq } from 'drizzle-orm';
+import { eq } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const practiceRouter = Router();

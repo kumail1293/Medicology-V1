@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { questionsTable } from '@workspace/db';
-import { eq, and, ilike, sql } from 'drizzle-orm';
+import { eq, and, ilike, sql } from '../utils/drizzle.js';
 import { authenticate } from '../middleware/auth.js';
 
 export const questionsRouter = Router();
@@ -65,10 +65,10 @@ questionsRouter.get('/meta/filters', authenticate, async (req, res) => {
     const systems = await db.selectDistinct({ system: questionsTable.system }).from(questionsTable);
     const universities = await db.selectDistinct({ universityTag: questionsTable.universityTag }).from(questionsTable);
     res.json({
-      subjects: subjects.map(s => s.subject).filter(Boolean),
-      topics: topics.map(t => t.topic).filter(Boolean),
-      systems: systems.map(s => s.system).filter(Boolean),
-      universities: universities.map(u => u.universityTag).filter(Boolean),
+      subjects: subjects.map((s: any) => s.subject).filter(Boolean),
+      topics: topics.map((t: any) => t.topic).filter(Boolean),
+      systems: systems.map((s: any) => s.system).filter(Boolean),
+      universities: universities.map((u: any) => u.universityTag).filter(Boolean),
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

@@ -7,12 +7,35 @@ import { isTokenExpired } from "./tokenUtils";
 // NOTE: { ...headersObj } doesn't work for Headers instances — it returns {}.
 // Using new Headers(existing) is the correct way to copy all header types.
 const originalFetch = window.fetch;
+
+function getStoredToken() {
+  try {
+    return localStorage.getItem("medicology_token") || sessionStorage.getItem("medicology_token") || null;
+  } catch {
+    return null;
+  }
+}
+
+function persistToken(token: string, remember: boolean) {
+  try {
+    if (remember) {
+      localStorage.setItem("medicology_token", token);
+      sessionStorage.removeItem("medicology_token");
+    } else {
+      sessionStorage.setItem("medicology_token", token);
+      localStorage.removeItem("medicology_token");
+    }
+  } catch {}
+}
+
 window.fetch = async (input, init) => {
-  const token = localStorage.getItem("medicology_token");
+  const token = getStoredToken();
   if (token) {
     if (isTokenExpired(token)) {
-      localStorage.removeItem("medicology_token");
-      window.location.href = "/login";
+      try {
+        localStorage.removeItem("medicology_token");
+        sessionStorage.removeItem("medicology_token");
+      } catch {}
       return new Response(null, { status: 401 });
     }
     const headers = new Headers((init as RequestInit | undefined)?.headers);
@@ -36,7 +59,7 @@ interface AuthContextType {
   isAdmin: boolean;
   customPermissions: CustomPermissions;
   hasPermission: (key: keyof CustomPermissions) => boolean;
-  login: (token: string, user: User) => void;
+  login: (token: string, user: User, remember?: boolean) => void;
   logout: () => void;
   refreshUser: () => void;
 }
@@ -56,11 +79,12 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(localStorage.getItem("medicology_token"));
+  const [token, setToken] = useState<string | null>(getStoredToken());
   const [user, setUser] = useState<User | null>(null);
 
-  const { data: currentUser, isLoading, error, refetch } = useGetCurrentUser({
+  const { data: currentUser, isLoading, isFetching, error, refetch } = useGetCurrentUser({
     query: {
+      queryKey: ["current-user"],
       enabled: !!token,
       retry: false,
     },
@@ -73,12 +97,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      const t = localStorage.getItem("medicology_token");
-      if (t && isTokenExpired(t)) logout();
-    }, 60_000);
-    return () => clearInterval(id);
-  }, [logout]);
+    if (token && isTokenExpired(token)) {
+      logout();
+    }
+  }, [token, logout]);
 
   useEffect(() => {
     if (currentUser) {
@@ -89,8 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [currentUser, error, logout]);
 
-  const login = (newToken: string, newUser: User) => {
-    localStorage.setItem("medicology_token", newToken);
+  const login = (newToken: string, newUser: User, remember: boolean = true) => {
+    persistToken(newToken, remember);
     setToken(newToken);
     setUser(newUser);
   };
@@ -110,11 +132,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return customPermissions[key] === true;
   };
 
+  const authLoading = !!token && (isLoading || isFetching || (!currentUser && !error));
+
   return (
     <AuthContext.Provider value={{
       user,
       token,
-      isLoading: !!token && isLoading,
+      isLoading: authLoading,
       role,
       isSuperAdmin,
       isAdmin,
@@ -134,7 +158,7 @@ export function useAuth() {
 }
 
 export function ProtectedRoute({ component: Component }: { component: React.ComponentType<any> }) {
-  const { user, isLoading, token } = useAuth();
+  const { isLoading, token } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {

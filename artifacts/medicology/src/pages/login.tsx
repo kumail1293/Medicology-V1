@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Link, useLocation } from 'wouter';
 import { motion } from 'framer-motion';
@@ -14,6 +14,7 @@ export default function Login() {
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(0);
+  const [rememberMe, setRememberMe] = useState(true);
   const { login } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -36,6 +37,14 @@ export default function Login() {
       }
     }, 1000);
   };
+
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +84,7 @@ export default function Login() {
         return;
       }
       setFailedAttempts(0);
-      login(data.token, data.user);
+      login(data.token, data.user, rememberMe);
       setLocation('/');
     } catch (err: any) {
       toast({
@@ -165,7 +174,16 @@ export default function Login() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="form-checkbox h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  Keep me signed in
+                </label>
                 <Link href="/forgot-password" className="text-xs text-primary hover:underline font-medium">
                   Forgot password?
                 </Link>

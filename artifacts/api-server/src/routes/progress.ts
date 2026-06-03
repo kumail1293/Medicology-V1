@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { userProgressTable, questionsTable } from '@workspace/db';
-import { eq, sql, and, desc } from 'drizzle-orm';
+import { eq, sql, and, desc } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const progressRouter = Router();
@@ -11,13 +11,13 @@ progressRouter.get('/analytics', authenticate, async (req: AuthRequest, res) => 
     const userId = req.user!.id;
     const allProgress = await db.select().from(userProgressTable).where(eq(userProgressTable.userId, userId));
     const totalAttempted = allProgress.length;
-    const totalCorrect = allProgress.filter(p => p.isCorrect).length;
+    const totalCorrect = allProgress.filter((p: any) => p.isCorrect).length;
     const totalIncorrect = totalAttempted - totalCorrect;
     const accuracy = totalAttempted > 0 ? Math.round((totalCorrect / totalAttempted) * 100) : 0;
     const avgTimeSeconds = totalAttempted > 0
-      ? Math.round(allProgress.reduce((sum, p) => sum + (p.timeTaken || 0), 0) / totalAttempted) : 0;
+      ? Math.round(allProgress.reduce((sum: number, p: any) => sum + (p.timeTaken || 0), 0) / totalAttempted) : 0;
     const [{ count: totalQuestions }] = await db.select({ count: sql<number>`count(*)` }).from(questionsTable);
-    const usedQuestionIds = [...new Set(allProgress.map(p => p.questionId))];
+    const usedQuestionIds = [...new Set(allProgress.map((p: any) => p.questionId))];
     const usedQuestions = usedQuestionIds.length;
     const unusedQuestions = Number(totalQuestions) - usedQuestions;
     const percentUsed = Number(totalQuestions) > 0 ? Math.round((usedQuestions / Number(totalQuestions)) * 100) : 0;
@@ -35,7 +35,7 @@ progressRouter.get('/analytics', authenticate, async (req: AuthRequest, res) => 
     }));
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentProgress = allProgress.filter(p => new Date(p.createdAt) >= thirtyDaysAgo);
+    const recentProgress = allProgress.filter((p: any) => new Date(p.createdAt) >= thirtyDaysAgo);
     const activityMap: Record<string, { count: number; correct: number }> = {};
     for (const p of recentProgress) {
       const date = new Date(p.createdAt).toISOString().split('T')[0];
@@ -43,7 +43,7 @@ progressRouter.get('/analytics', authenticate, async (req: AuthRequest, res) => 
       activityMap[date].count++;
       if (p.isCorrect) activityMap[date].correct++;
     }
-    const recentActivity = Object.entries(activityMap).map(([date, data]) => ({ date, count: data.count, correct: data.correct })).sort((a, b) => a.date.localeCompare(b.date));
+    const recentActivity = Object.entries(activityMap).map(([date, data]) => ({ date, count: data.count, correct: data.correct })).sort((a: any, b: any) => a.date.localeCompare(b.date));
     let streakDays = 0;
     const checkDate = new Date();
     while (true) {

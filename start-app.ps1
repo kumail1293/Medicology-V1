@@ -27,7 +27,7 @@ Write-Host ""
 # Start API Server in a new PowerShell window
 Write-Host "Starting API Server..." -ForegroundColor Yellow
 $apiScriptBlock = {
-    cd "$PSScriptRoot\artifacts\api-server"
+    Set-Location "$PSScriptRoot\artifacts\api-server"
     pnpm dev
     Read-Host "Press Enter to close this window"
 }
@@ -39,7 +39,7 @@ Start-Sleep -Seconds 3
 # Start Frontend in a new PowerShell window
 Write-Host "Starting Frontend..." -ForegroundColor Yellow
 $webScriptBlock = {
-    cd "$PSScriptRoot\artifacts\medicology"
+    Set-Location "$PSScriptRoot\artifacts\medicology"
     pnpm dev
     Read-Host "Press Enter to close this window"
 }

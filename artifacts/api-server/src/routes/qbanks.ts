@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { qbankPurchasesTable } from '@workspace/db';
-import { eq } from 'drizzle-orm';
+import { eq } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const qbanksRouter = Router();
@@ -22,7 +22,7 @@ qbanksRouter.get('/', authenticate, async (req: AuthRequest, res) => {
       .where(eq(qbankPurchasesTable.userId, req.user!.id));
     const now = new Date();
     const catalogue = QBANKS.map(qb => {
-      const purchase = purchases.find(p =>
+      const purchase = purchases.find((p: any) =>
         p.qbankType === qb.id &&
         p.status === 'active' &&
         (!p.expiresAt || new Date(p.expiresAt) > now)

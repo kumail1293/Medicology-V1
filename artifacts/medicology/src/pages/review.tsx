@@ -167,7 +167,7 @@ function NotesTab() {
   );
 
   const handleSave = async (questionId: number) => {
-    await upsertMutation.mutateAsync({ data: { questionId, noteText: editContent } });
+    await upsertMutation.mutateAsync({ questionId, data: { noteText: editContent } });
     queryClient.invalidateQueries({ queryKey: ["getNotes"] });
     setEditingId(null);
     toast({ title: "Note saved" });

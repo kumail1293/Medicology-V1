@@ -36,7 +36,7 @@ export default function ExamMode() {
       subject: subjectFilter !== "all" ? subjectFilter : undefined,
       limit: 50,
     },
-    { query: { enabled: false } }
+    { query: { queryKey: ["exam-questions"], enabled: false } }
   );
 
   const handleStartTest = async () => {
@@ -135,7 +135,7 @@ export default function ExamMode() {
   }
 
   if (phase === "results") {
-    const { correct, attempted, total, score, timeTaken } = results;
+    const { correct, total, score, timeTaken } = results;
     const formatTimeTaken = (s: number) => `${Math.floor(s / 60)}m ${s % 60}s`;
     return (
       <div className="space-y-6 animate-in fade-in">

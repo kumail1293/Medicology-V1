@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { testSessionsTable, questionsTable } from '@workspace/db';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const sessionsRouter = Router();
@@ -31,7 +31,7 @@ sessionsRouter.post('/', authenticate, async (req: AuthRequest, res) => {
         .orderBy(sql`RANDOM()`)
         .limit(Number(limit));
 
-      finalQuestionIds = questions.map(q => q.id);
+      finalQuestionIds = questions.map((q: any) => q.id);
     }
 
     const [session] = await db.insert(testSessionsTable).values({
@@ -64,8 +64,8 @@ sessionsRouter.get('/:id', authenticate, async (req: AuthRequest, res) => {
     const questions = await db.select().from(questionsTable)
       .where(inArray(questionsTable.id, session.questionIds as number[]));
 
-    const orderedQuestions = (session.questionIds as number[]).map(id =>
-      questions.find(q => q.id === id)
+    const orderedQuestions = (session.questionIds as number[]).map((id: number) =>
+      questions.find((q: any) => q.id === id)
     ).filter(Boolean);
 
     return res.json({ session, questions: orderedQuestions });

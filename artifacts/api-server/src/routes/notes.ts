@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { notesTable } from '@workspace/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const notesRouter = Router();

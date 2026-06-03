@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "node --env-file=../../.env --watch --import tsx/esm src/app.ts",
-    "build": "esbuild src/app.ts --bundle --platform=node --outfile=dist/app.js --external:pg-native --external:bufferutil --external:utf-8-validate",
+    "build": "esbuild src/app.ts --bundle --platform=node --format=esm --outfile=dist/app.js --external:pg-native --external:bufferutil --external:utf-8-validate",
     "start": "node --env-file=../../.env dist/app.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
     "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.8.0",
     "cors": "^2.8.5",
     "drizzle-orm": "catalog:",
     "express": "^5.1.0",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.0",

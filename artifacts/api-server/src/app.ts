@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { authRouter } from './routes/auth.js';
 import { questionsRouter } from './routes/questions.js';
 import { progressRouter } from './routes/progress.js';
@@ -18,6 +21,41 @@ import { testConnection } from './db.js';
 import { errorHandler } from './utils/errors.js';
 import { rateLimit, startRateLimitCleanup } from './middleware/rateLimit.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function loadLocalEnvFile() {
+  const localEnvPath = path.join(__dirname, '..', '.env.local');
+
+  if (!fs.existsSync(localEnvPath)) {
+    return;
+  }
+
+  const raw = fs.readFileSync(localEnvPath, 'utf-8');
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('export ')) {
+      continue;
+    }
+
+    const eqIndex = trimmed.indexOf('=');
+    if (eqIndex <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, eqIndex).trim();
+    let value = trimmed.slice(eqIndex + 1).trim();
+
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
+loadLocalEnvFile();
+
 // Validate required environment variables
 if (!process.env.JWT_SECRET) {
   console.error('❌ FATAL: JWT_SECRET environment variable is required');
@@ -26,10 +64,14 @@ if (!process.env.JWT_SECRET) {
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000').split(',');
+const allowedOriginsRaw = process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:5174,http://localhost:3000';
+const ALLOWED_ORIGINS = allowedOriginsRaw
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 // CORS configuration - restrict to specific domains
-app.use(cors({ 
+app.use(cors({
   origin: (origin, callback) => {
     if (!origin || ALLOWED_ORIGINS.includes(origin)) {
       callback(null, true);
@@ -84,8 +126,8 @@ app.use(errorHandler as any);
 testConnection().then(() => {
   app.listen(PORT, () => {
     console.log(`✅ Medicology API running at http://localhost:${PORT}/api`);
-    console.log(`📚 Frontend: http://localhost:3000`);
-    console.log(`🔧 Admin: http://localhost:3000/admin`);
+    console.log(`📚 Frontend: http://localhost:5173`);
+    console.log(`🔧 Admin: http://localhost:5173/admin`);
   });
 });
 

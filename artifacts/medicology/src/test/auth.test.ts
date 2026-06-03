@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isTokenExpired } from "../lib/auth";
+import { isTokenExpired } from "../lib/tokenUtils";
 
 function makeJwt(expOffsetSeconds: number): string {
   const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));

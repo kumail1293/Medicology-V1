@@ -6,7 +6,7 @@ import { Link, useLocation } from 'wouter';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { clsx } from 'clsx';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface Analytics {
   totalAttempted: number;
@@ -89,6 +89,42 @@ export default function Dashboard() {
     return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
   };
 
+  const qbankCoverage = stats.totalQuestions > 0 ? Math.round((stats.usedQuestions / stats.totalQuestions) * 100) : 0;
+  const dailyAverage = stats.recentActivity.length > 0 ? Math.round(stats.totalAttempted / stats.recentActivity.length) : 0;
+
+  const GoalProgressCard = () => (
+    <div className="bg-card border border-border rounded-3xl p-6 shadow-sm">
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <div>
+          <h2 className="text-lg font-bold">Learning Goal Progress</h2>
+          <p className="text-sm text-muted-foreground">Track your coverage and what to focus on next.</p>
+        </div>
+        <span className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Daily target</span>
+      </div>
+      <div className="space-y-4">
+        <div>
+          <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
+            <span>QBank coverage</span>
+            <span>{qbankCoverage}%</span>
+          </div>
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-primary rounded-full" style={{ width: `${qbankCoverage}%` }} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="rounded-2xl border border-border p-4 bg-background">
+            <p className="text-muted-foreground text-xs">Avg. questions/day</p>
+            <p className="font-bold text-lg">{dailyAverage}</p>
+          </div>
+          <div className="rounded-2xl border border-border p-4 bg-background">
+            <p className="text-muted-foreground text-xs">Focus area</p>
+            <p className="font-bold text-lg">{weakSubject ? weakSubject.subject : 'Balanced review'}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <PageTransition className="space-y-8 pb-16">
       {/* Animated background gradient */}
@@ -119,6 +155,8 @@ export default function Dashboard() {
           <Plus size={20} /> Create Test
         </motion.button>
       </motion.div>
+
+      <GoalProgressCard />
 
       {/* Streak banner with animation */}
       <AnimatePresence>
@@ -173,7 +211,7 @@ export default function Dashboard() {
         animate={{ opacity: 1 }}
         transition={{ staggerChildren: 0.1, delayChildren: 0.2 }}
       >
-        <StatCard title="Questions Solved" value={stats.totalAttempted.toLocaleString()} icon={<Target size={24} className="text-blue-500" />} bg="from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20" delay={0} />
+        <StatCard title="Questions Solved" value={formatNumber(stats.totalAttempted)} icon={<Target size={24} className="text-blue-500" />} bg="from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20" delay={0} />
         <StatCard title="Overall Accuracy" value={`${Math.round(stats.accuracy)}%`} icon={<Activity size={24} className="text-green-500" />} bg="from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20" delay={0.1} />
         <StatCard title="Current Streak" value={`${stats.streakDays}`} icon={<Flame size={24} className="text-orange-500" />} bg="from-orange-50 to-orange-100/50 dark:from-orange-950/30 dark:to-orange-900/20" delay={0.2} />
         <StatCard title="Avg Time/Q" value={formatTime(stats.avgTimeSeconds)} icon={<Clock size={24} className="text-purple-500" />} bg="from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20" delay={0.3} />
@@ -418,10 +456,15 @@ function StatCard({ title, value, icon, bg, delay = 0 }: { title: string; value:
   );
 }
 
-function ScoreBox({ label, value, color }: { label: string; value: number; color: string }) {
+function formatNumber(value: number | null | undefined) {
+  const safeValue = Number(value ?? 0);
+  return Number.isFinite(safeValue) ? safeValue.toLocaleString() : '0';
+}
+
+function ScoreBox({ label, value, color }: { label: string; value?: number | null; color: string }) {
   return (
     <div className={clsx("rounded-2xl p-3 text-center", color)}>
-      <div className="text-xl font-bold">{value.toLocaleString()}</div>
+      <div className="text-xl font-bold">{formatNumber(value)}</div>
       <div className="text-xs mt-0.5 opacity-80">{label}</div>
     </div>
   );

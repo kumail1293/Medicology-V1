@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { bookmarksTable, questionsTable } from '@workspace/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const bookmarksRouter = Router();
@@ -12,8 +12,8 @@ bookmarksRouter.get('/', authenticate, async (req: AuthRequest, res) => {
     const bookmarks = await db.select().from(bookmarksTable)
       .where(eq(bookmarksTable.userId, req.user!.id));
     const questions = await Promise.all(
-      bookmarks.map(b => db.select().from(questionsTable)
-        .where(eq(questionsTable.id, b.questionId)).then(r => r[0]))
+      bookmarks.map((b: any) => db.select().from(questionsTable)
+        .where(eq(questionsTable.id, b.questionId)).then((r: any[]) => r[0]))
     );
     res.json({ bookmarks: questions.filter(Boolean) });
   } catch (err: any) { res.status(500).json({ error: err.message }); }

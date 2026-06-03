@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { errataTable } from '@workspace/db';
-import { eq } from 'drizzle-orm';
+import { eq } from '../utils/drizzle.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 
 export const errataRouter = Router();

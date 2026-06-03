@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { dailyChallengeTable, questionsTable } from '@workspace/db';
-import { eq, sql, and } from 'drizzle-orm';
+import { eq, sql, and } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const dailyRouter = Router();

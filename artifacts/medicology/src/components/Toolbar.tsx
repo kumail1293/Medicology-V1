@@ -43,6 +43,7 @@ export function Toolbar() {
     light: <Sun className="h-4 w-4" />,
     dark: <Moon className="h-4 w-4" />,
     easy: <Leaf className="h-4 w-4" />,
+    oled: <Moon className="h-4 w-4" />,
     usmle: <Monitor className="h-4 w-4" />,
   }[settings.theme] ?? <Sun className="h-4 w-4" />;
 
@@ -50,6 +51,7 @@ export function Toolbar() {
     light: "Light",
     dark: "Dark",
     easy: "Sepia",
+    oled: "OLED",
     usmle: "USMLE",
   }[settings.theme] ?? "Light";
 

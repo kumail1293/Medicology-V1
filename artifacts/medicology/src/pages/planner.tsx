@@ -569,6 +569,8 @@ export default function PlannerPage() {
 
   const today = todayStr();
   const todayEntry = schedule.find(e => e.dateStr === today);
+  const completedDays = Object.values(completion).filter(Boolean).length;
+  const completionRate = schedule.length > 0 ? Math.round((completedDays / schedule.length) * 100) : 0;
 
   const toggleCompletion = useCallback((dateStr: string) => {
     setCompletion(prev => {
@@ -634,6 +636,21 @@ export default function PlannerPage() {
           >
             <Pencil size={13} /> Edit Plan
           </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
+          <p className="text-sm text-muted-foreground">Completed days</p>
+          <p className="mt-3 text-3xl font-bold">{completedDays}</p>
+        </div>
+        <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
+          <p className="text-sm text-muted-foreground">Remaining days</p>
+          <p className="mt-3 text-3xl font-bold">{Math.max(0, schedule.length - completedDays)}</p>
+        </div>
+        <div className="bg-card border border-border rounded-3xl p-5 shadow-sm">
+          <p className="text-sm text-muted-foreground">Plan completion</p>
+          <p className="mt-3 text-3xl font-bold">{completionRate}%</p>
         </div>
       </div>
 

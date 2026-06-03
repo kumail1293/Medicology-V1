@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { studyBuddiesTable, usersTable } from '@workspace/db';
-import { eq, or, and, ilike } from 'drizzle-orm';
+import { eq, or, and, ilike } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const buddiesRouter = Router();
@@ -18,7 +18,7 @@ buddiesRouter.get('/', authenticate, async (req: AuthRequest, res) => {
         eq(studyBuddiesTable.status, 'accepted')
       ));
 
-    const buddyUsers = await Promise.all(buddies.map(async b => {
+    const buddyUsers = await Promise.all(buddies.map(async (b: any) => {
       const otherId = b.requesterId === req.user!.id ? b.recipientId : b.requesterId;
       const [user] = await db.select().from(usersTable).where(eq(usersTable.id, otherId));
       return { ...user, passwordHash: undefined, buddyId: b.id };
@@ -42,7 +42,7 @@ buddiesRouter.get('/search', authenticate, async (req: AuthRequest, res) => {
         ilike(usersTable.name, `%${q}%`),
         ilike(usersTable.email, `%${q}%`)
       )).limit(10);
-    return res.json({ users: users.map(u => ({ ...u, passwordHash: undefined })) });
+    return res.json({ users: users.map((u: any) => ({ ...u, passwordHash: undefined })) });
   } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 
@@ -54,7 +54,7 @@ buddiesRouter.get('/requests', authenticate, async (req: AuthRequest, res) => {
         eq(studyBuddiesTable.recipientId, req.user!.id),
         eq(studyBuddiesTable.status, 'pending')
       ));
-    const withRequester = await Promise.all(requests.map(async r => {
+    const withRequester = await Promise.all(requests.map(async (r: any) => {
       const [user] = await db.select().from(usersTable)
         .where(eq(usersTable.id, r.requesterId));
       return { ...r, requester: { ...user, passwordHash: undefined } };

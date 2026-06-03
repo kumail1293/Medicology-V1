@@ -240,7 +240,7 @@ export default function ImportView({ decks, defaultDeckId, onImport, onBack }: P
 
       {error && (
         <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-xl text-sm text-destructive">
-          <AlertCircle size={15} className="shrink-0" /> {error}
+          <AlertCircle size={15} className="shrink-0" /> {typeof error === 'object' && error !== null ? error.message : error}
         </div>
       )}
 

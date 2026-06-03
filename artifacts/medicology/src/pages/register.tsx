@@ -143,7 +143,7 @@ export default function Register() {
         return;
       }
 
-      login(data.token, data.user);
+      login(data.token, data.user, true);
       setLocation('/');
     } catch (err: any) {
       toast({ title: "Registration Failed", description: err?.message || "Network error. Please try again.", variant: "destructive" });

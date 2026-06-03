@@ -139,6 +139,28 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
+function normalizeToastContent(content: React.ReactNode): React.ReactNode {
+  if (
+    content == null ||
+    typeof content === "string" ||
+    typeof content === "number" ||
+    typeof content === "boolean" ||
+    React.isValidElement(content)
+  ) {
+    return content
+  }
+
+  if (Array.isArray(content)) {
+    return content.map((item) => normalizeToastContent(item))
+  }
+
+  try {
+    return JSON.stringify(content)
+  } catch {
+    return String(content)
+  }
+}
+
 function toast({ ...props }: Toast) {
   const id = genId()
 
@@ -153,6 +175,8 @@ function toast({ ...props }: Toast) {
     type: "ADD_TOAST",
     toast: {
       ...props,
+      title: normalizeToastContent(props.title),
+      description: normalizeToastContent(props.description),
       id,
       open: true,
       onOpenChange: (open) => {

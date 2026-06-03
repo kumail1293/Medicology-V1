@@ -125,7 +125,11 @@ export default function ResetPassword() {
                   </div>
                 </div>
 
-                {error && <p className="text-sm text-red-500">{error}</p>}
+                {error && (
+                  <p className="text-sm text-red-500">
+                    {typeof error === 'object' && error !== null ? error.message : error}
+                  </p>
+                )}
 
                 <button
                   type="submit" disabled={loading}
