@@ -76,8 +76,10 @@ export function errorHandler(
  * Async handler wrapper to catch promise rejections
  */
 export function asyncHandler(fn: Function) {
-  return (req: any, res: any, next: NextFunction) => {
+  return (req: any, res: any, next: any) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
+};
 }
+
 
