@@ -6,7 +6,7 @@ import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 
 export const flagsRouter = Router();
 
-flagsRouter.post('/', authenticate, async (req: AuthRequest, res) => {
+flagsRouter.post('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { questionId } = req.body;
     if (!questionId) {
@@ -20,7 +20,7 @@ flagsRouter.post('/', authenticate, async (req: AuthRequest, res) => {
   } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 
-flagsRouter.get('/', authenticate, requireAdmin, async (req, res) => {
+flagsRouter.get('/', authenticate, requireAdmin, async (req, res: any) => {
   try {
     const flags = await db.select().from(questionFlagsTable).orderBy(questionFlagsTable.createdAt);
     const flagsWithText = await Promise.all(flags.map(async (f: any) => {
@@ -31,7 +31,7 @@ flagsRouter.get('/', authenticate, requireAdmin, async (req, res) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-flagsRouter.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+flagsRouter.delete('/:id', authenticate, requireAdmin, async (req, res: any) => {
   try {
     await db.delete(questionFlagsTable).where(eq(questionFlagsTable.id, Number(req.params.id)));
     res.json({ success: true });

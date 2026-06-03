@@ -6,7 +6,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const dailyRouter = Router();
 
-dailyRouter.get('/', authenticate, async (req: AuthRequest, res) => {
+dailyRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const existing = await db.select().from(dailyChallengeTable).where(and(eq(dailyChallengeTable.userId, req.user!.id), eq(dailyChallengeTable.date, today)));
@@ -24,7 +24,7 @@ dailyRouter.get('/', authenticate, async (req: AuthRequest, res) => {
   } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 
-dailyRouter.get('/status', authenticate, async (req: AuthRequest, res) => {
+dailyRouter.get('/status', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const [challenge] = await db.select().from(dailyChallengeTable).where(and(eq(dailyChallengeTable.userId, req.user!.id), eq(dailyChallengeTable.date, today)));

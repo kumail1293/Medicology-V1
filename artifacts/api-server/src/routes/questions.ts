@@ -7,7 +7,7 @@ import { authenticate } from '../middleware/auth.js';
 export const questionsRouter = Router();
 
 // Get questions with filters
-questionsRouter.get('/', authenticate, async (req, res) => {
+questionsRouter.get('/', authenticate, async (req, res: any) => {
   try {
     const {
       subject, topic, system, subtopic, difficulty,
@@ -44,7 +44,7 @@ questionsRouter.get('/', authenticate, async (req, res) => {
 });
 
 // Get single question
-questionsRouter.get('/:id', authenticate, async (req, res) => {
+questionsRouter.get('/:id', authenticate, async (req, res: any) => {
   try {
     const [question] = await db.select().from(questionsTable)
       .where(eq(questionsTable.id, Number(req.params.id)));
@@ -58,7 +58,7 @@ questionsRouter.get('/:id', authenticate, async (req, res) => {
 });
 
 // Get available filters
-questionsRouter.get('/meta/filters', authenticate, async (req, res) => {
+questionsRouter.get('/meta/filters', authenticate, async (req, res: any) => {
   try {
     const subjects = await db.selectDistinct({ subject: questionsTable.subject }).from(questionsTable);
     const topics = await db.selectDistinct({ topic: questionsTable.topic }).from(questionsTable);

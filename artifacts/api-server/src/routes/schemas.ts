@@ -59,3 +59,4 @@ export const questionIdParamSchema = z.object({
 export type CreateQuestion = z.infer<typeof createQuestionSchema>;
 export type UpdateQuestion = z.infer<typeof updateQuestionSchema>;
 export type GetQuestionsQuery = z.infer<typeof getQuestionsQuerySchema>;
+

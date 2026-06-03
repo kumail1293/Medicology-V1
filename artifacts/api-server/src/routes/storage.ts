@@ -28,7 +28,7 @@ const upload = multer({
 });
 
 // Request upload URL
-storageRouter.post('/upload-url', authenticate, async (req, res) => {
+storageRouter.post('/upload-url', authenticate, async (req, res: any) => {
   try {
     const { name } = req.body;
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
@@ -42,7 +42,7 @@ storageRouter.post('/upload-url', authenticate, async (req, res) => {
 });
 
 // Upload file
-storageRouter.put('/upload/:filename', upload.single('file'), async (req, res) => {
+storageRouter.put('/upload/:filename', upload.single('file'), async (req, res: any) => {
   try {
     return res.json({ success: true, path: `/uploads/${req.params.filename}` });
   } catch (err: any) { return res.status(500).json({ error: err.message }); }

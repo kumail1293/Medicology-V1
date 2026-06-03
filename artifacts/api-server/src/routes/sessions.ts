@@ -7,7 +7,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 export const sessionsRouter = Router();
 
 // Create session
-sessionsRouter.post('/', authenticate, async (req: AuthRequest, res) => {
+sessionsRouter.post('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const {
       mode = 'tutor', subject, topic, difficulty,
@@ -50,7 +50,7 @@ sessionsRouter.post('/', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Get session by ID
-sessionsRouter.get('/:id', authenticate, async (req: AuthRequest, res) => {
+sessionsRouter.get('/:id', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const [session] = await db.select().from(testSessionsTable)
       .where(and(
@@ -75,7 +75,7 @@ sessionsRouter.get('/:id', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Update session (save progress)
-sessionsRouter.put('/:id', authenticate, async (req: AuthRequest, res) => {
+sessionsRouter.put('/:id', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { answers, currentIndex, status, totalCorrect } = req.body;
     const [session] = await db.update(testSessionsTable)
@@ -92,7 +92,7 @@ sessionsRouter.put('/:id', authenticate, async (req: AuthRequest, res) => {
 });
 
 // List user sessions
-sessionsRouter.get('/', authenticate, async (req: AuthRequest, res) => {
+sessionsRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const sessions = await db.select().from(testSessionsTable)
       .where(eq(testSessionsTable.userId, req.user!.id))
@@ -104,7 +104,7 @@ sessionsRouter.get('/', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Create session (alternative endpoint)
-sessionsRouter.post('/create', authenticate, async (req: AuthRequest, res) => {
+sessionsRouter.post('/create', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { questionIds, mode = 'tutor' } = req.body;
     const [session] = await db.insert(testSessionsTable).values({

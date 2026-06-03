@@ -7,7 +7,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 export const buddiesRouter = Router();
 
 // Get my buddies
-buddiesRouter.get('/', authenticate, async (req: AuthRequest, res) => {
+buddiesRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const buddies = await db.select().from(studyBuddiesTable)
       .where(and(
@@ -31,7 +31,7 @@ buddiesRouter.get('/', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Search users
-buddiesRouter.get('/search', authenticate, async (req: AuthRequest, res) => {
+buddiesRouter.get('/search', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { q } = req.query as { q: string };
     if (!q || q.length < 2) {
@@ -47,7 +47,7 @@ buddiesRouter.get('/search', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Get pending requests
-buddiesRouter.get('/requests', authenticate, async (req: AuthRequest, res) => {
+buddiesRouter.get('/requests', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const requests = await db.select().from(studyBuddiesTable)
       .where(and(
@@ -66,7 +66,7 @@ buddiesRouter.get('/requests', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Send buddy request
-buddiesRouter.post('/request', authenticate, async (req: AuthRequest, res) => {
+buddiesRouter.post('/request', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { recipientId } = req.body;
     const [existing] = await db.select().from(studyBuddiesTable)
@@ -87,7 +87,7 @@ buddiesRouter.post('/request', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Respond to request
-buddiesRouter.put('/:id/respond', authenticate, async (req: AuthRequest, res) => {
+buddiesRouter.put('/:id/respond', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { action } = req.body;
     const status = action === 'accept' ? 'accepted' : 'rejected';
@@ -100,7 +100,7 @@ buddiesRouter.put('/:id/respond', authenticate, async (req: AuthRequest, res) =>
 });
 
 // Remove buddy
-buddiesRouter.delete('/:id', authenticate, async (req: AuthRequest, res) => {
+buddiesRouter.delete('/:id', authenticate, async (req: AuthRequest, res: any) => {
   try {
     await db.delete(studyBuddiesTable)
       .where(eq(studyBuddiesTable.id, Number(req.params.id)));

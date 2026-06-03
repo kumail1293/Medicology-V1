@@ -7,7 +7,7 @@ import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 export const errataRouter = Router();
 
 // Submit errata
-errataRouter.post('/', authenticate, async (req: AuthRequest, res) => {
+errataRouter.post('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { questionId, errorType, description, correction, referenceUrl } = req.body;
     if (!questionId || !description) {
@@ -27,7 +27,7 @@ errataRouter.post('/', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Get my errata
-errataRouter.get('/my', authenticate, async (req: AuthRequest, res) => {
+errataRouter.get('/my', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const errata = await db.select().from(errataTable)
       .where(eq(errataTable.userId, req.user!.id));
@@ -36,7 +36,7 @@ errataRouter.get('/my', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Get all errata (admin)
-errataRouter.get('/admin', authenticate, requireAdmin, async (req, res) => {
+errataRouter.get('/admin', authenticate, requireAdmin, async (req, res: any) => {
   try {
     const errata = await db.select().from(errataTable)
       .orderBy(errataTable.createdAt);
@@ -45,7 +45,7 @@ errataRouter.get('/admin', authenticate, requireAdmin, async (req, res) => {
 });
 
 // Review errata (admin)
-errataRouter.put('/admin/:id', authenticate, requireAdmin, async (req, res) => {
+errataRouter.put('/admin/:id', authenticate, requireAdmin, async (req, res: any) => {
   try {
     const { status, adminNotes, rewardPoints } = req.body;
     const [errata] = await db.update(errataTable)

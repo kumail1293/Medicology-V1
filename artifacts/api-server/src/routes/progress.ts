@@ -6,7 +6,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const progressRouter = Router();
 
-progressRouter.get('/analytics', authenticate, async (req: AuthRequest, res) => {
+progressRouter.get('/analytics', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const userId = req.user!.id;
     const allProgress = await db.select().from(userProgressTable).where(eq(userProgressTable.userId, userId));
@@ -54,7 +54,7 @@ progressRouter.get('/analytics', authenticate, async (req: AuthRequest, res) => 
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-progressRouter.get('/wrong', authenticate, async (req: AuthRequest, res) => {
+progressRouter.get('/wrong', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const wrong = await db.select().from(userProgressTable).where(and(eq(userProgressTable.userId, req.user!.id), eq(userProgressTable.isCorrect, false))).orderBy(desc(userProgressTable.createdAt));
     res.json({ questions: wrong });

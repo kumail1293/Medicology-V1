@@ -6,7 +6,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const practiceRouter = Router();
 
-practiceRouter.post('/submit', authenticate, async (req: AuthRequest, res) => {
+practiceRouter.post('/submit', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { questionId, selectedAnswer, timeTaken, mode } = req.body;
     if (!questionId || !selectedAnswer) {

@@ -16,7 +16,7 @@ const QBANKS = [
 ];
 
 // Get all qbanks with purchase status
-qbanksRouter.get('/', authenticate, async (req: AuthRequest, res) => {
+qbanksRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const purchases = await db.select().from(qbankPurchasesTable)
       .where(eq(qbankPurchasesTable.userId, req.user!.id));
@@ -34,14 +34,14 @@ qbanksRouter.get('/', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Get pricing config
-qbanksRouter.get('/pricing', async (req, res) => {
+qbanksRouter.get('/pricing', async (req, res: any) => {
   try {
     res.json({ plans: QBANKS });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 // Get my purchases
-qbanksRouter.get('/my', authenticate, async (req: AuthRequest, res) => {
+qbanksRouter.get('/my', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const purchases = await db.select().from(qbankPurchasesTable)
       .where(eq(qbankPurchasesTable.userId, req.user!.id));
@@ -50,7 +50,7 @@ qbanksRouter.get('/my', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Purchase qbank
-qbanksRouter.post('/purchase', authenticate, async (req: AuthRequest, res) => {
+qbanksRouter.post('/purchase', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { qbankId, duration } = req.body;
     const durationMap: Record<string, number> = {

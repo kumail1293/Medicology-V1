@@ -7,7 +7,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 export const bookmarksRouter = Router();
 
 // Get bookmarks
-bookmarksRouter.get('/', authenticate, async (req: AuthRequest, res) => {
+bookmarksRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const bookmarks = await db.select().from(bookmarksTable)
       .where(eq(bookmarksTable.userId, req.user!.id));
@@ -20,7 +20,7 @@ bookmarksRouter.get('/', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Add bookmark
-bookmarksRouter.post('/', authenticate, async (req: AuthRequest, res) => {
+bookmarksRouter.post('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { questionId } = req.body;
     await db.insert(bookmarksTable).values({ userId: req.user!.id, questionId }).onConflictDoNothing();
@@ -29,7 +29,7 @@ bookmarksRouter.post('/', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Remove bookmark
-bookmarksRouter.delete('/:questionId', authenticate, async (req: AuthRequest, res) => {
+bookmarksRouter.delete('/:questionId', authenticate, async (req: AuthRequest, res: any) => {
   try {
     await db.delete(bookmarksTable).where(and(
       eq(bookmarksTable.userId, req.user!.id),

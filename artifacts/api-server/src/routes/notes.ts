@@ -6,21 +6,21 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 export const notesRouter = Router();
 
-notesRouter.get('/', authenticate, async (req: AuthRequest, res) => {
+notesRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const notes = await db.select().from(notesTable).where(eq(notesTable.userId, req.user!.id));
     res.json({ notes });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-notesRouter.get('/:questionId', authenticate, async (req: AuthRequest, res) => {
+notesRouter.get('/:questionId', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const [note] = await db.select().from(notesTable).where(and(eq(notesTable.userId, req.user!.id), eq(notesTable.questionId, Number(req.params.questionId))));
     res.json({ note: note || null });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-notesRouter.put('/:questionId', authenticate, async (req: AuthRequest, res) => {
+notesRouter.put('/:questionId', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { text } = req.body;
     const existing = await db.select().from(notesTable).where(and(eq(notesTable.userId, req.user!.id), eq(notesTable.questionId, Number(req.params.questionId))));

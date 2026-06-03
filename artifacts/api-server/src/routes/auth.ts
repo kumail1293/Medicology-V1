@@ -8,7 +8,7 @@ import { generateToken, authenticate, AuthRequest } from '../middleware/auth.js'
 export const authRouter = Router();
 
 // Register
-authRouter.post('/register', async (req, res) => {
+authRouter.post('/register', async (req, res: any) => {
   try {
     const { name, email, password, college, university, year } = req.body;
     if (!name || !email || !password || !college || !year) {
@@ -50,7 +50,7 @@ authRouter.post('/register', async (req, res) => {
 });
 
 // Login
-authRouter.post('/login', async (req, res) => {
+authRouter.post('/login', async (req, res: any) => {
   console.log('Login route called with:', req.body);
   try {
     const { email, password } = req.body;
@@ -76,7 +76,7 @@ authRouter.post('/login', async (req, res) => {
 });
 
 // Get current user
-authRouter.get('/me', authenticate, async (req: AuthRequest, res) => {
+authRouter.get('/me', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
     if (!user) {
