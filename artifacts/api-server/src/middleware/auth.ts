@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { Request, Response, NextFunction } from 'express';
+import { Request, NextFunction } from 'express';
 
 // JWT_SECRET is now validated in app.ts startup
 const JWT_SECRET = process.env.JWT_SECRET!;
@@ -20,7 +20,7 @@ export function generateToken(user: { id: number; email: string; isAdmin: boolea
   return jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
 }
 
-export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {
+export function authenticate(req: AuthRequest, res: any, next: NextFunction): void {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -37,7 +37,7 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
   }
 }
 
-export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
+export function requireAdmin(req: AuthRequest, res: any, next: NextFunction): void {
   if (!req.user?.isAdmin && req.user?.role !== 'admin' && req.user?.role !== 'superadmin') {
     res.status(403).json({ error: 'Forbidden' });
     return;
