@@ -123,12 +123,14 @@ app.use((req, res) => {
 // Global error handling middleware (must be last)
 app.use(errorHandler as any);
 
-testConnection().then(() => {
-  app.listen(PORT, () => {
-    console.log(`✅ Medicology API running at http://localhost:${PORT}/api`);
-    console.log(`📚 Frontend: http://localhost:5173`);
-    console.log(`🔧 Admin: http://localhost:5173/admin`);
+if (!process.env.VERCEL) {
+  testConnection().then(() => {
+    app.listen(PORT, () => {
+      console.log(`✅ Medicology API running at http://localhost:${PORT}/api`);
+    });
   });
-});
+} else {
+  testConnection();
+}
 
 export default app;
