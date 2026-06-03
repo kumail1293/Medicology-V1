@@ -15,7 +15,7 @@ questionsRouter.get('/', authenticate, async (req, res) => {
       random, search
     } = req.query as Record<string, string>;
 
-    const conditions = [];
+    const conditions: any[] = [];
 
     if (subject) conditions.push(eq(questionsTable.subject, subject));
     if (topic) conditions.push(eq(questionsTable.topic, topic));
