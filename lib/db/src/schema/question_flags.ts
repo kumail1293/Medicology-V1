@@ -1,6 +1,6 @@
 import { pgTable, serial, integer, timestamp } from "drizzle-orm/pg-core";
-import { usersTable } from "./users";
-import { questionsTable } from "./questions";
+import { usersTable } from "./users.js";
+import { questionsTable } from "./questions.js";
 
 export const questionFlagsTable = pgTable("question_flags", {
   id: serial("id").primaryKey(),
@@ -10,3 +10,4 @@ export const questionFlagsTable = pgTable("question_flags", {
 });
 
 export type QuestionFlag = typeof questionFlagsTable.$inferSelect;
+

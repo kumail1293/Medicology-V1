@@ -9,3 +9,4 @@ export const qbankUserSettingsTable = pgTable("qbank_user_settings", {
 });
 
 export type QbankUserSetting = typeof qbankUserSettingsTable.$inferSelect;
+

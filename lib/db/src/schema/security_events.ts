@@ -12,3 +12,4 @@ export const securityEventsTable = pgTable("security_events", {
 
 export type SecurityEvent = typeof securityEventsTable.$inferSelect;
 export type NewSecurityEvent = typeof securityEventsTable.$inferInsert;
+

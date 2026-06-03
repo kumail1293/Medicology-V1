@@ -1,7 +1,7 @@
 import { pgTable, serial, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { usersTable } from "./users";
+import { usersTable } from "./users.js";
 
 export const dailyChallengeTable = pgTable("daily_challenge", {
   id: serial("id").primaryKey(),
@@ -17,3 +17,4 @@ export const dailyChallengeTable = pgTable("daily_challenge", {
 export const insertDailyChallengeSchema = createInsertSchema(dailyChallengeTable).omit({ id: true, createdAt: true });
 export type InsertDailyChallenge = z.infer<typeof insertDailyChallengeSchema>;
 export type DailyChallenge = typeof dailyChallengeTable.$inferSelect;
+

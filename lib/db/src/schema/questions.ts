@@ -28,3 +28,4 @@ export const questionsTable = pgTable("questions", {
 export const insertQuestionSchema = createInsertSchema(questionsTable).omit({ id: true, createdAt: true });
 export type InsertQuestion = z.infer<typeof insertQuestionSchema>;
 export type Question = typeof questionsTable.$inferSelect;
+

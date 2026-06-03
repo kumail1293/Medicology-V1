@@ -12,3 +12,4 @@ export const qbankPurchasesTable = pgTable("qbank_purchases", {
 });
 
 export type QbankPurchase = typeof qbankPurchasesTable.$inferSelect;
+

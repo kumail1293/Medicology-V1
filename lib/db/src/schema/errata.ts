@@ -1,6 +1,6 @@
 import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
-import { usersTable } from "./users";
-import { questionsTable } from "./questions";
+import { usersTable } from "./users.js";
+import { questionsTable } from "./questions.js";
 
 export const errataTable = pgTable("errata", {
   id: serial("id").primaryKey(),
@@ -19,3 +19,4 @@ export const errataTable = pgTable("errata", {
 
 export type Erratum = typeof errataTable.$inferSelect;
 export type InsertErratum = typeof errataTable.$inferInsert;
+

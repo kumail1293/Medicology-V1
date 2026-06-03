@@ -1,8 +1,8 @@
 import { pgTable, serial, integer, text, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { usersTable } from "./users";
-import { questionsTable } from "./questions";
+import { usersTable } from "./users.js";
+import { questionsTable } from "./questions.js";
 
 export const userProgressTable = pgTable("user_progress", {
   id: serial("id").primaryKey(),
@@ -18,3 +18,4 @@ export const userProgressTable = pgTable("user_progress", {
 export const insertProgressSchema = createInsertSchema(userProgressTable).omit({ id: true, createdAt: true });
 export type InsertProgress = z.infer<typeof insertProgressSchema>;
 export type Progress = typeof userProgressTable.$inferSelect;
+

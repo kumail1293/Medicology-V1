@@ -17,3 +17,4 @@ export const paymentOrdersTable = pgTable("payment_orders", {
 
 export type PaymentOrder = typeof paymentOrdersTable.$inferSelect;
 export type NewPaymentOrder = typeof paymentOrdersTable.$inferInsert;
+

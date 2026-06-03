@@ -1,5 +1,5 @@
 import { pgTable, serial, integer, text, jsonb, timestamp } from "drizzle-orm/pg-core";
-import { usersTable } from "./users";
+import { usersTable } from "./users.js";
 
 export const testSessionsTable = pgTable("test_sessions", {
   id: serial("id").primaryKey(),
@@ -25,3 +25,4 @@ export const testSessionsTable = pgTable("test_sessions", {
 
 export type TestSession = typeof testSessionsTable.$inferSelect;
 export type InsertTestSession = typeof testSessionsTable.$inferInsert;
+

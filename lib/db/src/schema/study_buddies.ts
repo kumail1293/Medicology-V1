@@ -9,3 +9,4 @@ export const studyBuddiesTable = pgTable("study_buddies", {
 });
 
 export type StudyBuddy = typeof studyBuddiesTable.$inferSelect;
+
