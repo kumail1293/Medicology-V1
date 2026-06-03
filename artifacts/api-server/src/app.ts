@@ -90,8 +90,8 @@ app.use(rateLimit(100, 15 * 60 * 1000)); // 100 requests per 15 minutes
 startRateLimitCleanup();
 
 // Health check
-app.get('/api/healthz', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/api/healthz', (req: any, res: any) => {
+res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Routes
@@ -111,8 +111,8 @@ app.use('/api/qbanks', qbanksRouter);
 app.use('/api/storage', storageRouter);
 
 // 404 handler
-app.use((req, res) => {
-  res.status(404).json({ 
+app.use((req: any, res: any) => {
+    res.status(404).json({ 
     error: {
       code: 'NOT_FOUND',
       message: 'Route not found'
