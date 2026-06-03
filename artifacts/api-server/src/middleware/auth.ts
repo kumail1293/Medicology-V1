@@ -12,6 +12,8 @@ export interface AuthRequest extends Request {
     role: string;
   };
   body: any;
+  params: any;
+  query: any;
 }
 
 export function generateToken(user: { id: number; email: string; isAdmin: boolean; role: string }) {
