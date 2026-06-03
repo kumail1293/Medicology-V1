@@ -53,3 +53,5 @@ Thumbs.db
 .env.local
 .env.*.local
 .env.production.local
+!lib/db/dist
+!lib/db/dist/**
