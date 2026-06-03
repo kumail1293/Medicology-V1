@@ -1,11 +1,10 @@
-import { z } from "zod/v4";
-export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
-    name: "questions";
+export declare const testSessionsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "test_sessions";
     schema: undefined;
     columns: {
         id: import("drizzle-orm/pg-core").PgColumn<{
             name: "id";
-            tableName: "questions";
+            tableName: "test_sessions";
             dataType: "number";
             columnType: "PgSerial";
             data: number;
@@ -20,47 +19,13 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
-        questionText: import("drizzle-orm/pg-core").PgColumn<{
-            name: "question_text";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        imageUrl: import("drizzle-orm/pg-core").PgColumn<{
-            name: "image_url";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        options: import("drizzle-orm/pg-core").PgColumn<{
-            name: "options";
-            tableName: "questions";
-            dataType: "json";
-            columnType: "PgJsonb";
-            data: unknown;
-            driverParam: unknown;
+        userId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "user_id";
+            tableName: "test_sessions";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
             notNull: true;
             hasDefault: false;
             isPrimaryKey: false;
@@ -71,43 +36,9 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
-        correctAnswer: import("drizzle-orm/pg-core").PgColumn<{
-            name: "correct_answer";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        explanation: import("drizzle-orm/pg-core").PgColumn<{
-            name: "explanation";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        explanationImageUrl: import("drizzle-orm/pg-core").PgColumn<{
-            name: "explanation_image_url";
-            tableName: "questions";
+        title: import("drizzle-orm/pg-core").PgColumn<{
+            name: "title";
+            tableName: "test_sessions";
             dataType: "string";
             columnType: "PgText";
             data: string;
@@ -122,162 +53,9 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
-        wrongAnswerExplanations: import("drizzle-orm/pg-core").PgColumn<{
-            name: "wrong_answer_explanations";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        references: import("drizzle-orm/pg-core").PgColumn<{
-            name: "references";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        subject: import("drizzle-orm/pg-core").PgColumn<{
-            name: "subject";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        system: import("drizzle-orm/pg-core").PgColumn<{
-            name: "system";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        topic: import("drizzle-orm/pg-core").PgColumn<{
-            name: "topic";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        subtopic: import("drizzle-orm/pg-core").PgColumn<{
-            name: "subtopic";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        qbankType: import("drizzle-orm/pg-core").PgColumn<{
-            name: "qbank_type";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        universityTag: import("drizzle-orm/pg-core").PgColumn<{
-            name: "university_tag";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        examType: import("drizzle-orm/pg-core").PgColumn<{
-            name: "exam_type";
-            tableName: "questions";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        difficulty: import("drizzle-orm/pg-core").PgColumn<{
-            name: "difficulty";
-            tableName: "questions";
+        mode: import("drizzle-orm/pg-core").PgColumn<{
+            name: "mode";
+            tableName: "test_sessions";
             dataType: "string";
             columnType: "PgText";
             data: string;
@@ -292,9 +70,74 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
-        tags: import("drizzle-orm/pg-core").PgColumn<{
-            name: "tags";
-            tableName: "questions";
+        questionIds: import("drizzle-orm/pg-core").PgColumn<{
+            name: "question_ids";
+            tableName: "test_sessions";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: number[];
+            driverParam: unknown;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: number[];
+        }>;
+        answers: import("drizzle-orm/pg-core").PgColumn<{
+            name: "answers";
+            tableName: "test_sessions";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: Record<string, {
+                selected: string;
+                timeSpent: number;
+                isCorrect?: boolean;
+            }>;
+            driverParam: unknown;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: Record<string, {
+                selected: string;
+                timeSpent: number;
+                isCorrect?: boolean;
+            }>;
+        }>;
+        flaggedQuestions: import("drizzle-orm/pg-core").PgColumn<{
+            name: "flagged_questions";
+            tableName: "test_sessions";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: number[];
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: number[];
+        }>;
+        subjectFilter: import("drizzle-orm/pg-core").PgColumn<{
+            name: "subject_filter";
+            tableName: "test_sessions";
             dataType: "json";
             columnType: "PgJsonb";
             data: string[];
@@ -311,13 +154,64 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
         }, {}, {
             $type: string[];
         }>;
-        isFree: import("drizzle-orm/pg-core").PgColumn<{
-            name: "is_free";
-            tableName: "questions";
-            dataType: "boolean";
-            columnType: "PgBoolean";
-            data: boolean;
-            driverParam: boolean;
+        questionFilter: import("drizzle-orm/pg-core").PgColumn<{
+            name: "question_filter";
+            tableName: "test_sessions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        difficulty: import("drizzle-orm/pg-core").PgColumn<{
+            name: "difficulty";
+            tableName: "test_sessions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        status: import("drizzle-orm/pg-core").PgColumn<{
+            name: "status";
+            tableName: "test_sessions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        currentIndex: import("drizzle-orm/pg-core").PgColumn<{
+            name: "current_index";
+            tableName: "test_sessions";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
             notNull: true;
             hasDefault: true;
             isPrimaryKey: false;
@@ -328,9 +222,94 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        totalCorrect: import("drizzle-orm/pg-core").PgColumn<{
+            name: "total_correct";
+            tableName: "test_sessions";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        totalTime: import("drizzle-orm/pg-core").PgColumn<{
+            name: "total_time";
+            tableName: "test_sessions";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        examType: import("drizzle-orm/pg-core").PgColumn<{
+            name: "exam_type";
+            tableName: "test_sessions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        universityTag: import("drizzle-orm/pg-core").PgColumn<{
+            name: "university_tag";
+            tableName: "test_sessions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        mbbsYear: import("drizzle-orm/pg-core").PgColumn<{
+            name: "mbbs_year";
+            tableName: "test_sessions";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
-            tableName: "questions";
+            tableName: "test_sessions";
             dataType: "date";
             columnType: "PgTimestamp";
             data: Date;
@@ -345,32 +324,26 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        completedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "completed_at";
+            tableName: "test_sessions";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
     };
     dialect: "pg";
 }>;
-export declare const insertQuestionSchema: z.ZodObject<{
-    questionText: z.ZodString;
-    imageUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    options: z.ZodType<import("drizzle-zod").Json, unknown, z.core.$ZodTypeInternals<import("drizzle-zod").Json, unknown>>;
-    correctAnswer: z.ZodString;
-    explanation: z.ZodString;
-    explanationImageUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    wrongAnswerExplanations: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    references: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    subject: z.ZodString;
-    system: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    topic: z.ZodString;
-    subtopic: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    qbankType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    universityTag: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    examType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    difficulty: z.ZodOptional<z.ZodString>;
-    tags: z.ZodOptional<z.ZodNullable<z.ZodType<string[], string[], z.core.$ZodTypeInternals<string[], string[]>>>>;
-    isFree: z.ZodOptional<z.ZodBoolean>;
-}, {
-    out: {};
-    in: {};
-}>;
-export type InsertQuestion = z.infer<typeof insertQuestionSchema>;
-export type Question = typeof questionsTable.$inferSelect;
-//# sourceMappingURL=questions.d.ts.map
+export type TestSession = typeof testSessionsTable.$inferSelect;
+export type InsertTestSession = typeof testSessionsTable.$inferInsert;
+//# sourceMappingURL=test_sessions.d.ts.map
