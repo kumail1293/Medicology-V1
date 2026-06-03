@@ -1,8 +1,5 @@
 import { NextFunction } from 'express';
 
-/**
- * Standard error response format
- */
 export interface AppError {
   code: string;
   message: string;
@@ -10,21 +7,13 @@ export interface AppError {
   details?: Record<string, any>;
 }
 
-/**
- * Centralized error handler
- */
 export class ApiError extends Error implements AppError {
   code: string;
   override message: string;
   statusCode: number;
   details?: Record<string, any>;
 
-  constructor(
-    code: string,
-    message: string,
-    statusCode = 500,
-    details?: Record<string, any>
-  ) {
+  constructor(code: string, message: string, statusCode = 500, details?: Record<string, any>) {
     super(message);
     this.code = code;
     this.message = message;
@@ -34,16 +23,7 @@ export class ApiError extends Error implements AppError {
   }
 }
 
-/**
- * Express middleware to handle errors globally
- */
-export function errorHandler(
-  err: Error | ApiError,
-  req: any,
-  res: any,
-  next: NextFunction
-) {
-  // Log error for debugging
+export function errorHandler(err: any, req: any, res: any, next: NextFunction) {
   console.error('[Error]', {
     code: err instanceof ApiError ? err.code : 'UNKNOWN_ERROR',
     message: err.message,
@@ -62,8 +42,7 @@ export function errorHandler(
     });
   }
 
-  // Generic error - don't expose internals
-  const statusCode = (err as any).statusCode || 500;
+  const statusCode = err.statusCode || 500;
   return res.status(statusCode).json({
     error: {
       code: 'INTERNAL_ERROR',
@@ -72,14 +51,8 @@ export function errorHandler(
   });
 }
 
-/**
- * Async handler wrapper to catch promise rejections
- */
 export function asyncHandler(fn: Function) {
   return (req: any, res: any, next: any) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
-};
 }
-
-
