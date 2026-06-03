@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router } from 'express';
 import { db } from '../db.js';
 import { questionsTable, usersTable, userProgressTable } from '@workspace/db';
 import { eq, ilike, and, or, sql } from '../utils/drizzle.js';
@@ -20,7 +20,7 @@ export const adminRouter = Router();
 adminRouter.use(authenticate, requireAdmin);
 
 // Get stats
-adminRouter.get('/stats', async (req: AuthRequest, res: Response) => {
+adminRouter.get('/stats', async (req: AuthRequest, res: any) => {
   try {
     const [{ totalQuestions }] = await db
       .select({ totalQuestions: sql<number>`count(*)` })
@@ -54,7 +54,7 @@ adminRouter.get('/stats', async (req: AuthRequest, res: Response) => {
 adminRouter.get(
   '/questions',
   validateQuery(getQuestionsQuerySchema),
-  async (req: any, res: Response) => {
+  async (req: any, res: any) => {
     try {
       const query = req.validatedQuery as GetQuestionsQuery;
       const conditions: any[] = [];
@@ -97,7 +97,7 @@ adminRouter.get(
 adminRouter.post(
   '/questions',
   validateBody(createQuestionSchema),
-  async (req: any, res: Response) => {
+  async (req: any, res: any) => {
     try {
       const data = req.validatedBody as CreateQuestion;
       const [question] = await db.insert(questionsTable).values(data).returning();
@@ -114,7 +114,7 @@ adminRouter.put(
   '/questions/:id',
   validateParams(questionIdParamSchema),
   validateBody(updateQuestionSchema),
-  async (req: any, res: Response) => {
+  async (req: any, res: any) => {
     try {
       const { id } = req.validatedParams as { id: number };
       const data = req.validatedBody as UpdateQuestion;
@@ -141,7 +141,7 @@ adminRouter.put(
 adminRouter.delete(
   '/questions/:id',
   validateParams(questionIdParamSchema),
-  async (req: any, res: Response) => {
+  async (req: any, res: any) => {
     try {
       const { id } = req.validatedParams as { id: number };
       await db.delete(questionsTable).where(eq(questionsTable.id, id));
@@ -154,7 +154,7 @@ adminRouter.delete(
 );
 
 // Check duplicates
-adminRouter.get('/questions/duplicates', async (req: AuthRequest, res: Response) => {
+adminRouter.get('/questions/duplicates', async (req: AuthRequest, res: any) => {
   try {
     const questions = await db
       .select()
@@ -186,7 +186,7 @@ adminRouter.get('/questions/duplicates', async (req: AuthRequest, res: Response)
 adminRouter.delete(
   '/users/:id',
   validateParams(questionIdParamSchema),
-  async (req: any, res: Response) => {
+  async (req: any, res: any) => {
     try {
       const { id } = req.validatedParams as { id: number };
       await db.delete(usersTable).where(eq(usersTable.id, id));
@@ -202,7 +202,7 @@ adminRouter.delete(
 adminRouter.post(
   '/users/:id/reset-password',
   validateParams(questionIdParamSchema),
-  async (req: any, res: Response) => {
+  async (req: any, res: any) => {
     try {
       const bcrypt = await import('bcryptjs');
       const { newPassword } = req.body;
@@ -218,7 +218,7 @@ adminRouter.post(
 );
 
 // Get all users (with pagination and search)
-adminRouter.get('/users', async (req: any, res: Response) => {
+adminRouter.get('/users', async (req: any, res: any) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 10, 100);
     const offset = parseInt(req.query.offset) || 0;
@@ -265,7 +265,7 @@ adminRouter.get('/users', async (req: any, res: Response) => {
 adminRouter.get(
   '/users/:id',
   validateParams(questionIdParamSchema),
-  async (req: any, res: Response) => {
+  async (req: any, res: any) => {
     try {
       const { id } = req.validatedParams as { id: number };
       const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
@@ -286,7 +286,7 @@ adminRouter.get(
 );
 
 // Create user
-adminRouter.post('/users', async (req: any, res: Response) => {
+adminRouter.post('/users', async (req: any, res: any) => {
   try {
     const bcrypt = await import('bcryptjs');
     const { name, email, password, college, university, year, role } = req.body;
@@ -328,7 +328,7 @@ adminRouter.post('/users', async (req: any, res: Response) => {
 adminRouter.put(
   '/users/:id',
   validateParams(questionIdParamSchema),
-  async (req: any, res: Response) => {
+  async (req: any, res: any) => {
     try {
       const { id } = req.validatedParams as { id: number };
       const { name, email, college, university, year, role } = req.body;
@@ -371,3 +371,4 @@ adminRouter.put(
     }
   }
 );
+
