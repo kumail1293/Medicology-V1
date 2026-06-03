@@ -90,7 +90,7 @@ authRouter.get('/me', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Update profile
-authRouter.put('/me', authenticate, async (req: AuthRequest, res) => {
+authRouter.put('/me', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { name, email, college, university, year } = req.body;
     const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
@@ -113,7 +113,7 @@ authRouter.put('/me', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Change password
-authRouter.put('/me/password', authenticate, async (req: AuthRequest, res) => {
+authRouter.put('/me/password', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
