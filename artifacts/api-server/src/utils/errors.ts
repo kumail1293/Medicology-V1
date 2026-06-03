@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { NextFunction } from 'express';
 
 /**
  * Standard error response format
@@ -39,8 +39,8 @@ export class ApiError extends Error implements AppError {
  */
 export function errorHandler(
   err: Error | ApiError,
-  req: Request,
-  res: Response,
+  req: any,
+  res: any,
   next: NextFunction
 ) {
   // Log error for debugging
@@ -76,7 +76,8 @@ export function errorHandler(
  * Async handler wrapper to catch promise rejections
  */
 export function asyncHandler(fn: Function) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: any, res: any, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
+

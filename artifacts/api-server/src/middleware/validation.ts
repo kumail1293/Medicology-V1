@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 
 export interface ValidatedRequest extends Request {
@@ -11,7 +11,7 @@ export interface ValidatedRequest extends Request {
  * Middleware to validate request body against a Zod schema
  */
 export function validateBody(schema: ZodSchema) {
-  return (req: ValidatedRequest, res: Response, next: NextFunction) => {
+  return (req: ValidatedRequest, res: any, next: NextFunction) => {
     try {
       const validated = schema.parse(req.body);
       req.validatedBody = validated;
@@ -41,7 +41,7 @@ export function validateBody(schema: ZodSchema) {
  * Middleware to validate query parameters against a Zod schema
  */
 export function validateQuery(schema: ZodSchema) {
-  return (req: ValidatedRequest, res: Response, next: NextFunction) => {
+  return (req: ValidatedRequest, res: any, next: NextFunction) => {
     try {
       const validated = schema.parse(req.query);
       req.validatedQuery = validated;
@@ -71,7 +71,7 @@ export function validateQuery(schema: ZodSchema) {
  * Middleware to validate URL parameters against a Zod schema
  */
 export function validateParams(schema: ZodSchema) {
-  return (req: ValidatedRequest, res: Response, next: NextFunction) => {
+  return (req: ValidatedRequest, res: any, next: NextFunction) => {
     try {
       const validated = schema.parse(req.params);
       req.validatedParams = validated;
@@ -101,9 +101,10 @@ export function validateParams(schema: ZodSchema) {
  * Helper to wrap async route handlers and catch errors
  */
 export function asyncHandler(
-  fn: (req: ValidatedRequest, res: Response, next: NextFunction) => Promise<void>
+  fn: (req: ValidatedRequest, res: any, next: NextFunction) => Promise<void>
 ) {
-  return (req: ValidatedRequest, res: Response, next: NextFunction) => {
+  return (req: ValidatedRequest, res: any, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
+
