@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { Request, NextFunction } from 'express';
+import { Request } from 'express';
 
 // JWT_SECRET is now validated in app.ts startup
 const JWT_SECRET = process.env.JWT_SECRET!;
