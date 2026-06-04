@@ -5,9 +5,16 @@
     "rootDir": "src",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "target": "es2020",
+    "lib": ["es2020"],
     "noImplicitAny": false,
     "skipLibCheck": true,
-    "strict": false
+    "strict": false,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "declaration": false,
+    "sourceMap": false
   },
   "include": ["src/**/*"],
   "references": [
