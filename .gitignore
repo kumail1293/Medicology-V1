@@ -1,5 +1,4 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
-
 # compiled output
 dist
 tmp
@@ -7,10 +6,8 @@ out-tsc
 *.tsbuildinfo
 .expo
 .expo-shared
-
 # dependencies
 node_modules
-
 # IDEs and editors
 /.idea
 .project
@@ -19,14 +16,12 @@ node_modules
 *.launch
 .settings/
 *.sublime-workspace
-
 # IDE - VSCode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-
 # misc
 /.sass-cache
 /connect.lock
@@ -36,18 +31,14 @@ npm-debug.log
 yarn-error.log
 testem.log
 /typings
-
 # System Files
 .DS_Store
 Thumbs.db
-
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
-
 # Replit
 .cache/
 .local/
-
 # Environment variables - NEVER commit secrets!
 .env
 .env.local
@@ -55,3 +46,8 @@ Thumbs.db
 .env.production.local
 !lib/db/dist
 !lib/db/dist/**
+# pnpm cache
+clean/
+*/clean/
+**/clean/
+.pnpm-store/
