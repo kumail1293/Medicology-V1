@@ -1,19 +1,20 @@
 {
   "version": 2,
+  "buildCommand": "pnpm build",
   "installCommand": "pnpm install --no-frozen-lockfile",
   "builds": [
     {
-      "src": "src/app.ts",
-      "use": "@vercel/node",
+      "src": "dist/app.js",
+      "use": "@vercel/node@3",
       "config": {
-        "includeFiles": ["../../lib/db/dist/**"]
+        "maxLambdaSize": "50mb"
       }
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "src/app.ts"
+      "dest": "dist/app.js"
     }
   ]
 }
