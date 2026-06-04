@@ -296,7 +296,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile Header */}
       <div className="md:hidden glass-panel flex items-center justify-between p-4 shadow-sm">
         <div className="flex items-center gap-3">
-          <img src={`${import.meta.env.BASE_URL}images/logo-colored.png`} alt="Medicology" className="h-10 w-auto object-contain" />
+          <img src={`/images/logo-colored.png`} alt="Medicology" className="h-10 w-auto object-contain" />
           <button
             onClick={() => setPaletteOpen(true)}
             className="hidden sm:inline-flex items-center gap-2 rounded-full border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted transition-colors"
@@ -330,7 +330,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         >
             <div className="p-6 hidden md:flex items-center justify-start">
-              <img src={`${import.meta.env.BASE_URL}images/logo-colored.png`} alt="Medicology" className="h-16 w-auto object-contain" />
+              <img src={`/images/logo-colored.png`} alt="Medicology" className="h-16 w-auto object-contain" />
             </div>
 
             <div className="px-4 pb-2">
