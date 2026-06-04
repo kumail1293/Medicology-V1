@@ -14,13 +14,14 @@ export interface AuthRequest extends Request {
   body: any;
   params: any;
   query: any;
+  headers: any;
 }
 
 export function generateToken(user: { id: number; email: string; isAdmin: boolean; role: string }) {
   return jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
 }
 
-export function authenticate(req: AuthRequest, res: any, next: NextFunction): void {
+export function authenticate(req: any, res: any, next: any): void {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -37,7 +38,7 @@ export function authenticate(req: AuthRequest, res: any, next: NextFunction): vo
   }
 }
 
-export function requireAdmin(req: AuthRequest, res: any, next: NextFunction): void {
+export function requireAdmin(req: any, res: any, next: any): void {
   if (!req.user?.isAdmin && req.user?.role !== 'admin' && req.user?.role !== 'superadmin') {
     res.status(403).json({ error: 'Forbidden' });
     return;
