@@ -1,16 +1,8 @@
 {
-  "version": 2,
-  "buildCommand": "pnpm build",
-  "installCommand": "pnpm install --no-frozen-lockfile",
-  "outputDirectory": "dist",
-  "routes": [
+  "rewrites": [
     {
-      "src": "^/assets/.*",
-      "dest": "/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
