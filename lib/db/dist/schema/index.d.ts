@@ -14,4 +14,6 @@ export * from "./qbank_user_settings.js";
 export * from "./payment_orders.js";
 export * from "./security_events.js";
 export * from "./password_reset_tokens.js";
+export * from "./otp_verifications.js";
+export * from "./otp_verifications.js";
 //# sourceMappingURL=index.d.ts.map
