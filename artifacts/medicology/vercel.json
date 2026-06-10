@@ -2,11 +2,11 @@
   "version": 2,
   "buildCommand": "pnpm build",
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "outputDirectory": "dist/public",
+  "outputDirectory": "dist",
   "routes": [
     {
       "src": "^/assets/.*",
-      "dest": "/assets/$1"
+      "dest": "/$1"
     },
     {
       "src": "/(.*)",
