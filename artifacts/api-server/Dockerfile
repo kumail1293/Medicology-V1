@@ -5,21 +5,13 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm
 
-# Copy only package.json and lock files first (for layer caching)
-COPY ../../pnpm-lock.yaml ../../package.json ../../.npmrc* ./
+# Copy api-server files
+COPY . .
 
-# Copy the api-server source
-COPY . ./api-server
-
-# Copy database module
-COPY ../../lib ./lib
-
-# Install dependencies
-WORKDIR /app
-RUN pnpm install --frozen-lockfile
+# Install only production dependencies (assuming lock file is in api-server or parent)
+RUN pnpm install --prod 2>/dev/null || pnpm install
 
 # Build
-WORKDIR /app/api-server
 RUN pnpm build
 
 EXPOSE 5000
