@@ -5,23 +5,23 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm
 
-# Copy root files
-COPY pnpm-lock.yaml .npmrc ./
-COPY package.json ./
+# Copy only package.json and lock files first (for layer caching)
+COPY ../../pnpm-lock.yaml ../../package.json ../../.npmrc* ./
 
-# Copy monorepo structure
-COPY artifacts/api-server ./artifacts/api-server
-COPY lib ./lib
+# Copy the api-server source
+COPY . ./api-server
+
+# Copy database module
+COPY ../../lib ./lib
 
 # Install dependencies
+WORKDIR /app
 RUN pnpm install --frozen-lockfile
 
-WORKDIR /app/artifacts/api-server
-
 # Build
+WORKDIR /app/api-server
 RUN pnpm build
 
 EXPOSE 5000
 
-# Start
 CMD ["pnpm", "start"]
