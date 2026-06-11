@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file=../../.env --watch --import tsx/esm src/app.ts",
-    "build": "esbuild src/app.ts --platform=node --format=esm --outfile=dist/app.js --packages=external --minify",
-    "start": "node --env-file=../../.env dist/app.js",
-    "typecheck": "tsc --noEmit"
+  "dev": "node --env-file=../../.env --watch --import tsx/esm src/app.ts",
+  "build": "tsc --noEmit",
+  "start": "node --import tsx/esm src/app.ts",
+  "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
