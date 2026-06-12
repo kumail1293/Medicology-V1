@@ -42,7 +42,7 @@ function generateCaptcha() {
   if (op === '+') answer = a + b;
   else if (op === '-') answer = a - b;
   else answer = a * b;
-  return { question: \\ \ \ = ?\, answer };
+  return { question: `${a} ${op} ${b} = ?`, answer };
 }
 
 export default function Register() {
