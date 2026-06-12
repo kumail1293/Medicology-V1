@@ -5,10 +5,11 @@ import { motion } from 'framer-motion';
 import { Mail, Lock, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeInput, clientRateLimit } from '@/lib/security';
+import { mockAuthService } from '@/lib/mockAuth';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('test@college.edu');
+  const [password, setPassword] = useState('Password123');
   const [showPassword, setShowPassword] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
@@ -55,7 +56,7 @@ export default function Login() {
     }
 
     if (lockoutUntil && Date.now() < lockoutUntil) {
-      toast({ title: `Try again in ${countdown}s`, variant: "destructive" });
+      toast({ title: \Try again in \s\, variant: "destructive" });
       return;
     }
 
@@ -66,30 +67,18 @@ export default function Login() {
 
     setIsPending(true);
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: sanitizeInput(email.trim()), password }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        const newAttempts = failedAttempts + 1;
-        setFailedAttempts(newAttempts);
-        if (newAttempts >= 3) startLockout(30);
-        toast({
-          title: "Login Failed",
-          description: data?.error || data?.message || "Invalid credentials",
-          variant: "destructive"
-        });
-        return;
-      }
+      const data = await mockAuthService.login(sanitizeInput(email.trim()), password);
       setFailedAttempts(0);
       login(data.token, data.user, rememberMe);
+      toast({ title: "Welcome back!", description: \Logged in as \\, variant: "default" });
       setLocation('/');
     } catch (err: any) {
+      const newAttempts = failedAttempts + 1;
+      setFailedAttempts(newAttempts);
+      if (newAttempts >= 3) startLockout(30);
       toast({
         title: "Login Failed",
-        description: err?.message || "Network error. Please try again.",
+        description: err?.message || "Invalid credentials",
         variant: "destructive"
       });
     } finally {
@@ -108,18 +97,23 @@ export default function Login() {
           {Array.from({ length: 15 }).map((_, i) => (
             <div key={i} className="absolute rounded-full bg-white" style={{
               width: Math.random() * 120 + 30, height: Math.random() * 120 + 30,
-              left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`,
+              left: \\%\, top: \\%\,
               opacity: Math.random() * 0.5
             }} />
           ))}
         </div>
         <div className="relative z-10 p-12 text-white max-w-lg">
           <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
-            <img src={`${import.meta.env.BASE_URL}images/logo-white.png`} alt="Medicology" className="h-32 w-auto object-contain mb-8 drop-shadow-2xl" />
+            <img src={\\images/logo-white.png\} alt="Medicology" className="h-32 w-auto object-contain mb-8 drop-shadow-2xl" />
             <h1 className="text-5xl font-display font-bold mb-6 leading-tight">Master your medical knowledge.</h1>
             <p className="text-lg text-white/80 leading-relaxed">
               The premier QBank platform designed exclusively for MBBS students. High-yield questions, detailed explanations, and AI-powered insights.
             </p>
+            <div className="mt-8 pt-6 border-t border-white/20">
+              <p className="text-sm text-white/70 mb-3 font-medium">?? Demo Mode - Test with:</p>
+              <p className="text-xs text-white/60">Email: test@college.edu</p>
+              <p className="text-xs text-white/60">Password: Password123</p>
+            </div>
           </motion.div>
         </div>
       </div>
@@ -133,7 +127,7 @@ export default function Login() {
         >
           {/* Mobile logo */}
           <div className="flex items-center justify-center mb-6 lg:hidden">
-            <img src={`${import.meta.env.BASE_URL}images/logo-colored.png`} alt="Medicology" className="h-16 w-auto object-contain" />
+            <img src={\\images/logo-colored.png\} alt="Medicology" className="h-16 w-auto object-contain" />
           </div>
 
           <div className="bg-card p-8 sm:p-10 rounded-3xl shadow-xl border border-border">
@@ -162,7 +156,7 @@ export default function Login() {
                   <input
                     type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required
                     className="w-full pl-11 pr-12 py-3 bg-background border-2 border-border rounded-xl focus:border-primary outline-none transition-colors"
-                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                    placeholder="••••••••"
                   />
                   <button
                     type="button"
@@ -196,7 +190,7 @@ export default function Login() {
                 {isPending
                   ? <Loader2 className="animate-spin" size={18} />
                   : isLocked
-                  ? `Try again in ${countdown}s`
+                  ? \Try again in \s\
                   : <><span>Sign In</span><ArrowRight size={18} /></>}
               </button>
             </form>
