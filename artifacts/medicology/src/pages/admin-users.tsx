@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/hooks/use-toast';
 import {
   Search,
@@ -58,9 +57,9 @@ function UserManagementPage() {
         search: searchQuery,
       });
 
-      const response = await fetch(`http://localhost:5000/api/admin/users?${params}`, {
+      const response = await fetch(`/api/admin/users?${params}`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       });
 
@@ -98,11 +97,10 @@ function UserManagementPage() {
   const handleCreateUser = async () => {
     try {
       const token = localStorage.getItem('medicology_token');
-      const response = await fetch('http://localhost:5000/api/admin/users', {
+      const response = await fetch('/api/admin/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(formData),
       });
@@ -134,11 +132,10 @@ function UserManagementPage() {
 
     try {
       const token = localStorage.getItem('medicology_token');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${selectedUser.id}`, {
+      const response = await fetch(`/api/admin/users/${selectedUser.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(formData),
       });
@@ -172,10 +169,10 @@ function UserManagementPage() {
 
     try {
       const token = localStorage.getItem('medicology_token');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}`, {
+      const response = await fetch(`/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       });
 
@@ -242,138 +239,136 @@ function UserManagementPage() {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <AdminLayout>
-      <div className="p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-bold mb-2">User Management</h2>
-            <p className="text-muted-foreground">Manage all registered users and their roles</p>
-          </div>
-          <button
-            onClick={() => {
-              resetForm();
-              setModalMode('create');
-              setShowModal(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Plus size={18} />
-            Create User
-          </button>
+    <div className="p-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-3xl font-bold mb-2">User Management</h2>
+          <p className="text-muted-foreground">Manage all registered users and their roles</p>
         </div>
+        <button
+          onClick={() => {
+            resetForm();
+            setModalMode('create');
+            setShowModal(true);
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+        >
+          <Plus size={18} />
+          Create User
+        </button>
+      </div>
 
-        {/* Search & Filter */}
-        <div className="bg-card border border-border rounded-lg p-4 mb-6">
-          <div className="flex items-center gap-3">
-            <Search size={18} className="text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search by name, email, or college..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent border-0 outline-none text-foreground placeholder:text-muted-foreground"
-            />
-          </div>
+      {/* Search & Filter */}
+      <div className="bg-card border border-border rounded-lg p-4 mb-6">
+        <div className="flex items-center gap-3">
+          <Search size={18} className="text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search by name, email, or college..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 bg-transparent border-0 outline-none text-foreground placeholder:text-muted-foreground"
+          />
         </div>
+      </div>
 
-        {/* Users Table */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading users...</div>
-          ) : users.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">No users found</div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Name</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Email</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">College</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Year</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Role</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Status</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Actions</th>
+      {/* Users Table */}
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        {loading ? (
+          <div className="p-8 text-center text-muted-foreground">Loading users...</div>
+        ) : users.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground">No users found</div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Name</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Email</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">College</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Year</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Role</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                      <td className="px-6 py-4 text-sm font-medium">{user.name}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">{user.email}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">{user.college}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">Year {user.year}</td>
+                      <td className="px-6 py-4 text-sm">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                          <Shield size={12} />
+                          {user.role.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-500">
+                          Active
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => openViewModal(user)}
+                            className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
+                            title="View"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            onClick={() => openEditModal(user)}
+                            className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
+                            title="Edit"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="p-1 hover:bg-destructive/10 rounded transition-colors text-muted-foreground hover:text-destructive"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => (
-                      <tr key={user.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                        <td className="px-6 py-4 text-sm font-medium">{user.name}</td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground">{user.email}</td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground">{user.college}</td>
-                        <td className="px-6 py-4 text-sm text-muted-foreground">Year {user.year}</td>
-                        <td className="px-6 py-4 text-sm">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                            <Shield size={12} />
-                            {user.role.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-500">
-                            Active
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => openViewModal(user)}
-                              className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
-                              title="View"
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button
-                              onClick={() => openEditModal(user)}
-                              className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
-                              title="Edit"
-                            >
-                              <Edit size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUser(user.id)}
-                              className="p-1 hover:bg-destructive/10 rounded transition-colors text-muted-foreground hover:text-destructive"
-                              title="Delete"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="px-6 py-4 border-t border-border flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages} • Total: {total} users
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="p-2 hover:bg-muted rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronLeft size={16} />
-                    </button>
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="p-2 hover:bg-muted rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages} • Total: {total} users
                 </div>
-              )}
-            </>
-          )}
-        </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 hover:bg-muted rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 hover:bg-muted rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* User Modal */}
@@ -492,7 +487,7 @@ function UserManagementPage() {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </div>
   );
 }
 

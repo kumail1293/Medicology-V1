@@ -24,6 +24,9 @@ const Analytics        = lazy(() => import("./pages/analytics"));
 const ReviewHub        = lazy(() => import("./pages/review"));
 const AdminDashboard   = lazy(() => import("./pages/admin-dashboard"));
 const AdminUsers       = lazy(() => import("./pages/admin-users"));
+const AdminQuestions   = lazy(() => import("./pages/admin-questions"));
+const AdminAnnouncements = lazy(() => import("./pages/admin-announcements"));
+const AdminFlags       = lazy(() => import("./pages/admin-flags"));
 const FlashcardsPage   = lazy(() => import("./pages/flashcards"));
 const SettingsPage     = lazy(() => import("./pages/settings"));
 const CreateTestPage   = lazy(() => import("./pages/create-test"));
@@ -64,7 +67,7 @@ function Router() {
           {() => <ProtectedRoute component={SessionV2} />}
         </Route>
 
-        <Route path="/">
+        <Route path="/admin">
           {() => <ProtectedRoute component={() => <AppLayout><Dashboard /></AppLayout>} />}
         </Route>
         <Route path="/create-test">
@@ -123,20 +126,20 @@ function Router() {
         </Route>
 
         {/* Admin routes */}
-        <Route path="/admin">
+        <Route path="/admin-dashboard">
           {() => <AdminRoute component={() => <AdminLayout><AdminDashboard /></AdminLayout>} />}
         </Route>
         <Route path="/admin/users">
           {() => <AdminRoute component={() => <AdminLayout><AdminUsers /></AdminLayout>} />}
         </Route>
         <Route path="/admin/questions">
-          {() => <AdminRoute component={() => <AdminLayout><div className="p-6"><h1 className="text-2xl font-bold">Questions</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div></AdminLayout>} />}
+          {() => <AdminRoute component={() => <AdminLayout><AdminQuestions /></AdminLayout>} />}
         </Route>
         <Route path="/admin/announcements">
-          {() => <AdminRoute component={() => <AdminLayout><div className="p-6"><h1 className="text-2xl font-bold">Announcements</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div></AdminLayout>} />}
+          {() => <AdminRoute component={() => <AdminLayout><AdminAnnouncements /></AdminLayout>} />}
         </Route>
         <Route path="/admin/flags">
-          {() => <AdminRoute component={() => <AdminLayout><div className="p-6"><h1 className="text-2xl font-bold">Flags &amp; Reports</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div></AdminLayout>} />}
+          {() => <AdminRoute component={() => <AdminLayout><AdminFlags /></AdminLayout>} />}
         </Route>
         <Route path="/admin/settings">
           {() => <AdminRoute component={() => <AdminLayout><div className="p-6"><h1 className="text-2xl font-bold">Admin Settings</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div></AdminLayout>} />}

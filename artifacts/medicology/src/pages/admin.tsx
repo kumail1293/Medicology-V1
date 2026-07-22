@@ -2737,6 +2737,8 @@ const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
   errata:        ErrataSection,
 };
 
+export { QuestionsSection, FlagsSection, AnnouncementsSection };
+
 export default function Admin() {
   const [sectionOrder, setSectionOrder] = useSectionOrder();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});

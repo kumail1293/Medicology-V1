@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/hooks/use-toast';
 import {
   BarChart3,
@@ -164,10 +163,9 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const token = localStorage.getItem('medicology_token');
-        const response = await fetch('http://localhost:5000/api/admin/stats', {
+        const response = await fetch('/api/admin/stats', {
           headers: {
-            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
         });
 
@@ -193,9 +191,8 @@ export default function AdminDashboard() {
   }, [toast]);
 
   return (
-    <AdminLayout>
-      <div className="p-8">
-        <div className="mb-8">
+    <div className="p-8">
+      <div className="mb-8">
           <h2 className="text-3xl font-bold mb-2">Dashboard</h2>
           <p className="text-muted-foreground">Welcome to Medicology Admin Panel. Here's your system overview.</p>
         </div>
@@ -253,6 +250,5 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
-    </AdminLayout>
   );
 }

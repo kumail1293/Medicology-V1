@@ -2,41 +2,24 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Link, useLocation } from 'wouter';
 import { motion } from 'framer-motion';
-import {
-  Mail, Lock, User, Building, GraduationCap,
-  Loader2, ArrowRight, Eye, EyeOff, University, ChevronDown
-} from 'lucide-react';
+import { Mail, Lock, User, Building, GraduationCap, Loader2, ArrowRight, Eye, EyeOff, University, ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { stripHtmlTags, isValidEmail, isStrongPassword, clientRateLimit } from '@/lib/security';
 import { mockAuthService } from '@/lib/mockAuth';
 
 const UNIVERSITIES = [
-  "Aga Khan University (AKU)",
-  "National University of Medical Sciences (NUMS)",
-  "Dow University of Health Sciences (DUHS)",
-  "University of Health Sciences (UHS)",
-  "Khyber Medical University (KMU)",
-  "Jinnah Sindh Medical University (JSMU)",
-  "Bahria University Medical & Dental College (BUMDC)",
-  "Ziauddin University (ZU)",
-  "Baqai Medical University (BMU)",
-  "Hamdard University (HU)",
-  "Isra University",
-  "The University of Lahore (UOL)",
-  "King Edward Medical University (KEMU)",
-  "Rawalpindi Medical University (RMU)",
-  "Quaid-e-Azam Medical College (QAMC)",
-  "Nishtar Medical University",
-  "Sheikh Zayed Medical College",
-  "Allama Iqbal Medical College (AIMC)",
-  "Services Institute of Medical Sciences (SIMS)",
+  "Aga Khan University (AKU)", "National University of Medical Sciences (NUMS)",
+  "Dow University of Health Sciences (DUHS)", "University of Health Sciences (UHS)",
+  "Khyber Medical University (KMU)", "Jinnah Sindh Medical University (JSMU)", "Ziauddin University (ZU)",
+  "Baqai Medical University (BMU)", "Hamdard University (HU)", "Isra University",
+  "The University of Lahore (UOL)", "King Edward Medical University (KEMU)", "Rawalpindi Medical University (RMU)", "Nishtar Medical University", "Services Institute of Medical Sciences (SIMS)",
   "Fatima Jinnah Medical University (FJMU)",
 ];
 
 function generateCaptcha() {
   const a = Math.floor(Math.random() * 12) + 1;
   const b = Math.floor(Math.random() * 12) + 1;
-  const ops = ['+', '-', '×'] as const;
+  const ops = ['+', '-', 'Ã—'] as const;
   const op = ops[Math.floor(Math.random() * ops.length)];
   let answer: number;
   if (op === '+') answer = a + b;
@@ -80,10 +63,7 @@ export default function Register() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'year' ? parseInt(value) : value
-    }));
+    setFormData(prev => ({ ...prev, [name]: name === 'year' ? parseInt(value) : value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,15 +80,18 @@ export default function Register() {
     }
 
     if (!isValidEmail(formData.email)) {
-      toast({ title: "Invalid email address", variant: "destructive" }); return;
+      toast({ title: "Invalid email address", variant: "destructive" });
+      return;
     }
 
     if (!isStrongPassword(formData.password)) {
-      toast({ title: "Weak password", description: "Use at least 8 characters with one uppercase letter and one number.", variant: "destructive" }); return;
+      toast({ title: "Weak password", description: "Use at least 8 characters with one uppercase letter and one number.", variant: "destructive" });
+      return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      toast({ title: "Passwords don't match", variant: "destructive" }); return;
+      toast({ title: "Passwords don't match", variant: "destructive" });
+      return;
     }
 
     const captchaAnswer = parseInt(captchaInput.trim());
@@ -131,7 +114,7 @@ export default function Register() {
       });
 
       login(data.token, data.user, true);
-      toast({ title: "Account created!", description: \Welcome \!\, variant: "default" });
+      toast({ title: "Account created!", description: `Welcome ${data.user.name}!`, variant: "default" });
       setLocation('/');
     } catch (err: any) {
       toast({ title: "Registration Failed", description: err?.message || "Please try again.", variant: "destructive" });
@@ -142,30 +125,25 @@ export default function Register() {
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Branding Panel */}
       <div className="hidden lg:flex flex-1 relative bg-primary items-center justify-center overflow-hidden order-2">
         <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary to-primary/80" />
         <div className="absolute inset-0 opacity-10">
           {Array.from({ length: 20 }).map((_, i) => (
             <div key={i} className="absolute rounded-full bg-white" style={{
               width: Math.random() * 100 + 20, height: Math.random() * 100 + 20,
-              left: \\%\, top: \\%\,
+              left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`,
               opacity: Math.random() * 0.5
             }} />
           ))}
         </div>
         <div className="relative z-10 p-12 text-white max-w-lg">
-          <img src={\\images/logo-white.png\} alt="Medicology" className="h-32 w-auto mb-8 object-contain" />
+          <img src={`${import.meta.env.BASE_URL}images/logo-white.png`} alt="Medicology" className="h-32 w-auto mb-8 object-contain" />
           <h1 className="text-5xl font-display font-bold mb-6 leading-tight">Join the elite.</h1>
-          <p className="text-xl text-white/80 leading-relaxed mb-8">
-            Practice with thousands of peer-reviewed MCQs tailored for MBBS students across Pakistan.
-          </p>
+          <p className="text-xl text-white/80 leading-relaxed mb-8">Practice with thousands of peer-reviewed MCQs tailored for Medical, Dental & Allied Health students.</p>
           <div className="space-y-3">
             {["High-yield questions for all subjects", "AI-powered explanations", "Track your progress daily"].map((f) => (
               <div key={f} className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full bg-white/30 flex items-center justify-center shrink-0">
-                  <div className="w-2 h-2 rounded-full bg-white" />
-                </div>
+                <div className="w-5 h-5 rounded-full bg-white/30 flex items-center justify-center shrink-0"><div className="w-2 h-2 rounded-full bg-white" /></div>
                 <span className="text-white/90 text-sm">{f}</span>
               </div>
             ))}
@@ -173,69 +151,56 @@ export default function Register() {
         </div>
       </div>
 
-      {/* Form Panel */}
       <div className="flex-1 flex flex-col justify-center items-center p-4 sm:p-8 order-1 overflow-y-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-lg my-4"
-        >
-          {/* Mobile Logo */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-lg my-4">
           <div className="flex items-center justify-center mb-6 lg:hidden">
-            <img src={\\images/logo-colored.png\} alt="Medicology" className="h-16 w-auto object-contain" />
+            <img src={`${import.meta.env.BASE_URL}images/logo-colored.png`} alt="Medicology" className="h-16 w-auto object-contain" />
           </div>
 
           <div className="bg-card p-6 sm:p-8 rounded-3xl shadow-xl border border-border">
             <h2 className="text-2xl font-display font-bold text-foreground mb-1">Create Account</h2>
-            <p className="text-sm text-muted-foreground mb-6">Join thousands of MBBS students</p>
+            <p className="text-sm text-muted-foreground mb-6">Join thousands of Medical, Dental & Allied Health students</p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-
-              {/* Full Name */}
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-foreground">Full Name</label>
                 <div className="relative">
                   <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input
-                    type="text" name="name" value={formData.name} onChange={handleChange} required
+                  <input type="text" name="name" value={formData.name} onChange={handleChange} required
                     className="w-full pl-10 pr-4 py-2.5 bg-background border-2 border-border rounded-xl focus:border-primary outline-none text-sm transition-colors"
                     placeholder="Dr. Ahmed Ali"
                   />
                 </div>
               </div>
 
-              {/* Email */}
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-foreground">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input
-                    type="email" name="email" value={formData.email} onChange={handleChange} required
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} required
                     className="w-full pl-10 pr-4 py-2.5 bg-background border-2 border-border rounded-xl focus:border-primary outline-none text-sm transition-colors"
                     placeholder="doctor@college.edu"
                   />
                 </div>
               </div>
 
-              {/* University */}
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-foreground">University</label>
                 <div className="flex gap-2 mb-1.5">
                   <button type="button" onClick={() => setUniversityMode('list')}
-                    className={\	ext-xs px-3 py-1 rounded-full font-medium transition-colors \\}>
+                    className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${universityMode === 'list' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>
                     Select University
                   </button>
                   <button type="button" onClick={() => setUniversityMode('custom')}
-                    className={\	ext-xs px-3 py-1 rounded-full font-medium transition-colors \\}>
-                    Other / Not Listed
+                    className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${universityMode === 'custom' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>
+                    Other
                   </button>
                 </div>
                 {universityMode === 'list' ? (
                   <div className="relative">
                     <University className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                     <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" size={14} />
-                    <select
-                      name="university" value={formData.university} onChange={handleChange}
+                    <select name="university" value={formData.university} onChange={handleChange}
                       className="w-full pl-10 pr-8 py-2.5 bg-background border-2 border-border rounded-xl focus:border-primary outline-none text-sm appearance-none transition-colors"
                     >
                       <option value="">Select your university...</option>
@@ -243,30 +208,24 @@ export default function Register() {
                     </select>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    <div className="relative">
-                      <University className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                      <input
-                        type="text" name="university" value={formData.university} onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-2.5 bg-background border-2 border-border rounded-xl focus:border-primary outline-none text-sm transition-colors"
-                        placeholder="Enter your university name..."
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground px-1">Your university will be reviewed and may be added to our list.</p>
+                  <div className="relative">
+                    <University className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                    <input type="text" name="university" value={formData.university} onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 bg-background border-2 border-border rounded-xl focus:border-primary outline-none text-sm transition-colors"
+                      placeholder="Enter your university name..."
+                    />
                   </div>
                 )}
               </div>
 
-              {/* College & Year */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-sm font-semibold text-foreground">College</label>
                   <div className="relative">
                     <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                    <input
-                      type="text" name="college" value={formData.college} onChange={handleChange} required
+                    <input type="text" name="college" value={formData.college} onChange={handleChange} required
                       className="w-full pl-10 pr-3 py-2.5 bg-background border-2 border-border rounded-xl focus:border-primary outline-none text-sm transition-colors"
-                      placeholder="KEMU"
+                      placeholder="Poonch Medical College, Rawalakot"
                     />
                   </div>
                 </div>
@@ -275,26 +234,22 @@ export default function Register() {
                   <div className="relative">
                     <GraduationCap className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" size={14} />
-                    <select
-                      name="year" value={formData.year} onChange={handleChange}
+                    <select name="year" value={formData.year} onChange={handleChange}
                       className="w-full pl-10 pr-8 py-2.5 bg-background border-2 border-border rounded-xl focus:border-primary outline-none text-sm appearance-none transition-colors"
                     >
-                      {[1,2,3,4,5,6].map(y => <option key={y} value={y}>Year {y}</option>)}
+                      {[1,2,3,4,5,"House"].map(y => <option key={y} value={y}>Year {y}</option>)}
                     </select>
                   </div>
                 </div>
               </div>
 
-              {/* Password */}
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-foreground">Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input
-                    type={showPassword ? "text" : "password"} name="password"
-                    value={formData.password} onChange={handleChange} required minLength={6}
+                  <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleChange} required minLength={6}
                     className="w-full pl-10 pr-10 py-2.5 bg-background border-2 border-border rounded-xl focus:border-primary outline-none text-sm transition-colors"
-                    placeholder="••••••••"
+                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-0.5">
@@ -305,70 +260,56 @@ export default function Register() {
                   <div className="space-y-1 px-1">
                     <div className="flex gap-1">
                       {[1,2,3,4,5].map(i => (
-                        <div key={i} className={\h-1 flex-1 rounded-full transition-colors \\} />
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= passwordStrength ? strengthColor : 'bg-muted'}`} />
                       ))}
                     </div>
-                    <p className={\	ext-xs font-medium \\}>
+                    <p className={`text-xs font-medium ${passwordStrength <= 1 ? 'text-red-500' : passwordStrength <= 3 ? 'text-yellow-600' : 'text-green-600'}`}>
                       {strengthLabel}
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Confirm Password */}
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-foreground">Confirm Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <input
-                    type={showConfirmPassword ? "text" : "password"} name="confirmPassword"
-                    value={formData.confirmPassword} onChange={handleChange} required
-                    className={\w-full pl-10 pr-10 py-2.5 bg-background border-2 rounded-xl outline-none text-sm transition-colors \\}
-                    placeholder="••••••••"
+                  <input type={showConfirmPassword ? "text" : "password"} name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required
+                    className={`w-full pl-10 pr-10 py-2.5 bg-background border-2 rounded-xl outline-none text-sm transition-colors ${
+                      formData.confirmPassword && formData.password !== formData.confirmPassword ? 'border-red-400' : formData.confirmPassword && formData.password === formData.confirmPassword ? 'border-green-400' : 'border-border'
+                    }`}
+                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   />
                   <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-0.5">
                     {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                {formData.confirmPassword && formData.password !== formData.confirmPassword && (
-                  <p className="text-xs text-red-500 px-1">Passwords do not match</p>
-                )}
               </div>
 
-              {/* CAPTCHA */}
               <div className="space-y-1">
                 <label className="text-sm font-semibold text-foreground">Security Check</label>
                 <div className="flex items-center gap-3">
-                  <div className="bg-muted border-2 border-border rounded-xl px-4 py-2.5 font-mono font-bold text-base select-none text-foreground min-w-28 text-center tracking-widest">
+                  <div className="bg-muted border-2 border-border rounded-xl px-4 py-2.5 font-mono font-bold text-base select-none text-foreground min-w-28 text-center">
                     {captcha.question}
                   </div>
-                  <input
-                    type="number"
-                    value={captchaInput}
-                    onChange={(e) => { setCaptchaInput(e.target.value); setCaptchaError(''); }}
+                  <input type="number" value={captchaInput} onChange={(e) => { setCaptchaInput(e.target.value); setCaptchaError(''); }}
                     className="flex-1 py-2.5 px-4 bg-background border-2 border-border rounded-xl focus:border-primary outline-none text-sm transition-colors"
-                    placeholder="Your answer"
-                    required
+                    placeholder="Your answer" required
                   />
                 </div>
                 {captchaError && <p className="text-xs text-red-500 px-1">{captchaError}</p>}
               </div>
 
-              {/* Submit */}
-              <button
-                type="submit"
-                disabled={isPending}
+              <button type="submit" disabled={isPending}
                 className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-xl font-bold hover:bg-primary/90 shadow-md shadow-primary/25 hover:-translate-y-0.5 mt-2 transition-all disabled:opacity-70"
               >
                 {isPending ? <Loader2 className="animate-spin" size={18} /> : <>Create Account <ArrowRight size={18} /></>}
               </button>
-
             </form>
 
             <p className="text-center mt-5 text-sm text-muted-foreground">
-              Already have an account?{' '}
-              <Link href="/login" className="text-primary font-semibold hover:underline">Sign in</Link>
+              Already have an account? <Link href="/login" className="text-primary font-semibold hover:underline">Sign in</Link>
             </p>
           </div>
         </motion.div>

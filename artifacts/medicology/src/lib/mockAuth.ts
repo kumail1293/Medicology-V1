@@ -29,7 +29,7 @@ export const mockAuthService = {
     await delay(800);
     
     const existingUsers = JSON.parse(localStorage.getItem('medicology_users') || '{}');
-    if (existingUsers[data.email]) {
+    if (existingUsers[data.email.toLowerCase().trim()]) {
       throw new Error('Email already registered');
     }
 
@@ -45,7 +45,7 @@ export const mockAuthService = {
 
     const token = btoa(JSON.stringify({ user, timestamp: Date.now() }));
     
-    existingUsers[data.email] = { password: data.password, user };
+    existingUsers[data.email.toLowerCase().trim()] = { password: data.password, user };
     localStorage.setItem('medicology_users', JSON.stringify(existingUsers));
     localStorage.setItem('medicology_session', JSON.stringify({ token, user }));
 
@@ -56,7 +56,7 @@ export const mockAuthService = {
     await delay(800);
     
     const users = JSON.parse(localStorage.getItem('medicology_users') || '{}');
-    const userData = users[email];
+    const userData = users[email.toLowerCase().trim()];
 
     if (!userData || userData.password !== password) {
       throw new Error('Invalid email or password');
@@ -81,3 +81,4 @@ export const mockAuthService = {
     return !!localStorage.getItem('medicology_session');
   },
 };
+
