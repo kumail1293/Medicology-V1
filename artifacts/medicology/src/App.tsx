@@ -27,6 +27,7 @@ const AdminUsers       = lazy(() => import("./pages/admin-users"));
 const AdminQuestions   = lazy(() => import("./pages/admin-questions"));
 const AdminAnnouncements = lazy(() => import("./pages/admin-announcements"));
 const AdminFlags       = lazy(() => import("./pages/admin-flags"));
+const AdminSettings    = lazy(() => import("./pages/admin-settings"));
 const FlashcardsPage   = lazy(() => import("./pages/flashcards"));
 const SettingsPage     = lazy(() => import("./pages/settings"));
 const CreateTestPage   = lazy(() => import("./pages/create-test"));
@@ -67,6 +68,12 @@ function Router() {
           {() => <ProtectedRoute component={SessionV2} />}
         </Route>
 
+        <Route path="/">
+          {() => <ProtectedRoute component={() => <AppLayout><Dashboard /></AppLayout>} />}
+        </Route>
+        <Route path="/dashboard">
+          {() => <ProtectedRoute component={() => <AppLayout><Dashboard /></AppLayout>} />}
+        </Route>
         <Route path="/admin">
           {() => <ProtectedRoute component={() => <AppLayout><Dashboard /></AppLayout>} />}
         </Route>
@@ -142,7 +149,7 @@ function Router() {
           {() => <AdminRoute component={() => <AdminLayout><AdminFlags /></AdminLayout>} />}
         </Route>
         <Route path="/admin/settings">
-          {() => <AdminRoute component={() => <AdminLayout><div className="p-6"><h1 className="text-2xl font-bold">Admin Settings</h1><p className="text-muted-foreground mt-2">Coming soon.</p></div></AdminLayout>} />}
+          {() => <AdminRoute component={() => <AdminLayout><AdminSettings /></AdminLayout>} />}
         </Route>
 
         <Route path="/payment/callback" component={PaymentCallback} />

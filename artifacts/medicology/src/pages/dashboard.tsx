@@ -33,37 +33,42 @@ export default function Dashboard() {
   const [freeQuestions, setFreeQuestions] = useState<any[]>([]);
 
   useEffect(() => {
-    const token = localStorage.getItem('medicology_token');
+    const token = localStorage.getItem('medicology_token') || localStorage.getItem('medicology_session')?.then(s => JSON.parse(s).token);
+    
+    // Show dashboard immediately with default data, load API data in background
+    setIsLoading(false);
+    
     const load = async () => {
       try {
-        const res = await fetch('/api/progress/analytics', { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch('/api/progress/analytics', { 
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        });
         if (res.ok) setAnalytics(await res.json());
-      } catch {}
-      finally { setIsLoading(false); }
+      } catch (e) {
+        console.debug('Analytics load failed (expected with mock auth):', e);
+      }
     };
+    
     const loadFree = async () => {
       try {
-        const res = await fetch('/api/questions/free?limit=6', { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch('/api/questions/free?limit=6', { 
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        });
         if (res.ok) {
           const d = await res.json();
           setFreeQuestions(d.questions ?? []);
         }
-      } catch {}
+      } catch (e) {
+        console.debug('Free questions load failed (expected with mock auth):', e);
+      }
     };
+    
+    // Load data in background without blocking UI
     load();
     loadFree();
   }, []);
-
-  if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center p-12">
-        <div className="animate-pulse flex flex-col items-center gap-3">
-          <div className="text-4xl">🧠</div>
-          <p className="text-muted-foreground">Loading your insights...</p>
-        </div>
-      </div>
-    );
-  }
 
   const stats = analytics || {
     totalAttempted: 0, totalCorrect: 0, totalIncorrect: 0, accuracy: 0, streakDays: 0,

@@ -65,11 +65,36 @@ export default function Login() {
 
     setIsPending(true);
     try {
-      const data = await mockAuthService.login(sanitizeInput(email.trim()), password);
-      setFailedAttempts(0);
-      login(data.token, data.user, rememberMe);
-      toast({ title: "Welcome back!", description: `Logged in as ${data.user.name}`, variant: "default" });
-      setLocation('/dashboard');
+      // Try backend API first
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: sanitizeInput(email.trim()).toLowerCase(),
+            password,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Login failed');
+        }
+
+        const data = await response.json();
+        setFailedAttempts(0);
+        login(data.token, data.user, rememberMe);
+        toast({ title: "Welcome back!", description: `Logged in as ${data.user.name}`, variant: "default" });
+        setLocation('/dashboard');
+      } catch (apiError: any) {
+        // Fall back to mock auth
+        console.log('Backend unavailable, using mock auth');
+        const data = await mockAuthService.login(sanitizeInput(email.trim()), password);
+        setFailedAttempts(0);
+        login(data.token, data.user, rememberMe);
+        toast({ title: "Welcome back!", description: `Logged in as ${data.user.name}`, variant: "default" });
+        setLocation('/dashboard');
+      }
     } catch (err: any) {
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);

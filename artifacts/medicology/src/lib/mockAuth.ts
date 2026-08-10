@@ -17,6 +17,24 @@ export interface MockSession {
 // Simulate network delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Generate a mock JWT token with proper format (header.payload.signature)
+function generateMockJWT(user: MockUser): string {
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  // Token expires in 30 days
+  const expiresAt = Math.floor((Date.now() + 30 * 24 * 60 * 60 * 1000) / 1000);
+  const payload = btoa(JSON.stringify({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    isAdmin: false,
+    role: 'user',
+    iat: Math.floor(Date.now() / 1000),
+    exp: expiresAt,
+  }));
+  const signature = btoa('mock-signature');
+  return `${header}.${payload}.${signature}`;
+}
+
 export const mockAuthService = {
   register: async (data: {
     name: string;
@@ -43,7 +61,7 @@ export const mockAuthService = {
       createdAt: new Date().toISOString(),
     };
 
-    const token = btoa(JSON.stringify({ user, timestamp: Date.now() }));
+    const token = generateMockJWT(user);
     
     existingUsers[data.email.toLowerCase().trim()] = { password: data.password, user };
     localStorage.setItem('medicology_users', JSON.stringify(existingUsers));
@@ -62,7 +80,7 @@ export const mockAuthService = {
       throw new Error('Invalid email or password');
     }
 
-    const token = btoa(JSON.stringify({ user: userData.user, timestamp: Date.now() }));
+    const token = generateMockJWT(userData.user);
     localStorage.setItem('medicology_session', JSON.stringify({ token, user: userData.user }));
 
     return { token, user: userData.user };

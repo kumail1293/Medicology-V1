@@ -104,18 +104,54 @@ export default function Register() {
 
     setIsPending(true);
     try {
-      const data = await mockAuthService.register({
-        name: stripHtmlTags(formData.name.trim()),
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password,
-        college: stripHtmlTags(formData.college.trim()),
-        university: formData.university.trim() || 'Other',
-        year: Number(formData.year),
-      });
+      // Try backend API first, fall back to mock auth if backend is unavailable
+      try {
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: stripHtmlTags(formData.name.trim()),
+            email: formData.email.trim().toLowerCase(),
+            password: formData.password,
+            college: stripHtmlTags(formData.college.trim()),
+            university: formData.university.trim() || 'Other',
+            year: Number(formData.year),
+          }),
+        });
 
-      login(data.token, data.user, true);
-      toast({ title: "Account created!", description: `Welcome ${data.user.name}!`, variant: "default" });
-      setLocation('/');
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Registration failed');
+        }
+
+        const data = await response.json();
+        const user = { 
+          id: data.user?.id || data.id,
+          name: stripHtmlTags(formData.name.trim()),
+          email: formData.email.trim().toLowerCase(),
+          college: formData.college,
+          university: formData.university,
+          year: Number(formData.year),
+          createdAt: new Date().toISOString(),
+        };
+        login(data.token, user, true);
+        toast({ title: "Account created!", description: `Welcome ${user.name}!`, variant: "default" });
+        setLocation('/dashboard');
+      } catch (apiError: any) {
+        // Fall back to mock auth if backend is unavailable
+        console.log('Backend unavailable, using mock auth');
+        const mockData = await mockAuthService.register({
+          name: stripHtmlTags(formData.name.trim()),
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+          college: stripHtmlTags(formData.college.trim()),
+          university: formData.university.trim() || 'Other',
+          year: Number(formData.year),
+        });
+        login(mockData.token, mockData.user, true);
+        toast({ title: "Account created!", description: `Welcome ${mockData.user.name}!`, variant: "default" });
+        setLocation('/dashboard');
+      }
     } catch (err: any) {
       toast({ title: "Registration Failed", description: err?.message || "Please try again.", variant: "destructive" });
     } finally {
