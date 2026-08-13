@@ -75,7 +75,7 @@ function Router() {
           {() => <ProtectedRoute component={() => <AppLayout><Dashboard /></AppLayout>} />}
         </Route>
         <Route path="/admin">
-          {() => <ProtectedRoute component={() => <AppLayout><Dashboard /></AppLayout>} />}
+          {() => <AdminRoute component={() => <AdminLayout><AdminDashboard /></AdminLayout>} />}
         </Route>
         <Route path="/create-test">
           {() => <ProtectedRoute component={() => <AppLayout><CreateTestPage /></AppLayout>} />}

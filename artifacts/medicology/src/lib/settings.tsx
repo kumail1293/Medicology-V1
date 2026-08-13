@@ -51,11 +51,15 @@ function applySettings(s: AppSettings) {
 interface SettingsContextType {
   settings: AppSettings;
   update: (partial: Partial<AppSettings>) => void;
+  theme: AppTheme;
+  setTheme: (theme: AppTheme) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType>({
   settings: DEFAULTS,
   update: () => {},
+  theme: DEFAULTS.theme,
+  setTheme: () => {},
 });
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
@@ -70,7 +74,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setSettings((prev) => ({ ...prev, ...partial }));
 
   return (
-    <SettingsContext.Provider value={{ settings, update }}>
+    <SettingsContext.Provider
+      value={{
+        settings,
+        update,
+        theme: settings.theme,
+        setTheme: (theme) => update({ theme }),
+      }}
+    >
       {children}
     </SettingsContext.Provider>
   );

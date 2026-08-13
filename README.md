@@ -7,7 +7,7 @@ A full-stack web application for medical education with comprehensive question b
 ### Prerequisites
 - Node.js v18+
 - pnpm (`npm install -g pnpm`)
-- PostgreSQL (or use Railway/Neon)
+- PostgreSQL only if you want a real database (mock mode needs none)
 
 ### Local Development
 
@@ -22,15 +22,35 @@ cp .env.example .env
 # 3. Run Backend API
 cd artifacts/api-server
 pnpm dev
-# API starts on http://localhost:3000
+# API starts on http://localhost:5000
 
 # 4. In another terminal, run Frontend
 cd artifacts/medicology
 pnpm dev
-# App opens on http://localhost:5173
+# App opens on http://localhost:5173 (Vite proxies /api to the backend on :5000)
 ```
 
 Visit **http://localhost:5173** in your browser!
+
+### 🗄️ Mock Database Mode (No PostgreSQL Needed)
+
+The backend can run without a database using a built-in in-memory mock DB, which
+is perfect for frontend work, demos, and quick testing:
+
+- Set `USE_SQLITE=true` in the root `.env`, or simply leave `DATABASE_URL` unset.
+- The API then logs `📊 Using mock database for development (data not persisted)`.
+- **Auth, admin, announcements, questions, progress — all routes work**, with
+  seeded-capable in-memory tables.
+- ⚠️ **Data is not persisted**: restarting the API server wipes registered users
+  and any data created. Promotions/announcements made in a session disappear on
+  restart.
+
+To use a real PostgreSQL database instead, set `DATABASE_URL` to a Postgres
+connection string (local, Railway, Neon, or Supabase) and remove `USE_SQLITE`.
+
+> **Ports:** the API listens on **5000** (`artifacts/api-server/.env.local` sets
+> `PORT=5000`), not 3000. The frontend Vite dev server runs on **5173** and
+> proxies `/api` requests to `VITE_API_URL` (default `http://localhost:5000`).
 
 ---
 
@@ -58,7 +78,6 @@ Question-Bank/
 ├── lib/
 │   ├── api-client-react/    # React hooks for API
 │   ├── api-spec/            # OpenAPI specification
-│   ├── api-zod/             # Zod schemas for validation
 │   └── db/                  # Database schema & migrations
 │
 └── package.json             # Workspace root
@@ -144,11 +163,11 @@ pnpm typecheck      # Check TypeScript
 - Tokens valid for 30 days
 - Admin roles for special access
 
-### Default Admin Setup
-```bash
-# Admin account can be created via API or database
-# Email backend developer for credentials
-```
+### Admin Setup
+
+Admins are promoted by an existing admin via the admin panel (`/admin` → Users)
+or the API. In mock-DB mode, promote any user with a crafted dev token against
+`PUT /api/admin/users/:id` (see the admin routes for details).
 
 ---
 
@@ -169,13 +188,15 @@ pnpm typecheck      # Check TypeScript
 ## 🐛 Troubleshooting
 
 ### Port Already in Use
+The API uses port **5000** and the frontend uses **5173**.
+
 ```bash
 # Windows
-netstat -ano | findstr :3000
+netstat -ano | findstr :5000
 taskkill /PID <PID> /F
 
 # Mac/Linux
-lsof -i :3000
+lsof -i :5000
 kill -9 <PID>
 ```
 
@@ -189,7 +210,8 @@ pnpm install --force
 ### Database Connection Error
 ```bash
 # Check DATABASE_URL in .env
-# Ensure PostgreSQL is running
+# For local dev without Postgres, set USE_SQLITE=true to use the mock DB
+# Ensure PostgreSQL is running if you are NOT using mock mode
 # Verify credentials are correct
 ```
 
@@ -203,9 +225,6 @@ pnpm install --force
 
 ## 📚 Documentation
 
-- [Setup Guide for Testing](./SETUP_FOR_TESTING.md)
-- [Deployment Guide](./DEPLOYMENT_GUIDE.md)
-- [Deployment Checklist](./DEPLOYMENT_CHECKLIST.md)
 - [Environment Variables](./.env.example)
 
 ---

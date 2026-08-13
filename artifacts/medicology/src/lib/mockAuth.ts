@@ -1,11 +1,13 @@
 // Mock authentication service using localStorage
 export interface MockUser {
-  id: string;
+  id: number;
   name: string;
   email: string;
   college: string;
   university: string;
   year: number;
+  isAdmin: boolean;
+  role: string;
   createdAt: string;
 }
 
@@ -52,12 +54,14 @@ export const mockAuthService = {
     }
 
     const user: MockUser = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.floor(Math.random() * 1e9),
       name: data.name,
       email: data.email,
       college: data.college,
       university: data.university,
       year: data.year,
+      isAdmin: false,
+      role: 'user',
       createdAt: new Date().toISOString(),
     };
 

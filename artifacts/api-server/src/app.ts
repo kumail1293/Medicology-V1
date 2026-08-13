@@ -16,6 +16,7 @@ import { buddiesRouter } from './routes/buddies.js';
 import { errataRouter } from './routes/errata.js';
 import { practiceRouter } from './routes/practice.js';
 import { qbanksRouter } from './routes/qbanks.js';
+import { announcementsRouter } from './routes/announcements.js';
 import { storageRouter } from './routes/storage.js';
 import { testConnection } from './db.js';
 import { errorHandler } from './utils/errors.js';
@@ -109,6 +110,7 @@ app.use('/api/errata', errataRouter);
 app.use('/api/practice', practiceRouter);
 app.use('/api/qbanks', qbanksRouter);
 app.use('/api/storage', storageRouter);
+app.use('/api/announcements', announcementsRouter);
 
 // 404 handler
 app.use((req: any, res: any) => {

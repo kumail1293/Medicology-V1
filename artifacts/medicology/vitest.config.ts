@@ -7,6 +7,14 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    // Run test files sequentially in a single fork to avoid worker startup
+    // timeouts on Windows dev machines.
+    pool: "forks",
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
     setupFiles: ["./src/test/setup.ts"],
     coverage: {
       provider: "v8",

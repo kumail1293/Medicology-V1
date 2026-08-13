@@ -480,7 +480,7 @@ importers:
         version: 3.25.76
       zustand:
         specifier: ^5.0.12
-        version: 5.0.13(@types/react@19.2.14)(react@19.1.0)
+        version: 5.0.13(@types/react@19.2.14)(react@19.1.0)(use-sync-external-store@1.6.0(react@19.1.0))
 
   lib/api-client-react:
     dependencies:
@@ -493,12 +493,6 @@ importers:
       orval:
         specifier: ^8.5.2
         version: 8.9.1(prettier@3.8.3)(typescript@5.9.3)
-
-  lib/api-zod:
-    dependencies:
-      zod:
-        specifier: 'catalog:'
-        version: 3.25.76
 
   lib/db:
     dependencies:
@@ -6926,7 +6920,8 @@ snapshots:
 
   zod@3.25.76: {}
 
-  zustand@5.0.13(@types/react@19.2.14)(react@19.1.0):
+  zustand@5.0.13(@types/react@19.2.14)(react@19.1.0)(use-sync-external-store@1.6.0(react@19.1.0)):
     optionalDependencies:
       '@types/react': 19.2.14
       react: 19.1.0
+      use-sync-external-store: 1.6.0(react@19.1.0)

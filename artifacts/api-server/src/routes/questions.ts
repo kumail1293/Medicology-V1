@@ -43,6 +43,20 @@ questionsRouter.get('/', authenticate, async (req, res: any) => {
   }
 });
 
+// Get free sample questions (dashboard "Free Sample MCQs" section)
+questionsRouter.get('/free', authenticate, async (req, res: any) => {
+  try {
+    const limit = Number(req.query.limit ?? '6');
+    const questions = await db.select()
+      .from(questionsTable)
+      .where(eq(questionsTable.isFree, true))
+      .limit(limit);
+    return res.json({ questions });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Get single question
 questionsRouter.get('/:id', authenticate, async (req, res: any) => {
   try {

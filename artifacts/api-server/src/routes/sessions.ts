@@ -103,14 +103,45 @@ sessionsRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
   }
 });
 
-// Create session (alternative endpoint)
+// Create session (used by Create Test wizard + Daily Challenge)
+// Accepts either explicit questionIds/specificQuestionIds, or filter params
+// (subjects/systems/difficulty/universityTag/examType + questionCount) from
+// which matching questions are selected server-side.
 sessionsRouter.post('/create', authenticate, async (req: AuthRequest, res: any) => {
   try {
-    const { questionIds, mode = 'tutor' } = req.body;
+    const {
+      questionIds, specificQuestionIds,
+      subjects, systems, questionCount = 20, mode = 'tutor',
+      difficulty, universityTag, examType,
+    } = req.body;
+
+    let finalQuestionIds: number[] = questionIds || specificQuestionIds || [];
+
+    if (finalQuestionIds.length === 0) {
+      const conditions: any[] = [];
+      if (Array.isArray(subjects) && subjects.length > 0) {
+        conditions.push(inArray(questionsTable.subject, subjects));
+      }
+      if (Array.isArray(systems) && systems.length > 0) {
+        conditions.push(inArray(questionsTable.system, systems));
+      }
+      if (difficulty) conditions.push(eq(questionsTable.difficulty, difficulty));
+      if (universityTag) conditions.push(eq(questionsTable.universityTag, universityTag));
+      if (examType) conditions.push(eq(questionsTable.examType, examType));
+
+      const questions = await db.select({ id: questionsTable.id })
+        .from(questionsTable)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(sql`RANDOM()`)
+        .limit(Number(questionCount));
+
+      finalQuestionIds = questions.map((q: any) => q.id);
+    }
+
     const [session] = await db.insert(testSessionsTable).values({
       userId: req.user!.id,
       mode,
-      questionIds: questionIds || [],
+      questionIds: finalQuestionIds,
       currentIndex: 0,
       answers: {},
       status: 'active',

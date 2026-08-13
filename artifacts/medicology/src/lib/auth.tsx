@@ -123,10 +123,15 @@ useEffect(() => {
     refetch();
   };
 
-  const role = ((user as any)?.role ?? "user") as UserRole;
+  // The current-user query populates `currentUser` before the effect that copies
+  // it into `user` runs. Deriving role/admin from both avoids a one-render window
+  // where an admin reloading an admin page looks like a plain user and gets
+  // redirected by AdminRoute.
+  const activeUser = (user ?? currentUser) ?? null;
+  const role = ((activeUser as any)?.role ?? "user") as UserRole;
   const isSuperAdmin = role === "superadmin";
-  const isAdmin = isSuperAdmin || role === "admin" || !!user?.isAdmin;
-  const customPermissions: CustomPermissions = ((user as any)?.customPermissions ?? {}) as CustomPermissions;
+  const isAdmin = isSuperAdmin || role === "admin" || !!activeUser?.isAdmin;
+  const customPermissions: CustomPermissions = ((activeUser as any)?.customPermissions ?? {}) as CustomPermissions;
 
   const hasPermission = (key: string): boolean => {
     if (isSuperAdmin) return true;
@@ -134,7 +139,10 @@ useEffect(() => {
     return customPermissions[key] === true;
   };
 
-  const authLoading = !!token && (isLoading || isFetching || (!currentUser && !error));
+  // Only block on loading while we have a token but no user yet. Once `login()`
+  // sets the user locally, the current-user query is disabled, so we must not
+  // wait for it (otherwise the app spins forever after mock login).
+  const authLoading = !!token && !user && (isLoading || isFetching || (!currentUser && !error));
 
   return (
     <AuthContext.Provider value={{

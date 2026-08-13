@@ -132,6 +132,8 @@ export default function Register() {
           college: formData.college,
           university: formData.university,
           year: Number(formData.year),
+          isAdmin: false,
+          role: 'user',
           createdAt: new Date().toISOString(),
         };
         login(data.token, user, true);

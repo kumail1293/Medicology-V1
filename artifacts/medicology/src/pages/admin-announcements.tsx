@@ -5,7 +5,7 @@ import { Plus, Pencil, Trash2, Megaphone, CheckCircle2 } from 'lucide-react';
 interface AnnouncementItem {
   id: number;
   title: string;
-  message: string;
+  content: string;
   type: string;
   isActive?: boolean;
   createdAt?: string;
@@ -13,8 +13,8 @@ interface AnnouncementItem {
 
 const emptyForm = () => ({
   title: '',
-  message: '',
-  type: 'info',
+  content: '',
+  type: 'banner',
   isActive: true,
 });
 
@@ -54,7 +54,7 @@ export default function AdminAnnouncementsPage() {
     setEditing(announcement);
     setForm({
       title: announcement.title,
-      message: announcement.message,
+      content: announcement.content,
       type: announcement.type,
       isActive: Boolean(announcement.isActive),
     });
@@ -71,7 +71,7 @@ export default function AdminAnnouncementsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: form.title,
-          message: form.message,
+          content: form.content,
           type: form.type,
           isActive: form.isActive,
         }),
@@ -124,7 +124,7 @@ export default function AdminAnnouncementsPage() {
                     <Megaphone size={16} className="text-primary" />
                     <span className="font-semibold">{announcement.title}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">{announcement.message}</p>
+                  <p className="text-sm text-muted-foreground">{announcement.content}</p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="rounded-full bg-muted px-2 py-1">{announcement.type}</span>
                     {announcement.isActive ? <span className="rounded-full bg-green-500/10 px-2 py-1 text-green-600">Active</span> : <span className="rounded-full bg-muted px-2 py-1">Inactive</span>}
@@ -154,15 +154,15 @@ export default function AdminAnnouncementsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Message</label>
-                <textarea required rows={4} value={form.message} onChange={(event) => setForm({ ...form, message: event.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+                <textarea required rows={4} value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium">Type</label>
                   <select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2">
-                    <option value="info">Info</option>
-                    <option value="warning">Warning</option>
-                    <option value="success">Success</option>
+                    <option value="banner">Banner (top bar)</option>
+                    <option value="ticker">Ticker (bottom news strip)</option>
+                    <option value="popup">Popup (modal)</option>
                   </select>
                 </div>
                 <label className="flex items-center gap-2 pt-7 text-sm">

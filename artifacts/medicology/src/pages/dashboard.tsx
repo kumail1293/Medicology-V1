@@ -33,7 +33,8 @@ export default function Dashboard() {
   const [freeQuestions, setFreeQuestions] = useState<any[]>([]);
 
   useEffect(() => {
-    const token = localStorage.getItem('medicology_token') || localStorage.getItem('medicology_session')?.then(s => JSON.parse(s).token);
+    const session = localStorage.getItem('medicology_session');
+    const token = localStorage.getItem('medicology_token') || (session ? (JSON.parse(session) as { token?: string }).token : null);
     
     // Show dashboard immediately with default data, load API data in background
     setIsLoading(false);

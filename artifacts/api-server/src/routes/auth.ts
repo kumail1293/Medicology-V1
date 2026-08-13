@@ -51,7 +51,6 @@ authRouter.post('/register', async (req, res: any) => {
 
 // Login
 authRouter.post('/login', async (req, res: any) => {
-  console.log('Login route called with:', req.body);
   try {
     const { email, password } = req.body;
     if (!email || !password) {

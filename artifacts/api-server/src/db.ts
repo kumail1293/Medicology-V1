@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from '@workspace/db/schema';
+import { SEED_QUESTIONS } from './mock-seed.js';
 
 // Check if we should use SQLite (for development)
 const useSQLite = process.env.DATABASE_URL?.startsWith('sqlite:') ||
@@ -17,15 +18,25 @@ if (useSQLite) {
 
   const mockData: Record<string, any[]> = {
     users: [],
+    // Seed sample questions so practice/exam/daily flows have content in dev.
+    questions: SEED_QUESTIONS.map((q, i) => ({
+      id: i + 1,
+      ...q,
+      createdAt: new Date(),
+    })),
   };
 
   const nextId: Record<string, number> = {
     users: 1,
+    questions: SEED_QUESTIONS.length + 1,
   };
 
   const getTableName = (table: any): string => {
     if (!table) return '';
     if (typeof table === 'string') return table;
+    // drizzle-orm >= 0.41 stores the table name under this symbol
+    const drizzleName = table[Symbol.for('drizzle:Name')];
+    if (typeof drizzleName === 'string' && drizzleName) return drizzleName;
     if (typeof table.name === 'string') return table.name;
     if (typeof table.tableName === 'string') return table.tableName;
     if (typeof table.toString === 'function') {
@@ -40,45 +51,138 @@ if (useSQLite) {
   const getFieldName = (column: any): string | undefined => {
     if (!column) return undefined;
     if (typeof column === 'string') return column;
+    // drizzle columns expose the DB column name (e.g. "is_active") via .name,
+    // but mock rows are keyed by the TS property name (e.g. "isActive").
+    // Resolve the TS key through the column's owning table so filters match.
+    try {
+      const table = column.table;
+      const cols = table?.[Symbol.for('drizzle:Columns')];
+      if (cols) {
+        const entry = Object.entries(cols).find(([, c]) => c === column);
+        if (entry) return entry[0];
+      }
+    } catch {}
     return column.name ?? column.columnName ?? column.fieldName;
   };
 
-  const collectPrimitiveValues = (condition: any, values: any[] = [], seen = new Set()): any[] => {
-    if (!condition || seen.has(condition)) return values;
-    if (typeof condition !== 'object') {
-      if (typeof condition === 'string' || typeof condition === 'number' || typeof condition === 'boolean') {
-        values.push(condition);
-      }
-      return values;
-    }
-    seen.add(condition);
-    if (Array.isArray(condition)) {
-      for (const item of condition) collectPrimitiveValues(item, values, seen);
-      return values;
-    }
-    for (const key of Object.keys(condition)) {
-      collectPrimitiveValues(condition[key], values, seen);
-    }
-    return values;
-  };
+  /**
+   * Recursively evaluate a drizzle SQL condition tree against a mock row.
+   *
+   * drizzle-orm >= 0.41 builds every condition (eq/ilike/inArray/and/or) as a
+   * nested tree of `SQL` objects whose `queryChunks` are StringChunk (operators
+   * and " and "/" or " separators), column objects, Param/Array value holders.
+   * This walks that tree and returns true/false for a single row.
+   */
+  const evalChunks = (row: any, chunks: any[]): boolean => {
+    // Split the chunk stream on " and "/" or " separators into comparison
+    // groups; a nested SQL chunk is evaluated recursively. Each group records
+    // the joiner that preceded it so OR groups combine correctly.
+    const groups: Array<{ joiner: 'and' | 'or'; value: boolean }> = [];
+    let pendingJoiner: 'and' | 'or' = 'and';
+    let current: any = null;
 
-  const parseSqlCondition = (condition: any) => {
-    if (!condition || typeof condition !== 'object' || !Array.isArray(condition.queryChunks)) {
-      return null;
-    }
-    let field: string | undefined;
-    let value: any;
-    for (const chunk of condition.queryChunks) {
-      if (!chunk || typeof chunk !== 'object') continue;
-      if (!field) {
-        const parsedField = getFieldName(chunk);
-        if (parsedField) field = parsedField;
+    const push = (value: boolean) => {
+      groups.push({ joiner: pendingJoiner, value });
+      pendingJoiner = 'and';
+    };
+    const flushCurrent = () => {
+      if (current) {
+        if (!current.field) {
+          current = null;
+          return;
+        }
+        const rowValue = row[current.field];
+        const values = current.values ?? [];
+        let result: boolean;
+        if (current.op === 'ilike') {
+          const needle = String(values[0] ?? '').toLowerCase().replace(/%/g, '');
+          result = typeof rowValue === 'string' && rowValue.toLowerCase().includes(needle);
+        } else if (current.op === 'in') {
+          result = values.includes(rowValue);
+        } else {
+          result = rowValue === values[0];
+        }
+        push(result);
+        current = null;
       }
-      if (value === undefined && chunk.constructor?.name === 'Param' && 'value' in chunk) {
-        value = chunk.value;
+    };
+
+    for (const chunk of chunks) {
+      if (chunk === null || chunk === undefined) continue;
+
+      // Raw string value: ilike params inline as a primitive String chunk.
+      if (typeof chunk === 'string') {
+        if (!current) current = { field: undefined, op: undefined, values: [] };
+        current.values = [chunk];
+        continue;
+      }
+      if (typeof chunk !== 'object') continue;
+
+      // Nested SQL: a sub-condition (eq/ilike/inArray/and/or).
+      if (Array.isArray(chunk.queryChunks)) {
+        flushCurrent();
+        push(evalChunks(row, chunk.queryChunks));
+        continue;
+      }
+
+      // inArray(col, [...]) emits an array of Param chunks.
+      if (Array.isArray(chunk)) {
+        if (!current) current = { field: undefined, op: undefined, values: [] };
+        current.values = chunk
+          .filter((p: any) => p && p.constructor?.name === 'Param' && 'value' in p)
+          .map((p: any) => p.value);
+        current.op = 'in';
+        continue;
+      }
+
+      const type = chunk.constructor?.name;
+
+      if (type === 'StringChunk') {
+        const text = (chunk.value || []).join('').trim();
+        if (text === 'and' || text === 'or') {
+          flushCurrent();
+          pendingJoiner = text;
+        } else if (text === '=' || text === 'ilike' || text === 'in') {
+          if (!current) current = { field: undefined, op: undefined, values: [] };
+          current.op = text;
+        }
+        // "(" / ")" / "" are structural noise; ignore.
+        continue;
+      }
+
+      if (type === 'Param') {
+        if (!current) current = { field: undefined, op: undefined, values: [] };
+        current.values = [chunk.value];
+        continue;
+      }
+
+      // Column object (PgText, PgSerial, ...) — resolve to the TS property name.
+      const field = getFieldName(chunk);
+      if (field) {
+        if (!current) current = { field: undefined, op: undefined, values: [] };
+        current.field = field;
+        continue;
       }
     }
-    return field && value !== undefined ? { field, value } : null;
+    flushCurrent();
+
+    if (groups.length === 0) return true;
+
+    // AND groups together; a group whose joiner is "or" is satisfied if any
+    // of the OR-chained groups matched. Since the joiner lives on the group
+    // that follows it, fold OR chains right-to-left.
+    let result = true;
+    let i = groups.length - 1;
+    while (i >= 0) {
+      let orChain = groups[i].value;
+      while (i > 0 && groups[i].joiner === 'or') {
+        i--;
+        orChain = orChain || groups[i].value;
+      }
+      result = result && orChain;
+      i--;
+    }
+    return result;
   };
 
   const matchesCondition = (row: any, condition: any, seen = new Set()): boolean => {
@@ -98,28 +202,12 @@ if (useSQLite) {
       return condition.every((c) => matchesCondition(row, c, seen));
     }
 
-    const sqlCondition = parseSqlCondition(condition);
-    if (sqlCondition) {
-      const leftValue = row[sqlCondition.field];
-      return leftValue === sqlCondition.value;
+    // Drizzle SQL condition tree (eq/ilike/inArray/and/or in drizzle >= 0.41).
+    if (Array.isArray(condition.queryChunks)) {
+      return evalChunks(row, condition.queryChunks);
     }
 
-    if (condition.left !== undefined && condition.right !== undefined) {
-      const field = getFieldName(condition.left);
-      const value = condition.right?.value ?? condition.right;
-      if (field) {
-        const leftValue = row[field];
-        if (condition.operator === 'ilike' || condition.op === 'ilike') {
-          return typeof leftValue === 'string' && typeof value === 'string'
-            ? leftValue.toLowerCase().includes(value.toLowerCase().replace(/%/g, ''))
-            : false;
-        }
-        console.log('Mock DB check:', { field, leftValue, value, equal: leftValue === value });
-        return leftValue === value;
-      }
-      return false;
-    }
-
+    // Legacy shapes: and()/or() with explicit type + conditions list.
     if (condition.type === 'and' && Array.isArray(condition.conditions)) {
       return condition.conditions.every((c: any) => matchesCondition(row, c, seen));
     }
@@ -131,41 +219,58 @@ if (useSQLite) {
   };
 
 
-  const createQuery = (tableName: string, selectSpec?: any) => {
+  const createQuery = (tableName: string, selectSpec?: any, distinct = false) => {
     let rows = mockData[tableName] ?? [];
     let whereCondition: any = undefined;
 
     const applyFilter = () => {
       if (!whereCondition) return rows;
-      const filtered = rows.filter((row) => {
-        const match = matchesCondition(row, whereCondition);
-        if (tableName === 'users') {
-          console.log('Mock user row match:', { email: row.email, match });
-        }
-        return match;
-      });
-      if (tableName === 'users') {
-        console.log('Mock users filter result count:', filtered.length, 'of', rows.length);
-      }
-      return filtered;
+      return rows.filter((row) => matchesCondition(row, whereCondition));
     };
+
+    // selectDistinct projects only the requested columns and removes duplicates
+    // (used by /api/questions/meta/filters for subject/system/university lists).
+    const project = (result: any[]) => {
+      if (selectSpec && typeof selectSpec === 'object' && !('count' in selectSpec)) {
+        const keys = Object.keys(selectSpec);
+        const projected = result.map((row) => {
+          const out: any = {};
+          for (const key of keys) {
+            const column = selectSpec[key];
+            const field = getFieldName(column);
+            out[key] = row[field ?? key];
+          }
+          return out;
+        });
+        if (distinct) {
+          const seen = new Set<string>();
+          return projected.filter((row) => {
+            const sig = JSON.stringify(row);
+            if (seen.has(sig)) return false;
+            seen.add(sig);
+            return true;
+          });
+        }
+        return projected;
+      }
+      return result;
+    };
+
+    let limitValue: number | undefined;
+    let offsetValue: number | undefined;
 
     const query: any = {
       from: () => query,
       where(condition: any) {
         whereCondition = condition;
-        if (tableName === 'users') {
-          console.log('Mock query condition for users:', JSON.stringify(condition, null, 2));
-          console.log('Condition keys:', Object.keys(condition));
-          console.log('Condition type:', typeof condition);
-          console.log('Condition constructor:', condition?.constructor?.name);
-        }
         return query;
       },
-      limit() {
+      limit(n: number) {
+        limitValue = Number(n);
         return query;
       },
-      offset() {
+      offset(n: number) {
+        offsetValue = Number(n);
         return query;
       },
       orderBy() {
@@ -173,15 +278,27 @@ if (useSQLite) {
       },
       then(cb: any) {
         const result = applyFilter();
-        return Promise.resolve(cb(result));
+        if (selectSpec && typeof selectSpec === 'object' && 'count' in selectSpec) {
+          return Promise.resolve(cb([{ count: result.length }]));
+        }
+        return Promise.resolve(cb(project(paginate(result))));
       },
       returning() {
         const result = applyFilter();
         if (selectSpec && typeof selectSpec === 'object' && 'count' in selectSpec) {
           return Promise.resolve([{ count: result.length }]);
         }
-        return Promise.resolve(result);
+        return Promise.resolve(project(paginate(result)));
       },
+    };
+
+    // Apply LIMIT/OFFSET after filtering; the count subquery uses a fresh query
+    // so it always counts the full filtered set.
+    const paginate = (result: any[]) => {
+      let out = result;
+      if (offsetValue !== undefined) out = out.slice(offsetValue);
+      if (limitValue !== undefined) out = out.slice(0, limitValue);
+      return out;
     };
 
     return query;
@@ -189,6 +306,10 @@ if (useSQLite) {
 
   const mockSelect = (selectSpec?: any) => ({
     from: (table: any) => createQuery(getTableName(table), selectSpec),
+  });
+
+  const mockSelectDistinct = (selectSpec?: any) => ({
+    from: (table: any) => createQuery(getTableName(table), selectSpec, true),
   });
 
   const mockInsert = (table: any) => {
@@ -261,7 +382,9 @@ if (useSQLite) {
             return Promise.resolve([]);
           },
           then(cb: any) {
-            return Promise.resolve([]).then(cb);
+            // Awaiting `db.delete().where(...)` directly must also perform the
+            // deletion (routes use both `await` and `.returning()` forms).
+            return Promise.resolve(this.returning()).then(cb);
           },
         };
       },
@@ -270,6 +393,7 @@ if (useSQLite) {
 
   db = {
     select: mockSelect,
+    selectDistinct: mockSelectDistinct,
     insert: mockInsert,
     update: mockUpdate,
     delete: mockDelete,

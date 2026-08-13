@@ -127,7 +127,7 @@ export default function ResetPassword() {
 
                 {error && (
                   <p className="text-sm text-red-500">
-                    {typeof error === 'object' && error !== null ? error.message : error}
+                    {error}
                   </p>
                 )}
 
