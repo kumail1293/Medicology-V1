@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { AuthProvider, ProtectedRoute, AdminRoute } from "./lib/auth";
 import { SettingsProvider } from "./lib/settings";
+import BrandingApplier from "./components/BrandingApplier";
 import { AppLayout } from "./components/layout";
 import { AdminLayout } from "./components/AdminLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -188,6 +189,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <SettingsProvider>
+            <BrandingApplier />
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <AuthProvider>
                 <Router />

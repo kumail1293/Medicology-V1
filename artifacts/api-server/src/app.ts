@@ -19,6 +19,7 @@ import { qbanksRouter } from './routes/qbanks.js';
 import { announcementsRouter } from './routes/announcements.js';
 import { storageRouter } from './routes/storage.js';
 import { flashcardsRouter } from './routes/flashcards.js';
+import { settingsRouter } from './routes/settings.js';
 import { taxonomyRouter } from './routes/taxonomy.js';
 import { importRouter } from './routes/import.js';
 import { paymentsRouter } from './routes/payments.js';
@@ -126,6 +127,7 @@ app.use('/api/taxonomy', taxonomyRouter);
 app.use('/api/admin/import', importRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/flashcards', flashcardsRouter);
+app.use('/api', settingsRouter);
 
 // 404 handler
 app.use((req: any, res: any) => {

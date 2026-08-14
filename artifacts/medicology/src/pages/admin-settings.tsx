@@ -1,223 +1,542 @@
-import React, { useState } from 'react';
-import { useToast } from '@/hooks/use-toast';
-import { Settings, Save, RotateCcw, Mail, Database, Shield, Bell } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Settings, Palette, BookOpen, UserPlus, Bell, Shield, CreditCard,
+  Database, Plug, Save, RotateCcw, Loader2, ChevronRight, Globe, LayoutDashboard,
+  FileText, Type, Ruler,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  DEFAULT_SETTINGS, PlatformSettings, SettingsGroup,
+  fetchAdminSettings, saveAdminSettings, resetSettingsGroup,
+} from "@/lib/adminSettings";
+import { applyBranding } from "@/components/BrandingApplier";
+import { hexToHslTriplet } from "@/components/BrandingApplier";
 
-interface AdminSettings {
-  siteName: string;
-  apiUrl: string;
-  enableEmailNotifications: boolean;
-  maxFileUploadSize: number;
-  sessionTimeout: number;
-  enableAnalytics: boolean;
-  maintenanceMode: boolean;
-  requireMFA: boolean;
+/* ── Small form primitives ─────────────────────────────────────────────── */
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium">{label}</label>
+      {children}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
 }
 
-const defaultSettings: AdminSettings = {
-  siteName: 'Medicology',
-  apiUrl: '/api',
-  enableEmailNotifications: true,
-  maxFileUploadSize: 10,
-  sessionTimeout: 30,
-  enableAnalytics: true,
-  maintenanceMode: false,
-  requireMFA: false,
-};
+function TextInput({ value, onChange, placeholder, type = "text" }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+    />
+  );
+}
 
-export default function AdminSettingsPage() {
-  const [settings, setSettings] = useState<AdminSettings>(defaultSettings);
-  const [unsavedChanges, setUnsavedChanges] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const { toast } = useToast();
+function NumberInput({ value, onChange, min, max, step = 1 }: { value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number }) {
+  return (
+    <input
+      type="number"
+      value={Number.isFinite(value) ? value : 0}
+      min={min}
+      max={max}
+      step={step}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+    />
+  );
+}
 
-  const handleChange = (key: keyof AdminSettings, value: any) => {
-    setSettings({ ...settings, [key]: value });
-    setUnsavedChanges(true);
-  };
+function SelectInput({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+    >
+      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
 
-  const handleSave = async () => {
-    try {
-      setIsSaving(true);
-      const response = await fetch('/api/admin/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
+function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
+  return (
+    <label className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={(e) => { e.preventDefault(); onChange(!checked); }}
+        className={cn("relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors", checked ? "bg-primary" : "bg-muted-foreground/30")}
+      >
+        <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all", checked ? "left-4.5" : "left-0.5")} style={{ left: checked ? 18 : 2 }} />
+      </button>
+      <div>
+        <span className="font-medium">{label}</span>
+        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      </div>
+    </label>
+  );
+}
 
-      if (!response.ok) throw new Error('Failed to save settings');
-      toast({ title: 'Success', description: 'Settings saved successfully' });
-      setUnsavedChanges(false);
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to save settings', variant: 'destructive' });
-    } finally {
-      setIsSaving(false);
-    }
-  };
+function Card({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6">
+      <div className="mb-5">
+        <h3 className="font-semibold text-lg">{title}</h3>
+        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+      </div>
+      <div className="space-y-4">{children}</div>
+    </div>
+  );
+}
 
-  const handleReset = () => {
-    if (window.confirm('Reset settings to defaults?')) {
-      setSettings(defaultSettings);
-      setUnsavedChanges(false);
-    }
-  };
+/* ── Group definitions (WordPress-style settings sections) ─────────────── */
+
+const GROUPS: { id: SettingsGroup; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; blurb: string }[] = [
+  { id: "general", label: "General", icon: Settings, blurb: "Site identity, homepage and regional defaults." },
+  { id: "branding", label: "Branding & Design", icon: Palette, blurb: "Elementor-style design tokens — colors, fonts, radius, logo." },
+  { id: "content", label: "Content & QBanks", icon: BookOpen, blurb: "Default statuses and content workflow rules." },
+  { id: "registration", label: "Users & Registration", icon: UserPlus, blurb: "Registration policy and default roles." },
+  { id: "notifications", label: "Notifications", icon: Bell, blurb: "Which events trigger email alerts." },
+  { id: "security", label: "Security", icon: Shield, blurb: "MFA, sessions, passwords and maintenance mode." },
+  { id: "payments", label: "Payments", icon: CreditCard, blurb: "Currency, provider and pricing policy." },
+  { id: "storage", label: "Storage & Uploads", icon: Database, blurb: "Upload limits and allowed file types." },
+  { id: "integrations", label: "Integrations", icon: Plug, blurb: "Analytics, SEO meta and custom head code." },
+];
+
+/* ── Branding & Design (Elementor-like) with live preview ─────────────── */
+
+function BrandingSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["branding"]>) => void }) {
+  const b = draft.branding;
+  const previewStyle = useMemo(() => {
+    const primary = hexToHslTriplet(b.primaryColor);
+    return {
+      "--p": primary || "175 70% 35%",
+      "--r": `${b.borderRadius}px`,
+      "--font": b.fontFamily === "serif" ? "Merriweather, serif" : b.fontFamily === "mono" ? "JetBrains Mono, monospace" : "DM Sans, sans-serif",
+    } as React.CSSProperties;
+  }, [b.primaryColor, b.borderRadius, b.fontFamily]);
 
   return (
-    <div className="p-8 space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">Admin Settings</h2>
-        <p className="text-sm text-muted-foreground">Configure system-wide preferences and behavior.</p>
+    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="space-y-6">
+        <Card title="Identity">
+          <Field label="Logo URL" hint="Shown in the header and login screen.">
+            <TextInput value={b.logoUrl} onChange={(v) => set({ logoUrl: v })} placeholder="/images/logo-colored.png" />
+          </Field>
+          <Field label="Favicon URL">
+            <TextInput value={b.faviconUrl} onChange={(v) => set({ faviconUrl: v })} placeholder="/favicon.ico" />
+          </Field>
+        </Card>
+
+        <Card title="Color Palette" description="Applied platform-wide as the brand color — like Elementor global colors.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Primary color">
+              <div className="flex items-center gap-2">
+                <input type="color" value={b.primaryColor} onChange={(e) => set({ primaryColor: e.target.value })}
+                  className="h-9 w-12 cursor-pointer rounded-lg border border-border bg-background" />
+                <TextInput value={b.primaryColor} onChange={(v) => set({ primaryColor: v })} />
+              </div>
+            </Field>
+            <Field label="Accent color">
+              <div className="flex items-center gap-2">
+                <input type="color" value={b.accentColor} onChange={(e) => set({ accentColor: e.target.value })}
+                  className="h-9 w-12 cursor-pointer rounded-lg border border-border bg-background" />
+                <TextInput value={b.accentColor} onChange={(v) => set({ accentColor: v })} />
+              </div>
+            </Field>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {["#0d9488", "#2563eb", "#7c3aed", "#dc2626", "#ea580c", "#16a34a", "#0f172a"].map((c) => (
+              <button key={c} onClick={() => set({ primaryColor: c })}
+                className="h-7 w-7 rounded-full border border-border transition-transform hover:scale-110" style={{ background: c }} title={c} />
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Typography & Layout" description="Font, base text size, corner radius and content width.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Font family">
+              <SelectInput value={b.fontFamily} onChange={(v) => set({ fontFamily: v as any })}
+                options={[{ value: "sans", label: "Sans (DM Sans)" }, { value: "serif", label: "Serif (Merriweather)" }, { value: "mono", label: "Mono (JetBrains Mono)" }]} />
+            </Field>
+            <Field label="Base text size">
+              <SelectInput value={b.fontSizeScale} onChange={(v) => set({ fontSizeScale: v as any })}
+                options={[{ value: "sm", label: "Small" }, { value: "md", label: "Medium (default)" }, { value: "lg", label: "Large" }]} />
+            </Field>
+          </div>
+          <Field label={`Corner radius — ${b.borderRadius}px`}>
+            <input type="range" min={0} max={32} value={b.borderRadius} onChange={(e) => set({ borderRadius: Number(e.target.value) })}
+              className="w-full accent-primary" />
+            <div className="flex justify-between text-[10px] text-muted-foreground"><span>Sharp</span><span>Rounded</span></div>
+          </Field>
+          <Field label={`Content max width — ${b.contentMaxWidth}px`}>
+            <input type="range" min={640} max={1920} step={40} value={b.contentMaxWidth} onChange={(e) => set({ contentMaxWidth: Number(e.target.value) })}
+              className="w-full accent-primary" />
+          </Field>
+        </Card>
       </div>
 
-      <div className="grid gap-6">
-        {/* General Settings */}
-        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-4 border-b border-border">
-            <Settings size={18} className="text-primary" />
-            <h3 className="font-semibold text-lg">General</h3>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">Site Name</label>
-            <input
-              type="text"
-              value={settings.siteName}
-              onChange={(e) => handleChange('siteName', e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">API Base URL</label>
-            <input
-              type="text"
-              value={settings.apiUrl}
-              onChange={(e) => handleChange('apiUrl', e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2"
-            />
+      {/* Live preview */}
+      <div className="space-y-3 lg:sticky lg:top-6 lg:self-start">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><Ruler size={13} /> Live preview</p>
+        <div className="rounded-2xl border border-border bg-background p-5" style={previewStyle as React.CSSProperties}>
+          <div className="rounded-xl border border-border bg-card p-4" style={{ borderRadius: "var(--r)", fontFamily: "var(--font)" }}>
+            <div className="mb-3 flex items-center gap-2">
+              {b.logoUrl ? (
+                <img src={b.logoUrl} alt="logo" className="h-6 w-auto object-contain"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              ) : <Globe size={18} />}
+              <span className="text-sm font-bold" style={{ color: "hsl(var(--p))" }}>{draft.general.siteName || "Medicology"}</span>
+            </div>
+            <p className="text-sm font-semibold" style={{ color: "hsl(var(--p))" }}>Question 1 — Clinical vignette</p>
+            <p className="mt-1 text-sm text-muted-foreground">A 45-year-old presents with chest pain…</p>
+            <div className="mt-3 space-y-1.5">
+              {["Option A", "Option B", "Option C"].map((o, i) => (
+                <div key={o} className={cn("rounded-lg border px-3 py-1.5 text-xs", i === 0 ? "border-transparent" : "border-border")}
+                  style={i === 0 ? { background: "hsl(var(--p) / 0.12)", color: "hsl(var(--p))" } : undefined}>
+                  {o}
+                </div>
+              ))}
+            </div>
+            <button className="mt-3 w-full rounded-lg py-2 text-xs font-semibold text-white"
+              style={{ background: "hsl(var(--p))", borderRadius: "var(--r)" }}>
+              Start Exam
+            </button>
           </div>
         </div>
+        <p className="text-[11px] text-muted-foreground">Preview reflects your draft. Save to apply platform-wide.</p>
+      </div>
+    </div>
+  );
+}
 
-        {/* Notification Settings */}
-        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-4 border-b border-border">
-            <Bell size={18} className="text-primary" />
-            <h3 className="font-semibold text-lg">Notifications</h3>
-          </div>
+/* ── Section renderers ─────────────────────────────────────────────────── */
 
-          <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.enableEmailNotifications}
-              onChange={(e) => handleChange('enableEmailNotifications', e.target.checked)}
-              className="w-4 h-4"
-            />
-            <div>
-              <span className="font-medium">Email Notifications</span>
-              <p className="text-xs text-muted-foreground">Send email alerts for system events</p>
-            </div>
-          </label>
+function GeneralSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["general"]>) => void }) {
+  const g = draft.general;
+  return (
+    <Card title="General Settings" description="Site identity and regional defaults (WordPress → Settings → General).">
+      <Field label="Site name"><TextInput value={g.siteName} onChange={(v) => set({ siteName: v })} /></Field>
+      <Field label="Tagline" hint="Short description shown in meta and the login screen.">
+        <TextInput value={g.tagline} onChange={(v) => set({ tagline: v })} />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Support email"><TextInput type="email" value={g.supportEmail} onChange={(v) => set({ supportEmail: v })} /></Field>
+        <Field label="Timezone"><TextInput value={g.timezone} onChange={(v) => set({ timezone: v })} placeholder="Asia/Karachi" /></Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Locale / language"><TextInput value={g.locale} onChange={(v) => set({ locale: v })} placeholder="en" /></Field>
+        <Field label="Date format"><TextInput value={g.dateFormat} onChange={(v) => set({ dateFormat: v })} placeholder="MMM d, yyyy" /></Field>
+        <Field label="Default home page">
+          <SelectInput value={g.homePage} onChange={(v) => set({ homePage: v as any })}
+            options={[{ value: "dashboard", label: "Dashboard" }, { value: "store", label: "QBank Store" }, { value: "practice", label: "Practice" }]} />
+        </Field>
+      </div>
+    </Card>
+  );
+}
+
+function ContentSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["content"]>) => void }) {
+  const c = draft.content;
+  return (
+    <Card title="Content & QBank Workflow" description="Defaults applied when content is created, and publishing rules.">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Default question status">
+          <SelectInput value={c.defaultQuestionStatus} onChange={(v) => set({ defaultQuestionStatus: v as any })}
+            options={[{ value: "draft", label: "Draft" }, { value: "pending_review", label: "Pending review" }, { value: "published", label: "Published" }]} />
+        </Field>
+        <Field label="Default QBank status">
+          <SelectInput value={c.defaultQbankStatus} onChange={(v) => set({ defaultQbankStatus: v as any })}
+            options={[{ value: "draft", label: "Draft" }, { value: "published", label: "Published" }, { value: "archived", label: "Archived" }]} />
+        </Field>
+      </div>
+      <Field label="Questions per page">
+        <NumberInput value={c.questionsPerPage} onChange={(v) => set({ questionsPerPage: v })} min={5} max={100} />
+      </Field>
+      <Toggle checked={c.requireReviewBeforePublish} onChange={(v) => set({ requireReviewBeforePublish: v })}
+        label="Require medical review before publish" hint="Questions must pass the review queue before going live." />
+    </Card>
+  );
+}
+
+function RegistrationSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["registration"]>) => void }) {
+  const r = draft.registration;
+  return (
+    <Card title="Users & Registration" description="WordPress → Settings → General (Membership) style controls.">
+      <Toggle checked={r.openRegistration} onChange={(v) => set({ openRegistration: v })}
+        label="Anyone can register" hint="Disable to make the platform invite-only." />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Default role for new users">
+          <SelectInput value={r.defaultRole} onChange={(v) => set({ defaultRole: v as any })}
+            options={[{ value: "user", label: "User (student)" }, { value: "editor", label: "Editor" }, { value: "teacher", label: "Teacher" }]} />
+        </Field>
+        <Field label="Admin email"><TextInput type="email" value={r.adminEmail} onChange={(v) => set({ adminEmail: v })} /></Field>
+      </div>
+      <Toggle checked={r.requireEmailVerification} onChange={(v) => set({ requireEmailVerification: v })}
+        label="Require email verification" hint="New accounts must confirm their email before access." />
+    </Card>
+  );
+}
+
+function NotificationsSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["notifications"]>) => void }) {
+  const n = draft.notifications;
+  const items: { key: keyof PlatformSettings["notifications"]; label: string; hint: string }[] = [
+    { key: "emailNewUser", label: "New user registered", hint: "Email admins when someone signs up." },
+    { key: "emailNewQuestion", label: "New question submitted", hint: "Email admins when content is created." },
+    { key: "emailNewReview", label: "Question awaiting review", hint: "Notify reviewers when items enter the queue." },
+    { key: "emailNewPurchase", label: "New purchase", hint: "Confirm orders to the buyer and admins." },
+    { key: "emailAnnouncements", label: "Announcement broadcasts", hint: "Email all users when an announcement is published." },
+  ];
+  return (
+    <Card title="Email Notifications" description="Which events trigger email alerts (WordPress → Settings → Discussion style).">
+      {items.map((it) => (
+        <Toggle key={it.key} checked={n[it.key]} onChange={(v) => set({ [it.key]: v } as any)} label={it.label} hint={it.hint} />
+      ))}
+    </Card>
+  );
+}
+
+function SecuritySection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["security"]>) => void }) {
+  const s = draft.security;
+  return (
+    <Card title="Security" description="Authentication, sessions and maintenance.">
+      <Toggle checked={s.requireMFA} onChange={(v) => set({ requireMFA: v })}
+        label="Require multi-factor authentication" hint="Enforce MFA for all admin users." />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Session timeout (minutes)"><NumberInput value={s.sessionTimeoutMinutes} onChange={(v) => set({ sessionTimeoutMinutes: v })} min={1} max={1440} /></Field>
+        <Field label="Min password length"><NumberInput value={s.passwordMinLength} onChange={(v) => set({ passwordMinLength: v })} min={4} max={64} /></Field>
+        <Field label="Max login attempts"><NumberInput value={s.maxLoginAttempts} onChange={(v) => set({ maxLoginAttempts: v })} min={1} max={50} /></Field>
+      </div>
+      <Toggle checked={s.passwordRequireComplexity} onChange={(v) => set({ passwordRequireComplexity: v })}
+        label="Require complex passwords" hint="Mixed case, numbers and symbols." />
+      <Toggle checked={s.maintenanceMode} onChange={(v) => set({ maintenanceMode: v })}
+        label="Maintenance mode" hint="Disable access for non-admin users while you work." />
+    </Card>
+  );
+}
+
+function PaymentsSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["payments"]>) => void }) {
+  const p = draft.payments;
+  return (
+    <Card title="Payments" description="Currency, provider and pricing policy.">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Currency"><TextInput value={p.currency} onChange={(v) => set({ currency: v.toUpperCase().slice(0, 3) })} placeholder="USD" /></Field>
+        <Field label="Provider">
+          <SelectInput value={p.provider} onChange={(v) => set({ provider: v as any })}
+            options={[{ value: "dev", label: "Development (mock)" }, { value: "stripe", label: "Stripe" }, { value: "jazzcash", label: "JazzCash" }, { value: "easypaisa", label: "EasyPaisa" }]} />
+        </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Tax rate (%)"><NumberInput value={p.taxRatePercent} onChange={(v) => set({ taxRatePercent: v })} min={0} max={50} step={0.5} /></Field>
+        <Field label="Refund policy (days)"><NumberInput value={p.refundPolicyDays} onChange={(v) => set({ refundPolicyDays: v })} min={0} max={365} /></Field>
+      </div>
+    </Card>
+  );
+}
+
+function StorageSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["storage"]>) => void }) {
+  const st = draft.storage;
+  const toggleType = (t: string) =>
+    set({ allowedImageTypes: st.allowedImageTypes.includes(t) ? st.allowedImageTypes.filter((x) => x !== t) : [...st.allowedImageTypes, t] });
+  return (
+    <Card title="Storage & Uploads" description="WordPress → Settings → Media style controls.">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Max upload size (MB)"><NumberInput value={st.maxUploadSizeMB} onChange={(v) => set({ maxUploadSizeMB: v })} min={1} max={500} /></Field>
+        <Field label="Storage backend">
+          <SelectInput value={st.storageBackend} onChange={(v) => set({ storageBackend: v as any })}
+            options={[{ value: "local", label: "Local disk" }, { value: "s3", label: "S3-compatible" }]} />
+        </Field>
+      </div>
+      <Field label="Allowed image types">
+        <div className="flex flex-wrap gap-2 pt-1">
+          {["jpg", "jpeg", "png", "gif", "webp", "svg"].map((t) => (
+            <button key={t} onClick={() => toggleType(t)}
+              className={cn("rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                st.allowedImageTypes.includes(t) ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted")}>
+              {t}
+            </button>
+          ))}
         </div>
+      </Field>
+    </Card>
+  );
+}
 
-        {/* File & Storage Settings */}
-        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-4 border-b border-border">
-            <Database size={18} className="text-primary" />
-            <h3 className="font-semibold text-lg">Storage</h3>
-          </div>
+function IntegrationsSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["integrations"]>) => void }) {
+  const i = draft.integrations;
+  return (
+    <Card title="Integrations & SEO" description="Analytics, search meta and custom head code.">
+      <Field label="Google Analytics ID" hint="e.g. G-XXXXXXXXXX">
+        <TextInput value={i.googleAnalyticsId} onChange={(v) => set({ googleAnalyticsId: v })} placeholder="G-" />
+      </Field>
+      <Field label="Meta description" hint="Default description for search engines.">
+        <TextInput value={i.metaDescription} onChange={(v) => set({ metaDescription: v })} />
+      </Field>
+      <Field label="Custom head code" hint="Snippets injected into <head> (analytics, verification, fonts).">
+        <textarea value={i.customHeadCode} onChange={(e) => set({ customHeadCode: e.target.value })} rows={5}
+          className="w-full rounded-lg border border-border bg-background p-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+      </Field>
+    </Card>
+  );
+}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium">Max File Upload Size (MB)</label>
-            <input
-              type="number"
-              value={settings.maxFileUploadSize}
-              onChange={(e) => handleChange('maxFileUploadSize', Number(e.target.value))}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Maximum file size users can upload</p>
-          </div>
+/* ── Page ──────────────────────────────────────────────────────────────── */
 
-          <div>
-            <label className="mb-2 block text-sm font-medium">Session Timeout (minutes)</label>
-            <input
-              type="number"
-              value={settings.sessionTimeout}
-              onChange={(e) => handleChange('sessionTimeout', Number(e.target.value))}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Auto-logout after inactivity</p>
-          </div>
+export default function AdminSettingsPage() {
+  const { toast } = useToast();
+  const [loaded, setLoaded] = useState(false);
+  const [settings, setSettings] = useState<PlatformSettings>(DEFAULT_SETTINGS);
+  const [defaults, setDefaults] = useState<PlatformSettings>(DEFAULT_SETTINGS);
+  const [draft, setDraft] = useState<PlatformSettings>(DEFAULT_SETTINGS);
+  const [active, setActive] = useState<SettingsGroup>("general");
+  const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
-          <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.enableAnalytics}
-              onChange={(e) => handleChange('enableAnalytics', e.target.checked)}
-              className="w-4 h-4"
-            />
-            <div>
-              <span className="font-medium">Analytics Tracking</span>
-              <p className="text-xs text-muted-foreground">Collect usage statistics</p>
-            </div>
-          </label>
-        </div>
+  const load = async () => {
+    try {
+      const data = await fetchAdminSettings();
+      setSettings(data.settings);
+      setDefaults(data.defaults);
+      setDraft(data.settings);
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to load settings", variant: "destructive" });
+    } finally {
+      setLoaded(true);
+    }
+  };
+  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-        {/* Security Settings */}
-        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-4 border-b border-border">
-            <Shield size={18} className="text-primary" />
-            <h3 className="font-semibold text-lg">Security</h3>
-          </div>
+  const dirty = useMemo(() => JSON.stringify(draft[active]) !== JSON.stringify(settings[active]), [draft, settings, active]);
 
-          <label className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.requireMFA}
-              onChange={(e) => handleChange('requireMFA', e.target.checked)}
-              className="w-4 h-4"
-            />
-            <div>
-              <span className="font-medium">Require Multi-Factor Authentication</span>
-              <p className="text-xs text-muted-foreground">Enforce MFA for all admin users</p>
-            </div>
-          </label>
+  const setGroup = (patch: Partial<PlatformSettings[SettingsGroup]>) =>
+    setDraft((prev) => ({ ...prev, [active]: { ...prev[active], ...patch } }));
 
-          <label className="flex items-center gap-3 p-3 rounded-lg border border-destructive/20 bg-destructive/5 hover:bg-destructive/10 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.maintenanceMode}
-              onChange={(e) => handleChange('maintenanceMode', e.target.checked)}
-              className="w-4 h-4"
-            />
-            <div>
-              <span className="font-medium text-destructive">Maintenance Mode</span>
-              <p className="text-xs text-muted-foreground">Disable access for non-admin users</p>
-            </div>
-          </label>
-        </div>
+  const save = async () => {
+    setSaving(true);
+    try {
+      const updated = await saveAdminSettings({ [active]: draft[active] } as any);
+      setSettings(updated);
+      setDraft(updated);
+      // Apply branding immediately (not just on next page load).
+      if (active === "branding" || active === "general") {
+        applyBranding({ general: updated.general, branding: updated.branding });
+      }
+      toast({ title: "Saved", description: `${GROUPS.find((g) => g.id === active)?.label} settings updated.` });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to save", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reset = async () => {
+    if (!window.confirm(`Reset "${GROUPS.find((g) => g.id === active)?.label}" settings to defaults?`)) return;
+    setResetting(true);
+    try {
+      const updated = await resetSettingsGroup(active);
+      setSettings(updated);
+      setDraft(updated);
+      if (active === "branding" || active === "general") applyBranding({ general: updated.general, branding: updated.branding });
+      toast({ title: "Reset", description: "Settings restored to defaults." });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to reset", variant: "destructive" });
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const ActiveSection = () => {
+    switch (active) {
+      case "general": return <GeneralSection draft={draft} set={setGroup as any} />;
+      case "branding": return <BrandingSection draft={draft} set={setGroup as any} />;
+      case "content": return <ContentSection draft={draft} set={setGroup as any} />;
+      case "registration": return <RegistrationSection draft={draft} set={setGroup as any} />;
+      case "notifications": return <NotificationsSection draft={draft} set={setGroup as any} />;
+      case "security": return <SecuritySection draft={draft} set={setGroup as any} />;
+      case "payments": return <PaymentsSection draft={draft} set={setGroup as any} />;
+      case "storage": return <StorageSection draft={draft} set={setGroup as any} />;
+      case "integrations": return <IntegrationsSection draft={draft} set={setGroup as any} />;
+      default: return null;
+    }
+  };
+
+  if (!loaded) {
+    return (
+      <div className="flex items-center justify-center p-24 text-muted-foreground">
+        <Loader2 className="animate-spin" size={22} />
+        <span className="ml-2 text-sm">Loading settings…</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-6xl p-6">
+      <div className="mb-6">
+        <h2 className="flex items-center gap-2 text-2xl font-bold">
+          <Settings size={22} className="text-primary" /> Admin Settings
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          WordPress-style platform configuration — grouped, validated and stored in the database.
+        </p>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex justify-end gap-3 pt-4">
-        <button
-          onClick={handleReset}
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted/50"
-        >
-          <RotateCcw size={16} /> Reset
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={!unsavedChanges || isSaving}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          <Save size={16} /> {isSaving ? 'Saving...' : 'Save Settings'}
-        </button>
-      </div>
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Section nav */}
+        <nav className="lg:w-60 shrink-0 space-y-1">
+          {GROUPS.map((g) => {
+            const Icon = g.icon;
+            return (
+              <button key={g.id} onClick={() => setActive(g.id)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors",
+                  active === g.id ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "border-transparent hover:bg-muted/60",
+                )}>
+                <Icon size={16} className="shrink-0" />
+                <span className="flex-1">{g.label}</span>
+                <ChevronRight size={14} className={cn("text-muted-foreground", active === g.id && "text-primary")} />
+              </button>
+            );
+          })}
+          <div className="pt-3 text-xs text-muted-foreground">
+            <p className="flex items-center gap-1"><Database size={12} /> Stored in the database</p>
+            <p className="flex items-center gap-1"><Shield size={12} /> Admin-only access</p>
+          </div>
+        </nav>
 
-      {unsavedChanges && (
-        <div className="fixed bottom-6 right-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
-          You have unsaved changes. Click "Save Settings" to apply them.
+        {/* Active section */}
+        <div className="min-w-0 flex-1 space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold">{GROUPS.find((g) => g.id === active)?.label}</h3>
+              <p className="text-sm text-muted-foreground">{GROUPS.find((g) => g.id === active)?.blurb}</p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <button onClick={() => void reset()} disabled={resetting}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 disabled:opacity-50">
+                <RotateCcw size={14} /> {resetting ? "Resetting…" : "Reset"}
+              </button>
+              <button onClick={() => void save()} disabled={!dirty || saving}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50">
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save Changes
+              </button>
+            </div>
+          </div>
+
+          <ActiveSection />
+
+          {dirty && (
+            <div className="fixed bottom-6 right-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
+              Unsaved changes in “{GROUPS.find((g) => g.id === active)?.label}”. Click Save Changes to apply.
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

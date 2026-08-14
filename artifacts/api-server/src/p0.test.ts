@@ -382,3 +382,57 @@ test('waitlist: notify registers once per user+qbank, admin sees demand', async 
   const bds = demand.demand.find((d: any) => d.slug === 'uhs-bds-1st-year');
   assert.ok(bds && bds.count >= 1, 'admin demand should include the waitlist entry');
 });
+
+test('platform settings: public whitelist, admin update/reset roundtrip, validation', async () => {
+  const putJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+  const postJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+
+  // 1. Public endpoint needs no auth and only exposes whitelisted groups.
+  const pub: any = await (await fetch(`${BASE}/settings/public`)).json();
+  assert.ok(pub.settings?.branding?.primaryColor, 'public branding present');
+  assert.ok(pub.settings?.general?.siteName, 'public general present');
+  assert.equal(pub.settings?.security, undefined, 'security is never exposed publicly');
+  assert.equal(pub.settings?.payments, undefined, 'payments are never exposed publicly');
+
+  // 2. Admin login (mock seed admin).
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminBody: any = await adminLogin.json();
+  const auth = { Authorization: `Bearer ${adminBody.token}` };
+
+  // 3. Admin GET returns merged settings + defaults.
+  const adminGet: any = await (await fetch(`${BASE}/admin/settings`, { headers: auth })).json();
+  assert.ok(adminGet.settings?.branding?.primaryColor);
+  assert.ok(adminGet.defaults?.branding?.primaryColor);
+
+  // 4. PUT updates branding; public endpoint reflects it.
+  const putRes = await fetch(`${BASE}/admin/settings`, putJson(auth, { branding: { primaryColor: '#dc2626', borderRadius: 20 } }));
+  assert.equal(putRes.status, 200);
+  const putBody: any = await putRes.json();
+  assert.equal(putBody.settings.branding.primaryColor, '#dc2626');
+  assert.equal(putBody.settings.branding.borderRadius, 20);
+  const pub2: any = await (await fetch(`${BASE}/settings/public`)).json();
+  assert.equal(pub2.settings.branding.primaryColor, '#dc2626', 'public reflects the saved brand color');
+
+  // 5. Invalid color is rejected.
+  const bad = await fetch(`${BASE}/admin/settings`, putJson(auth, { branding: { primaryColor: 'not-a-color' } }));
+  assert.equal(bad.status, 400);
+
+  // 6. Non-admin is forbidden.
+  const { token: userToken } = await registerUser('settings-user@test.com');
+  const forbidden = await fetch(`${BASE}/admin/settings`, { headers: { Authorization: `Bearer ${userToken}` } });
+  assert.equal(forbidden.status, 403);
+
+  // 7. Reset restores defaults.
+  const resetRes = await fetch(`${BASE}/admin/settings/reset`, postJson(auth, { group: 'branding' }));
+  assert.equal(resetRes.status, 200);
+  const resetBody: any = await resetRes.json();
+  assert.equal(resetBody.settings.branding.primaryColor, '#0d9488', 'reset returns default brand color');
+});

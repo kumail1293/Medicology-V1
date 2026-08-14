@@ -305,3 +305,94 @@ export type UpdateFlashcardDeck = z.infer<typeof updateFlashcardDeckSchema>;
 export type CreateFlashcard = z.infer<typeof createFlashcardSchema>;
 export type UpdateFlashcard = z.infer<typeof updateFlashcardSchema>;
 export type BulkFlashcards = z.infer<typeof bulkFlashcardsSchema>;
+
+// ---------------------------------------------------------------------------
+// Platform settings (WordPress-style grouped configuration).
+// ---------------------------------------------------------------------------
+
+const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Must be a hex color like #0d9488');
+
+export const generalSettingsSchema = z.object({
+  siteName: z.string().min(1).max(100),
+  tagline: z.string().max(500),
+  supportEmail: z.string().email(),
+  timezone: z.string().min(1).max(80),
+  locale: z.string().min(2).max(10),
+  dateFormat: z.string().min(1).max(40),
+  homePage: z.enum(['dashboard', 'store', 'practice']),
+});
+
+export const brandingSettingsSchema = z.object({
+  logoUrl: z.string().max(2000),
+  faviconUrl: z.string().max(2000),
+  primaryColor: hexColorSchema,
+  accentColor: hexColorSchema,
+  fontFamily: z.enum(['sans', 'serif', 'mono']),
+  fontSizeScale: z.enum(['sm', 'md', 'lg']),
+  borderRadius: z.number().int().min(0).max(32),
+  contentMaxWidth: z.number().int().min(640).max(1920),
+});
+
+export const contentSettingsSchema = z.object({
+  defaultQuestionStatus: z.enum(['draft', 'pending_review', 'published']),
+  defaultQbankStatus: z.enum(['draft', 'published', 'archived']),
+  questionsPerPage: z.number().int().min(5).max(100),
+  requireReviewBeforePublish: z.boolean(),
+});
+
+export const registrationSettingsSchema = z.object({
+  openRegistration: z.boolean(),
+  defaultRole: z.enum(['user', 'editor', 'teacher']),
+  requireEmailVerification: z.boolean(),
+  adminEmail: z.string().email(),
+});
+
+export const notificationSettingsSchema = z.object({
+  emailNewUser: z.boolean(),
+  emailNewQuestion: z.boolean(),
+  emailNewReview: z.boolean(),
+  emailNewPurchase: z.boolean(),
+  emailAnnouncements: z.boolean(),
+});
+
+export const securitySettingsSchema = z.object({
+  requireMFA: z.boolean(),
+  sessionTimeoutMinutes: z.number().int().min(1).max(1440),
+  passwordMinLength: z.number().int().min(4).max(64),
+  passwordRequireComplexity: z.boolean(),
+  maxLoginAttempts: z.number().int().min(1).max(50),
+  maintenanceMode: z.boolean(),
+});
+
+export const paymentSettingsSchema = z.object({
+  currency: z.string().min(3).max(3).toUpperCase(),
+  provider: z.enum(['dev', 'stripe', 'jazzcash', 'easypaisa']),
+  taxRatePercent: z.number().min(0).max(50),
+  refundPolicyDays: z.number().int().min(0).max(365),
+});
+
+export const storageSettingsSchema = z.object({
+  maxUploadSizeMB: z.number().int().min(1).max(500),
+  allowedImageTypes: z.array(z.string().min(1).max(20)).max(20),
+  storageBackend: z.enum(['local', 's3']),
+});
+
+export const integrationSettingsSchema = z.object({
+  googleAnalyticsId: z.string().max(100),
+  metaDescription: z.string().max(500),
+  customHeadCode: z.string().max(10000),
+});
+
+export const updateSettingsSchema = z.object({
+  general: generalSettingsSchema.partial().optional(),
+  branding: brandingSettingsSchema.partial().optional(),
+  content: contentSettingsSchema.partial().optional(),
+  registration: registrationSettingsSchema.partial().optional(),
+  notifications: notificationSettingsSchema.partial().optional(),
+  security: securitySettingsSchema.partial().optional(),
+  payments: paymentSettingsSchema.partial().optional(),
+  storage: storageSettingsSchema.partial().optional(),
+  integrations: integrationSettingsSchema.partial().optional(),
+});
+
+export type UpdateSettings = z.infer<typeof updateSettingsSchema>;

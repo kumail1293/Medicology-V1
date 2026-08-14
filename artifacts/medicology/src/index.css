@@ -569,3 +569,22 @@
   height: 0;
   opacity: 0.6;
 }
+
+/* ─── Platform branding (admin Settings → Branding & Design) ─────────────
+   Admin-set design tokens. Unlayered rules win over Tailwind v4 utility
+   layers, so the --brand-radius override reliably reshapes cards/buttons. */
+:root {
+  --brand-radius: 12px;
+  --brand-content-width: 1200px;
+}
+.rounded-xl,
+.rounded-lg,
+.rounded-2xl,
+.rounded-md,
+.rounded-full {
+  transition: border-radius 0.25s ease;
+}
+.rounded-xl { border-radius: calc(var(--brand-radius) * 1); }
+.rounded-lg { border-radius: calc(var(--brand-radius) * 0.75); }
+.rounded-md { border-radius: calc(var(--brand-radius) * 0.6); }
+.rounded-2xl { border-radius: calc(var(--brand-radius) * 1.25); }
