@@ -16,6 +16,8 @@ import {
   FileText,
   AlertCircle,
   Megaphone,
+  Network,
+  UploadCloud,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -48,6 +50,16 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       label: 'Questions',
       icon: <BookOpen size={18} />,
       path: '/admin/questions',
+    },
+    {
+      label: 'Taxonomy',
+      icon: <Network size={18} />,
+      path: '/admin/taxonomy',
+    },
+    {
+      label: 'Bulk Import',
+      icon: <UploadCloud size={18} />,
+      path: '/admin/import',
     },
     {
       label: 'Announcements',

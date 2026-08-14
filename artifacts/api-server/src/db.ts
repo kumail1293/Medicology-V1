@@ -2,6 +2,17 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from '@workspace/db/schema';
 import { SEED_QUESTIONS } from './mock-seed.js';
+import {
+  SEED_COUNTRIES,
+  SEED_EXAM_SYSTEMS,
+  SEED_EXAMS,
+  SEED_PROGRAMS,
+  SEED_ACADEMIC_YEARS,
+  SEED_SUBJECTS,
+  SEED_SYSTEMS,
+  SEED_TOPICS,
+  SEED_SUBTOPICS,
+} from './mock-taxonomy-seed.js';
 
 // Check if we should use SQLite (for development)
 const useSQLite = process.env.DATABASE_URL?.startsWith('sqlite:') ||
@@ -16,19 +27,46 @@ if (useSQLite) {
   // This lets auth and admin routes work locally without requiring a real DB.
   console.log('📊 Using mock database for development (data not persisted)');
 
+  const now = new Date();
   const mockData: Record<string, any[]> = {
     users: [],
     // Seed sample questions so practice/exam/daily flows have content in dev.
+    // Each seeded question gets a stable public QID.
     questions: SEED_QUESTIONS.map((q, i) => ({
       id: i + 1,
+      qid: `QID-MED-${String(i + 1).padStart(9, '0')}`,
+      status: 'published',
+      publishedAt: now,
       ...q,
-      createdAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
     })),
+    // Seed the exam taxonomy hierarchy (countries → exams → programs → years,
+    // and subjects → systems → topics → subtopics) so the exam explorer and
+    // admin taxonomy UI have content in dev.
+    countries: SEED_COUNTRIES.map((c) => ({ ...c, createdAt: now })),
+    exam_systems: SEED_EXAM_SYSTEMS.map((es) => ({ ...es, createdAt: now })),
+    exams: SEED_EXAMS.map((e) => ({ ...e, createdAt: now })),
+    programs: SEED_PROGRAMS.map((p) => ({ ...p, createdAt: now })),
+    academic_years: SEED_ACADEMIC_YEARS.map((y) => ({ ...y, createdAt: now })),
+    subjects: SEED_SUBJECTS.map((s) => ({ ...s, createdAt: now })),
+    systems: SEED_SYSTEMS.map((s) => ({ ...s, createdAt: now })),
+    topics: SEED_TOPICS.map((t) => ({ ...t, createdAt: now })),
+    subtopics: SEED_SUBTOPICS.map((st) => ({ ...st, createdAt: now })),
   };
 
   const nextId: Record<string, number> = {
     users: 1,
     questions: SEED_QUESTIONS.length + 1,
+    countries: SEED_COUNTRIES.length + 1,
+    exam_systems: SEED_EXAM_SYSTEMS.length + 1,
+    exams: SEED_EXAMS.length + 1,
+    programs: SEED_PROGRAMS.length + 1,
+    academic_years: SEED_ACADEMIC_YEARS.length + 1,
+    subjects: SEED_SUBJECTS.length + 1,
+    systems: SEED_SYSTEMS.length + 1,
+    topics: SEED_TOPICS.length + 1,
+    subtopics: SEED_SUBTOPICS.length + 1,
   };
 
   const getTableName = (table: any): string => {
@@ -329,6 +367,18 @@ if (useSQLite) {
           return Promise.resolve([newRow]);
         },
         then(cb: any) {
+          // Awaiting `db.insert(...).values(...)` without `.returning()` must
+          // also insert — real Drizzle persists on `values()` and routes like
+          // practice/bookmarks/import rely on that.
+          const newRow = {
+            id: nextId[tableName] ?? 1,
+            ...values,
+          };
+          if (!mockData[tableName]) {
+            mockData[tableName] = [];
+          }
+          mockData[tableName].push(newRow);
+          nextId[tableName] = (nextId[tableName] ?? 1) + 1;
           return Promise.resolve(mockData[tableName]).then(cb);
         },
       }),

@@ -18,6 +18,8 @@ import { practiceRouter } from './routes/practice.js';
 import { qbanksRouter } from './routes/qbanks.js';
 import { announcementsRouter } from './routes/announcements.js';
 import { storageRouter } from './routes/storage.js';
+import { taxonomyRouter } from './routes/taxonomy.js';
+import { importRouter } from './routes/import.js';
 import { testConnection } from './db.js';
 import { errorHandler } from './utils/errors.js';
 import { rateLimit, startRateLimitCleanup } from './middleware/rateLimit.js';
@@ -111,6 +113,8 @@ app.use('/api/practice', practiceRouter);
 app.use('/api/qbanks', qbanksRouter);
 app.use('/api/storage', storageRouter);
 app.use('/api/announcements', announcementsRouter);
+app.use('/api/taxonomy', taxonomyRouter);
+app.use('/api/admin/import', importRouter);
 
 // 404 handler
 app.use((req: any, res: any) => {

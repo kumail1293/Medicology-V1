@@ -29,6 +29,8 @@ tags:
     description: Daily challenge
   - name: storage
     description: File storage
+  - name: taxonomy
+    description: Exam taxonomy hierarchy
 paths:
   /healthz:
     get:
@@ -226,6 +228,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Question"
+
+  /taxonomy/tree:
+    get:
+      operationId: getTaxonomyTree
+      tags: [taxonomy]
+      summary: Get the full exam taxonomy hierarchy
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxonomyTree"
+
+  /taxonomy/{entity}:
+    get:
+      operationId: adminListTaxonomy
+      tags: [taxonomy]
+      summary: Admin - List rows for a taxonomy entity
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [countries, exam-systems, exams, programs, years, subjects, systems, topics, subtopics]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+    post:
+      operationId: adminCreateTaxonomy
+      tags: [taxonomy]
+      summary: Admin - Create a taxonomy row
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [countries, exam-systems, exams, programs, years, subjects, systems, topics, subtopics]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /taxonomy/{entity}/{id}:
+    put:
+      operationId: adminUpdateTaxonomy
+      tags: [taxonomy]
+      summary: Admin - Update a taxonomy row
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+    delete:
+      operationId: adminDeleteTaxonomy
+      tags: [taxonomy]
+      summary: Admin - Delete a taxonomy row
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entity
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
 
   /practice/submit:
     post:
@@ -609,6 +730,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BulkUploadResponse"
+
+  /admin/import/preview:
+    post:
+      operationId: adminImportPreview
+      tags: [admin]
+      summary: Admin - Upload a spreadsheet and get a validated preview with duplicate detection
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          description: Invalid file or parse error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/import/execute:
+    post:
+      operationId: adminImportExecute
+      tags: [admin]
+      summary: Admin - Import validated rows from a preview
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportExecuteRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportExecuteResponse"
 
   /admin/stats:
     get:
@@ -1020,6 +1194,9 @@ components:
       properties:
         id:
           type: integer
+        qid:
+          type: string
+          description: Immutable public identifier (e.g. QID-MED-000001245)
         questionText:
           type: string
         imageUrl:
@@ -1054,11 +1231,33 @@ components:
           type: array
           items:
             type: string
+        countryId:
+          type: integer
+        examId:
+          type: integer
+        programId:
+          type: integer
+        yearId:
+          type: integer
+        subjectId:
+          type: integer
+        systemId:
+          type: integer
+        topicId:
+          type: integer
+        subtopicId:
+          type: integer
+        status:
+          type: string
+          enum: [draft, pending_review, under_medical_review, approved, published, flagged, errata, archived]
         isBookmarked:
           type: boolean
         userNote:
           type: string
         createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
       required: [id, questionText, options, correctAnswer, explanation, subject, topic, difficulty]
@@ -1102,6 +1301,152 @@ components:
           items:
             type: string
       required: [subjects, systems, topics, universities, examTypes]
+
+    TaxonomyTree:
+      type: object
+      properties:
+        countries:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxonomyCountry"
+        subjects:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxonomySubject"
+
+    TaxonomyCountry:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        flag:
+          type: string
+        examSystems:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxonomyExamSystem"
+
+    TaxonomyExamSystem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        countryId:
+          type: integer
+        exams:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxonomyExam"
+
+    TaxonomyExam:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        examSystemId:
+          type: integer
+        countryId:
+          type: integer
+        status:
+          type: string
+        programs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxonomyProgram"
+
+    TaxonomyProgram:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        examId:
+          type: integer
+        years:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxonomyYear"
+
+    TaxonomyYear:
+      type: object
+      properties:
+        id:
+          type: integer
+        programId:
+          type: integer
+        name:
+          type: string
+
+    TaxonomySubject:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        shortName:
+          type: string
+        icon:
+          type: string
+        color:
+          type: string
+        systems:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxonomySystem"
+
+    TaxonomySystem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        subjectId:
+          type: integer
+        topics:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxonomyTopic"
+
+    TaxonomyTopic:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        systemId:
+          type: integer
+        subtopics:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxonomySubtopic"
+
+    TaxonomySubtopic:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        topicId:
+          type: integer
 
     SubmitAnswerRequest:
       type: object
@@ -1334,6 +1679,25 @@ components:
           type: array
           items:
             type: string
+        countryId:
+          type: integer
+        examId:
+          type: integer
+        programId:
+          type: integer
+        yearId:
+          type: integer
+        subjectId:
+          type: integer
+        systemId:
+          type: integer
+        topicId:
+          type: integer
+        subtopicId:
+          type: integer
+        status:
+          type: string
+          enum: [draft, pending_review, under_medical_review, approved, published, flagged, errata, archived]
       required: [questionText, options, correctAnswer, explanation, subject, topic, difficulty]
 
     BulkUploadRequest:
@@ -1357,6 +1721,86 @@ components:
           items:
             type: string
       required: [inserted, failed]
+
+    ImportRow:
+      type: object
+      properties:
+        rowNumber:
+          type: integer
+        status:
+          type: string
+          enum: [valid, similar, duplicate, error]
+        messages:
+          type: array
+          items:
+            type: string
+        qid:
+          type: string
+        existingId:
+          type: integer
+        similarity:
+          type: integer
+        data:
+          type: object
+        unmappedColumns:
+          type: array
+          items:
+            type: string
+
+    ImportPreview:
+      type: object
+      properties:
+        fileName:
+          type: string
+        totalRows:
+          type: integer
+        columnMapping:
+          type: object
+          additionalProperties:
+            type: string
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImportRow"
+        stats:
+          type: object
+          properties:
+            valid:
+              type: integer
+            similar:
+              type: integer
+            duplicate:
+              type: integer
+            error:
+              type: integer
+          required: [valid, similar, duplicate, error]
+      required: [fileName, totalRows, columnMapping, rows, stats]
+
+    ImportExecuteRequest:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImportRow"
+        includeDuplicates:
+          type: boolean
+        createMissingTaxonomy:
+          type: boolean
+      required: [rows]
+
+    ImportExecuteResponse:
+      type: object
+      properties:
+        inserted:
+          type: integer
+        skipped:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+      required: [inserted, skipped]
 
     AdminStats:
       type: object

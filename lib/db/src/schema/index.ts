@@ -1,4 +1,5 @@
 export * from "./users.js";
+export * from "./taxonomy.js";
 export * from "./questions.js";
 export * from "./progress.js";
 export * from "./bookmarks.js";
@@ -17,5 +18,5 @@ export * from "./password_reset_tokens.js";
 
 
 export * from "./otp_verifications.js";
-
-export * from "./otp_verifications.js";
+export * from "./question_versions.js";
+export * from "./audit_logs.js";

@@ -15,6 +15,17 @@ import {
   questionIdParamSchema,
 } from './schemas.js';
 import type { CreateQuestion, UpdateQuestion, GetQuestionsQuery } from './schemas.js';
+import { generateQid, isValidQid } from '../utils/qid.js';
+import { resolveTaxonomyFields } from '../utils/taxonomy.js';
+import {
+  recordAudit,
+  recordQuestionVersion,
+  diffValues,
+  classifyChange,
+  summarizeDiff,
+  getQuestionVersions,
+  getAuditLogs,
+} from '../utils/audit.js';
 
 export const adminRouter = Router();
 adminRouter.use(authenticate, requireAdmin);
@@ -60,16 +71,27 @@ adminRouter.get(
       const conditions: any[] = [];
 
       if (query.search) {
-        conditions.push(
-          or(
-            ilike(questionsTable.questionText, `%${query.search}%`),
-            ilike(questionsTable.subject, `%${query.search}%`)
-          )
-        );
+        // Exact QID match takes priority; otherwise fall back to text search.
+        const search = query.search.trim();
+        if (isValidQid(search)) {
+          conditions.push(eq(questionsTable.qid, search));
+        } else {
+          conditions.push(
+            or(
+              ilike(questionsTable.questionText, `%${search}%`),
+              ilike(questionsTable.subject, `%${search}%`),
+              ilike(questionsTable.topic, `%${search}%`)
+            )
+          );
+        }
       }
 
       if (query.difficulty) {
         conditions.push(eq(questionsTable.difficulty, query.difficulty));
+      }
+
+      if (query.status) {
+        conditions.push(eq(questionsTable.status, query.status as any));
       }
 
       const questions = await db
@@ -93,14 +115,48 @@ adminRouter.get(
   }
 );
 
-// Create question
+// Create question — auto-generates the immutable QID and keeps the legacy
+// free-text taxonomy columns in sync with the relational IDs.
 adminRouter.post(
   '/questions',
   validateBody(createQuestionSchema),
   async (req: any, res: any) => {
     try {
       const data = req.validatedBody as CreateQuestion;
-      const [question] = await db.insert(questionsTable).values(data).returning();
+
+      const values: any = { ...data };
+      if (!values.qid) values.qid = await generateQid(db);
+      if (!values.status) values.status = 'published';
+      if (!values.publishedAt) values.publishedAt = new Date();
+
+      // Resolve taxonomy names from relational IDs (hybrid mode).
+      const taxonomy = await resolveTaxonomyFields(values);
+      Object.assign(values, taxonomy);
+
+      const [question] = await db.insert(questionsTable).values(values).returning();
+
+      // Version 1 + audit trail for the create.
+      const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+      await recordQuestionVersion({
+        questionId: question.id,
+        qid: question.qid,
+        changeType: 'create',
+        summary: 'Question created',
+        newValues: question,
+        actor,
+        reviewStatus: 'approved',
+      });
+      await recordAudit({
+        actor,
+        action: 'question.create',
+        entityType: 'question',
+        entityId: question.id,
+        entityLabel: question.qid,
+        summary: 'Question created',
+        newValues: question,
+        ip: req.ip,
+      });
+
       res.status(201).json(question);
     } catch (err: any) {
       console.error('Error in admin create question:', err);
@@ -109,7 +165,7 @@ adminRouter.post(
   }
 );
 
-// Update question
+// Update question — the QID is immutable and never changes on edits.
 adminRouter.put(
   '/questions/:id',
   validateParams(questionIdParamSchema),
@@ -119,14 +175,53 @@ adminRouter.put(
       const { id } = req.validatedParams as { id: number };
       const data = req.validatedBody as UpdateQuestion;
 
+      // Never allow the QID to change after a question exists.
+      delete (data as any).qid;
+
+      // Resolve taxonomy names from relational IDs (hybrid mode).
+      const taxonomy = await resolveTaxonomyFields(data);
+      Object.assign(data, taxonomy);
+
+      const values: any = { ...data, updatedAt: new Date() };
+
+      // Load the current row first so we can diff what actually changed.
+      const [existing] = await db.select().from(questionsTable).where(eq(questionsTable.id, id));
+      if (!existing) {
+        return res.status(404).json({ error: 'Question not found' });
+      }
+
       const [question] = await db
         .update(questionsTable)
-        .set(data)
+        .set(values)
         .where(eq(questionsTable.id, id))
         .returning();
 
-      if (!question) {
-        return res.status(404).json({ error: 'Question not found' });
+      // Version + audit trail for the edit (skip if nothing meaningful changed).
+      const diff = diffValues(existing, question);
+      if (Object.keys(diff).length > 0) {
+        const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+        const changeType = classifyChange(diff);
+        const summary = summarizeDiff(diff);
+        await recordQuestionVersion({
+          questionId: id,
+          qid: question.qid,
+          changeType,
+          summary,
+          oldValues: existing,
+          newValues: question,
+          actor,
+        });
+        await recordAudit({
+          actor,
+          action: `question.${changeType}`,
+          entityType: 'question',
+          entityId: id,
+          entityLabel: question.qid,
+          summary,
+          oldValues: diff,
+          newValues: question,
+          ip: req.ip,
+        });
       }
 
       return res.json(question);
@@ -144,10 +239,59 @@ adminRouter.delete(
   async (req: any, res: any) => {
     try {
       const { id } = req.validatedParams as { id: number };
+      const [existing] = await db.select().from(questionsTable).where(eq(questionsTable.id, id));
+
       await db.delete(questionsTable).where(eq(questionsTable.id, id));
+
+      const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+      await recordAudit({
+        actor,
+        action: 'question.delete',
+        entityType: 'question',
+        entityId: id,
+        entityLabel: existing?.qid ?? `#${id}`,
+        summary: 'Question deleted',
+        oldValues: existing,
+        ip: req.ip,
+      });
+
       res.json({ success: true });
     } catch (err: any) {
       console.error('Error in admin delete question:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// Get version history for a question
+adminRouter.get(
+  '/questions/:id/versions',
+  validateParams(questionIdParamSchema),
+  async (req: any, res: any) => {
+    try {
+      const { id } = req.validatedParams as { id: number };
+      const versions = await getQuestionVersions(id, Number(req.query.limit) || 50);
+      res.json({ versions });
+    } catch (err: any) {
+      console.error('Error in admin get question versions:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// Get audit logs
+adminRouter.get('/audit-logs', async (req: any, res: any) => {
+  try {
+    const { entityType, action, limit, offset } = req.query;
+      const result = await getAuditLogs({
+        entityType: entityType as string | undefined,
+        action: action as string | undefined,
+        limit: limit ? Number(limit) : 100,
+        offset: offset ? Number(offset) : 0,
+      });
+      res.json(result);
+    } catch (err: any) {
+      console.error('Error in admin get audit logs:', err);
       res.status(500).json({ error: err.message });
     }
   }

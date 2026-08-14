@@ -1,0 +1,264 @@
+import { Router } from 'express';
+import { db } from '../db.js';
+import {
+  countriesTable,
+  examSystemsTable,
+  examsTable,
+  programsTable,
+  academicYearsTable,
+  subjectsTable,
+  systemsTable,
+  topicsTable,
+  subtopicsTable,
+} from '@workspace/db';
+import { eq } from '../utils/drizzle.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { recordAudit } from '../utils/audit.js';
+
+const actorOf = (req: any) => ({ id: req.user?.id, name: req.user?.name, email: req.user?.email });
+
+export const taxonomyRouter = Router();
+
+type Table = any;
+
+// ---------------------------------------------------------------------------
+// Public tree — the full exam hierarchy assembled without SQL joins so it works
+// on both PostgreSQL and the in-memory mock DB.
+// ---------------------------------------------------------------------------
+
+taxonomyRouter.get('/tree', authenticate, async (_req: AuthRequest, res: any) => {
+  try {
+    const [countries, examSystems, exams, programs, years, subjects, systems, topics, subtopics] =
+      await Promise.all([
+        db.select().from(countriesTable),
+        db.select().from(examSystemsTable),
+        db.select().from(examsTable),
+        db.select().from(programsTable),
+        db.select().from(academicYearsTable),
+        db.select().from(subjectsTable),
+        db.select().from(systemsTable),
+        db.select().from(topicsTable),
+        db.select().from(subtopicsTable),
+      ]);
+
+    const tree = {
+      countries: countries.map((c: Table) => ({
+        ...c,
+        examSystems: examSystems
+          .filter((es: Table) => es.countryId === c.id)
+          .map((es: Table) => ({
+            ...es,
+            exams: exams
+              .filter((e: Table) => e.examSystemId === es.id)
+              .map((e: Table) => ({
+                ...e,
+                programs: programs
+                  .filter((p: Table) => p.examId === e.id)
+                  .map((p: Table) => ({
+                    ...p,
+                    years: years
+                      .filter((y: Table) => y.programId === p.id)
+                      .map((y: Table) => ({ ...y })),
+                  })),
+              })),
+          })),
+      })),
+      subjects: subjects.map((s: Table) => ({
+        ...s,
+        systems: systems
+          .filter((sys: Table) => sys.subjectId === s.id)
+          .map((sys: Table) => ({
+            ...sys,
+            topics: topics
+              .filter((t: Table) => t.systemId === sys.id)
+              .map((t: Table) => ({
+                ...t,
+                subtopics: subtopics
+                  .filter((st: Table) => st.topicId === t.id)
+                  .map((st: Table) => ({ ...st })),
+              })),
+          })),
+      })),
+    };
+
+    res.json(tree);
+  } catch (err: any) {
+    console.error('Error in taxonomy tree:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Admin CRUD — generic over the nine taxonomy entities.
+// ---------------------------------------------------------------------------
+
+const ENTITY_TABLES: Record<string, any> = {
+  countries: countriesTable,
+  'exam-systems': examSystemsTable,
+  exams: examsTable,
+  programs: programsTable,
+  years: academicYearsTable,
+  subjects: subjectsTable,
+  systems: systemsTable,
+  topics: topicsTable,
+  subtopics: subtopicsTable,
+};
+
+const ALLOWED_FIELDS: Record<string, string[]> = {
+  countries: ['code', 'name', 'flag', 'active'],
+  'exam-systems': ['name', 'countryId', 'sortOrder', 'active'],
+  exams: ['code', 'name', 'examSystemId', 'countryId', 'status', 'sortOrder', 'active'],
+  programs: ['code', 'name', 'examId', 'sortOrder', 'active'],
+  years: ['programId', 'name', 'sortOrder', 'active'],
+  subjects: ['code', 'name', 'shortName', 'icon', 'color', 'description', 'active'],
+  systems: ['name', 'subjectId', 'sortOrder', 'active'],
+  topics: ['name', 'systemId', 'sortOrder', 'active'],
+  subtopics: ['name', 'topicId', 'sortOrder', 'active'],
+};
+
+const REQUIRED_FIELDS: Record<string, string[]> = {
+  countries: ['code', 'name'],
+  'exam-systems': ['name', 'countryId'],
+  exams: ['code', 'name', 'examSystemId', 'countryId'],
+  programs: ['code', 'name', 'examId'],
+  years: ['name', 'programId'],
+  subjects: ['code', 'name'],
+  systems: ['name', 'subjectId'],
+  topics: ['name', 'systemId'],
+  subtopics: ['name', 'topicId'],
+};
+
+function pickFields(body: any, entity: string): Record<string, any> {
+  const allowed = ALLOWED_FIELDS[entity] ?? [];
+  const out: Record<string, any> = {};
+  for (const key of allowed) {
+    if (body[key] !== undefined) out[key] = body[key];
+  }
+  return out;
+}
+
+function validateRequired(data: Record<string, any>, entity: string): string | null {
+  for (const field of REQUIRED_FIELDS[entity] ?? []) {
+    if (data[field] === undefined || data[field] === null || data[field] === '') {
+      return `Missing required field: ${field}`;
+    }
+  }
+  return null;
+}
+
+// List all rows for an entity
+taxonomyRouter.get('/:entity', authenticate, requireAdmin, async (req: any, res: any) => {
+  try {
+    const table = ENTITY_TABLES[req.params.entity];
+    if (!table) return res.status(404).json({ error: `Unknown taxonomy entity: ${req.params.entity}` });
+    const rows = await db.select().from(table);
+    res.json({ [req.params.entity]: rows });
+  } catch (err: any) {
+    console.error('Error listing taxonomy:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create a row in an entity
+taxonomyRouter.post('/:entity', authenticate, requireAdmin, async (req: any, res: any) => {
+  try {
+    const entity = req.params.entity;
+    const table = ENTITY_TABLES[entity];
+    if (!table) return res.status(404).json({ error: `Unknown taxonomy entity: ${entity}` });
+
+    const data = pickFields(req.body, entity);
+    const missing = validateRequired(data, entity);
+    if (missing) return res.status(400).json({ error: missing });
+
+    const [row] = await db.insert(table).values(data).returning();
+
+    await recordAudit({
+      actor: actorOf(req),
+      action: `taxonomy.${entity}.create`,
+      entityType: entity,
+      entityId: row.id,
+      entityLabel: row.name ?? row.code,
+      summary: `Created ${entity.replace('-', ' ')} "${row.name ?? row.code}"`,
+      newValues: row,
+      ip: req.ip,
+    });
+
+    res.status(201).json(row);
+  } catch (err: any) {
+    console.error('Error creating taxonomy:', err);
+    if (String(err.message).includes('unique')) {
+      return res.status(400).json({ error: 'A row with this code/name already exists' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update a row in an entity
+taxonomyRouter.put('/:entity/:id', authenticate, requireAdmin, async (req: any, res: any) => {
+  try {
+    const entity = req.params.entity;
+    const table = ENTITY_TABLES[entity];
+    if (!table) return res.status(404).json({ error: `Unknown taxonomy entity: ${entity}` });
+
+    const id = Number(req.params.id);
+    const data = pickFields(req.body, entity);
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: 'No updatable fields provided' });
+    }
+
+    const [existing] = await db.select().from(table).where(eq(table.id, id));
+    if (!existing) return res.status(404).json({ error: 'Taxonomy row not found' });
+
+    const [row] = await db.update(table).set(data).where(eq(table.id, id)).returning();
+    if (!row) return res.status(404).json({ error: 'Taxonomy row not found' });
+
+    const changed = Object.keys(data).filter((key) => JSON.stringify(data[key]) !== JSON.stringify(existing[key]));
+    await recordAudit({
+      actor: actorOf(req),
+      action: `taxonomy.${entity}.update`,
+      entityType: entity,
+      entityId: id,
+      entityLabel: row.name ?? row.code,
+      summary: changed.length > 0
+        ? `Updated ${entity.replace('-', ' ')} "${row.name ?? row.code}" (${changed.join(', ')})`
+        : `Updated ${entity.replace('-', ' ')} "${row.name ?? row.code}"`,
+      oldValues: existing,
+      newValues: row,
+      ip: req.ip,
+    });
+
+    res.json(row);
+  } catch (err: any) {
+    console.error('Error updating taxonomy:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete a row from an entity
+taxonomyRouter.delete('/:entity/:id', authenticate, requireAdmin, async (req: any, res: any) => {
+  try {
+    const entity = req.params.entity;
+    const table = ENTITY_TABLES[entity];
+    if (!table) return res.status(404).json({ error: `Unknown taxonomy entity: ${entity}` });
+
+    const id = Number(req.params.id);
+    const [existing] = await db.select().from(table).where(eq(table.id, id));
+    await db.delete(table).where(eq(table.id, id));
+
+    await recordAudit({
+      actor: actorOf(req),
+      action: `taxonomy.${entity}.delete`,
+      entityType: entity,
+      entityId: id,
+      entityLabel: existing?.name ?? existing?.code ?? `#${id}`,
+      summary: `Deleted ${entity.replace('-', ' ')} "${existing?.name ?? existing?.code ?? id}"`,
+      oldValues: existing,
+      ip: req.ip,
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error deleting taxonomy:', err);
+    res.status(500).json({ error: err.message });
+  }
+});

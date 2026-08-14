@@ -28,6 +28,8 @@ const AdminQuestions   = lazy(() => import("./pages/admin-questions"));
 const AdminAnnouncements = lazy(() => import("./pages/admin-announcements"));
 const AdminFlags       = lazy(() => import("./pages/admin-flags"));
 const AdminSettings    = lazy(() => import("./pages/admin-settings"));
+const AdminTaxonomy    = lazy(() => import("./pages/admin-taxonomy"));
+const AdminImport      = lazy(() => import("./pages/admin-import"));
 const FlashcardsPage   = lazy(() => import("./pages/flashcards"));
 const SettingsPage     = lazy(() => import("./pages/settings"));
 const CreateTestPage   = lazy(() => import("./pages/create-test"));
@@ -150,6 +152,12 @@ function Router() {
         </Route>
         <Route path="/admin/settings">
           {() => <AdminRoute component={() => <AdminLayout><AdminSettings /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/taxonomy">
+          {() => <AdminRoute component={() => <AdminLayout><AdminTaxonomy /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/import">
+          {() => <AdminRoute component={() => <AdminLayout><AdminImport /></AdminLayout>} />}
         </Route>
 
         <Route path="/payment/callback" component={PaymentCallback} />
