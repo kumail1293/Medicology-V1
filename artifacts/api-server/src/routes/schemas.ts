@@ -163,6 +163,26 @@ export const questionIdParamSchema = z.object({
   id: z.string().transform(Number).pipe(z.number().positive()),
 });
 
+export const reviewQuestionSchema = z.object({
+  // Pipeline actions: submit (draft→pending_review), start_review
+  // (pending_review→under_medical_review), approve (→approved), publish
+  // (→published), reject (→draft, note required), archive, restore,
+  // flag / unflag.
+  action: z.enum([
+    'submit',
+    'start_review',
+    'approve',
+    'publish',
+    'reject',
+    'archive',
+    'restore',
+    'flag',
+    'unflag',
+  ]),
+  note: z.string().max(2000).optional(),
+});
+
 export type CreateQuestion = z.infer<typeof createQuestionSchema>;
 export type UpdateQuestion = z.infer<typeof updateQuestionSchema>;
 export type GetQuestionsQuery = z.infer<typeof getQuestionsQuerySchema>;
+export type ReviewQuestion = z.infer<typeof reviewQuestionSchema>;

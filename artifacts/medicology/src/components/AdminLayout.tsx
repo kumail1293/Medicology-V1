@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useLocation } from 'wouter';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -18,6 +18,7 @@ import {
   Megaphone,
   Network,
   UploadCloud,
+  ClipboardCheck,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -34,6 +35,33 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [location] = useLocation();
   const { theme } = useSettings();
+  const [reviewBadge, setReviewBadge] = useState<number | undefined>(undefined);
+
+  // Pending-review badge for the Review Queue nav item.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await fetch('/api/admin/review/summary');
+        if (!response.ok) return;
+        const data = await response.json();
+        const counts = data.counts || {};
+        const pending =
+          (counts.draft || 0) +
+          (counts.pending_review || 0) +
+          (counts.under_medical_review || 0) +
+          (counts.flagged || 0) +
+          (counts.errata || 0);
+        if (!cancelled) setReviewBadge(pending > 0 ? pending : undefined);
+      } catch {
+        // Non-fatal — badge just stays hidden.
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const navItems: NavItem[] = [
     {
@@ -60,6 +88,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       label: 'Bulk Import',
       icon: <UploadCloud size={18} />,
       path: '/admin/import',
+    },
+    {
+      label: 'Review Queue',
+      icon: <ClipboardCheck size={18} />,
+      path: '/admin/review',
+      badge: reviewBadge,
     },
     {
       label: 'Announcements',

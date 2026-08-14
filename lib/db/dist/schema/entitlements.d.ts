@@ -1,10 +1,13 @@
-export declare const paymentOrdersTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
-    name: "payment_orders";
+export type EntitlementStatus = "active" | "expired" | "revoked" | "complimentary" | "scholarship" | "beta" | "institutional";
+export declare const ENTITLEMENT_STATUSES: EntitlementStatus[];
+export type EntitlementSource = "payment" | "complimentary" | "scholarship" | "beta" | "institutional" | "coupon";
+export declare const entitlementsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "entitlements";
     schema: undefined;
     columns: {
         id: import("drizzle-orm/pg-core").PgColumn<{
             name: "id";
-            tableName: "payment_orders";
+            tableName: "entitlements";
             dataType: "number";
             columnType: "PgSerial";
             data: number;
@@ -19,26 +22,9 @@ export declare const paymentOrdersTable: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
-        orderId: import("drizzle-orm/pg-core").PgColumn<{
-            name: "order_id";
-            tableName: "payment_orders";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
         userId: import("drizzle-orm/pg-core").PgColumn<{
             name: "user_id";
-            tableName: "payment_orders";
+            tableName: "entitlements";
             dataType: "number";
             columnType: "PgInteger";
             data: number;
@@ -53,43 +39,9 @@ export declare const paymentOrdersTable: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
-        qbankType: import("drizzle-orm/pg-core").PgColumn<{
-            name: "qbank_type";
-            tableName: "payment_orders";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        provider: import("drizzle-orm/pg-core").PgColumn<{
-            name: "provider";
-            tableName: "payment_orders";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: true;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        amount: import("drizzle-orm/pg-core").PgColumn<{
-            name: "amount";
-            tableName: "payment_orders";
+        qbankId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "qbank_id";
+            tableName: "entitlements";
             dataType: "number";
             columnType: "PgInteger";
             data: number;
@@ -104,12 +56,12 @@ export declare const paymentOrdersTable: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
-        currency: import("drizzle-orm/pg-core").PgColumn<{
-            name: "currency";
-            tableName: "payment_orders";
+        source: import("drizzle-orm/pg-core").PgColumn<{
+            name: "source";
+            tableName: "entitlements";
             dataType: "string";
             columnType: "PgText";
-            data: string;
+            data: EntitlementSource;
             driverParam: string;
             notNull: true;
             hasDefault: true;
@@ -120,13 +72,15 @@ export declare const paymentOrdersTable: import("drizzle-orm/pg-core").PgTableWi
             baseColumn: never;
             identity: undefined;
             generated: undefined;
-        }, {}, {}>;
+        }, {}, {
+            $type: EntitlementSource;
+        }>;
         status: import("drizzle-orm/pg-core").PgColumn<{
             name: "status";
-            tableName: "payment_orders";
+            tableName: "entitlements";
             dataType: "string";
             columnType: "PgText";
-            data: string;
+            data: EntitlementStatus;
             driverParam: string;
             notNull: true;
             hasDefault: true;
@@ -137,61 +91,12 @@ export declare const paymentOrdersTable: import("drizzle-orm/pg-core").PgTableWi
             baseColumn: never;
             identity: undefined;
             generated: undefined;
-        }, {}, {}>;
-        transactionRef: import("drizzle-orm/pg-core").PgColumn<{
-            name: "transaction_ref";
-            tableName: "payment_orders";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        idempotencyKey: import("drizzle-orm/pg-core").PgColumn<{
-            name: "idempotency_key";
-            tableName: "payment_orders";
-            dataType: "string";
-            columnType: "PgText";
-            data: string;
-            driverParam: string;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: [string, ...string[]];
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        gatewayResponse: import("drizzle-orm/pg-core").PgColumn<{
-            name: "gateway_response";
-            tableName: "payment_orders";
-            dataType: "json";
-            columnType: "PgJsonb";
-            data: unknown;
-            driverParam: unknown;
-            notNull: false;
-            hasDefault: false;
-            isPrimaryKey: false;
-            isAutoincrement: false;
-            hasRuntimeDefault: false;
-            enumValues: undefined;
-            baseColumn: never;
-            identity: undefined;
-            generated: undefined;
-        }, {}, {}>;
-        createdAt: import("drizzle-orm/pg-core").PgColumn<{
-            name: "created_at";
-            tableName: "payment_orders";
+        }, {}, {
+            $type: EntitlementStatus;
+        }>;
+        startAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "start_at";
+            tableName: "entitlements";
             dataType: "date";
             columnType: "PgTimestamp";
             data: Date;
@@ -206,9 +111,79 @@ export declare const paymentOrdersTable: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
-        updatedAt: import("drizzle-orm/pg-core").PgColumn<{
-            name: "updated_at";
-            tableName: "payment_orders";
+        expiresAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "expires_at";
+            tableName: "entitlements";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        orderRef: import("drizzle-orm/pg-core").PgColumn<{
+            name: "order_ref";
+            tableName: "entitlements";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        grantedBy: import("drizzle-orm/pg-core").PgColumn<{
+            name: "granted_by";
+            tableName: "entitlements";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        metadata: import("drizzle-orm/pg-core").PgColumn<{
+            name: "metadata";
+            tableName: "entitlements";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: Record<string, any>;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: Record<string, any>;
+        }>;
+        createdAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "created_at";
+            tableName: "entitlements";
             dataType: "date";
             columnType: "PgTimestamp";
             data: Date;
@@ -226,6 +201,5 @@ export declare const paymentOrdersTable: import("drizzle-orm/pg-core").PgTableWi
     };
     dialect: "pg";
 }>;
-export type PaymentOrder = typeof paymentOrdersTable.$inferSelect;
-export type NewPaymentOrder = typeof paymentOrdersTable.$inferInsert;
-//# sourceMappingURL=payment_orders.d.ts.map
+export type Entitlement = typeof entitlementsTable.$inferSelect;
+//# sourceMappingURL=entitlements.d.ts.map

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { questionsTable, usersTable, userProgressTable } from '@workspace/db';
+import { questionsTable, usersTable, userProgressTable, waitlistTable, qbanksTable } from '@workspace/db';
 import { eq, ilike, and, or, sql } from '../utils/drizzle.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import {
@@ -13,8 +13,14 @@ import {
   updateQuestionSchema,
   getQuestionsQuerySchema,
   questionIdParamSchema,
+  reviewQuestionSchema,
 } from './schemas.js';
-import type { CreateQuestion, UpdateQuestion, GetQuestionsQuery } from './schemas.js';
+import type {
+  CreateQuestion,
+  UpdateQuestion,
+  GetQuestionsQuery,
+  ReviewQuestion,
+} from './schemas.js';
 import { generateQid, isValidQid } from '../utils/qid.js';
 import { resolveTaxonomyFields } from '../utils/taxonomy.js';
 import {
@@ -116,7 +122,8 @@ adminRouter.get(
 );
 
 // Create question — auto-generates the immutable QID and keeps the legacy
-// free-text taxonomy columns in sync with the relational IDs.
+// free-text taxonomy columns in sync with the relational IDs. New questions
+// enter the review pipeline as drafts rather than publishing immediately.
 adminRouter.post(
   '/questions',
   validateBody(createQuestionSchema),
@@ -126,8 +133,8 @@ adminRouter.post(
 
       const values: any = { ...data };
       if (!values.qid) values.qid = await generateQid(db);
-      if (!values.status) values.status = 'published';
-      if (!values.publishedAt) values.publishedAt = new Date();
+      if (!values.status) values.status = 'draft';
+      if (values.status === 'published' && !values.publishedAt) values.publishedAt = new Date();
 
       // Resolve taxonomy names from relational IDs (hybrid mode).
       const taxonomy = await resolveTaxonomyFields(values);
@@ -188,6 +195,11 @@ adminRouter.put(
       const [existing] = await db.select().from(questionsTable).where(eq(questionsTable.id, id));
       if (!existing) {
         return res.status(404).json({ error: 'Question not found' });
+      }
+
+      // Moving a question to published stamps its first-published date.
+      if (values.status === 'published' && !existing.publishedAt) {
+        values.publishedAt = new Date();
       }
 
       const [question] = await db
@@ -274,6 +286,182 @@ adminRouter.get(
       res.json({ versions });
     } catch (err: any) {
       console.error('Error in admin get question versions:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// Coming Soon demand — who is waiting for which QBank ("Notify Me" registrations).
+adminRouter.get('/waitlist', async (req: any, res: any) => {
+  try {
+    const [entries, qbanks] = await Promise.all([
+      db.select().from(waitlistTable),
+      db.select().from(qbanksTable),
+    ]);
+    const byId = new Map<number, any>(qbanks.map((qb: any) => [Number(qb.id), qb]));
+    const counts = new Map<number, { qbankId: number; slug: string; name: string; count: number }>();
+    for (const entry of entries) {
+      const qb = byId.get(Number(entry.qbankId));
+      if (!qb) continue;
+      const key = Number(entry.qbankId);
+      const existing = counts.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        counts.set(key, { qbankId: key, slug: qb.slug, name: qb.name, count: 1 });
+      }
+    }
+    const demand = Array.from(counts.values()).sort((a, b) => b.count - a.count);
+    res.json({ demand, total: entries.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Review queue summary — counts per pipeline status (for nav badge + page chips).
+adminRouter.get('/review/summary', async (req: any, res: any) => {
+  try {
+    const rows = await db
+      .select({ status: questionsTable.status, count: sql<number>`count(*)` })
+      .from(questionsTable)
+      .groupBy(questionsTable.status);
+
+    const counts: Record<string, number> = {};
+    for (const row of rows) counts[row.status] = Number(row.count);
+    res.json({ counts });
+  } catch (err: any) {
+    console.error('Error in admin review summary:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Review pipeline — move a question through draft → pending_review →
+// under_medical_review → approved → published (or reject/archive/flag).
+// Every transition appends a version row with reviewer metadata + an audit
+// entry, so the QID stays immutable while the decision is fully traceable.
+// ---------------------------------------------------------------------------
+const REVIEW_TRANSITIONS: Record<
+  string,
+  { from: string[]; to: string; label: string; needsNote?: boolean }
+> = {
+  submit: { from: ['draft'], to: 'pending_review', label: 'Submitted for review' },
+  start_review: { from: ['pending_review'], to: 'under_medical_review', label: 'Moved to medical review' },
+  approve: { from: ['pending_review', 'under_medical_review'], to: 'approved', label: 'Approved' },
+  publish: {
+    from: ['approved', 'pending_review', 'under_medical_review', 'errata'],
+    to: 'published',
+    label: 'Published',
+  },
+  reject: {
+    from: ['pending_review', 'under_medical_review', 'approved'],
+    to: 'draft',
+    label: 'Rejected — back to draft',
+    needsNote: true,
+  },
+  archive: {
+    from: ['draft', 'pending_review', 'under_medical_review', 'approved', 'published', 'flagged', 'errata'],
+    to: 'archived',
+    label: 'Archived',
+  },
+  restore: { from: ['archived'], to: 'pending_review', label: 'Restored to review queue' },
+  flag: { from: ['published', 'approved'], to: 'flagged', label: 'Flagged for review' },
+  unflag: { from: ['flagged'], to: 'pending_review', label: 'Unflagged — back to review' },
+};
+
+adminRouter.post(
+  '/questions/:id/review',
+  validateParams(questionIdParamSchema),
+  validateBody(reviewQuestionSchema),
+  async (req: any, res: any) => {
+    try {
+      const { id } = req.validatedParams as { id: number };
+      const { action, note } = req.validatedBody as ReviewQuestion;
+
+      const transition = REVIEW_TRANSITIONS[action];
+      if (!transition) {
+        return res.status(400).json({ error: `Unknown review action "${action}"` });
+      }
+
+      const [existing] = await db.select().from(questionsTable).where(eq(questionsTable.id, id));
+      if (!existing) {
+        return res.status(404).json({ error: 'Question not found' });
+      }
+
+      if (!transition.from.includes(existing.status)) {
+        return res.status(409).json({
+          error: `Cannot ${action} a question in status "${existing.status}"`,
+          currentStatus: existing.status,
+        });
+      }
+
+      if (transition.needsNote && !note?.trim()) {
+        return res.status(400).json({ error: 'A note explaining the rejection is required' });
+      }
+
+      const now = new Date();
+      // Snapshot the pre-transition status before the update mutates the row
+      // (the mock DB returns live row references, so read it first).
+      const oldStatus = existing.status;
+      const values: any = { status: transition.to, updatedAt: now };
+      if (transition.to === 'published' && !existing.publishedAt) {
+        values.publishedAt = now;
+      }
+
+      const [question] = await db
+        .update(questionsTable)
+        .set(values)
+        .where(eq(questionsTable.id, id))
+        .returning();
+
+      // The JWT payload carries no display name — resolve it from the users
+      // table so the reviewer metadata on the version row is useful.
+      let actorName = req.user?.name;
+      if (!actorName && req.user?.id) {
+        const [reviewer] = await db
+          .select({ name: usersTable.name })
+          .from(usersTable)
+          .where(eq(usersTable.id, req.user.id));
+        actorName = reviewer?.name;
+      }
+      const actor = { id: req.user?.id, name: actorName, email: req.user?.email };
+      const trimmedNote = note?.trim();
+      const summary = trimmedNote
+        ? `${transition.label} (${oldStatus} → ${transition.to}) — ${trimmedNote}`
+        : `${transition.label} (${oldStatus} → ${transition.to})`;
+
+      await recordQuestionVersion({
+        questionId: id,
+        qid: question.qid,
+        changeType: 'status_change',
+        summary,
+        oldValues: { status: oldStatus },
+        newValues: { status: question.status, note: trimmedNote ?? undefined },
+        actor,
+        ...(action === 'approve' || action === 'publish'
+          ? { reviewStatus: 'approved' as const }
+          : action === 'reject'
+            ? { reviewStatus: 'rejected' as const }
+            : {}),
+        reviewerId: actor.id,
+        reviewerName: actor.name,
+        reviewedAt: now,
+      });
+      await recordAudit({
+        actor,
+        action: 'question.review',
+        entityType: 'question',
+        entityId: id,
+        entityLabel: question.qid,
+        summary,
+        oldValues: { status: oldStatus },
+        newValues: { status: question.status, note: trimmedNote ?? undefined },
+        ip: req.ip,
+      });
+
+      res.json({ question, summary });
+    } catch (err: any) {
+      console.error('Error in admin review question:', err);
       res.status(500).json({ error: err.message });
     }
   }

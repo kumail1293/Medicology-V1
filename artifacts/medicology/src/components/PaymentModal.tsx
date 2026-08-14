@@ -85,6 +85,19 @@ export function PaymentModal({ open, onClose, item }: Props) {
         </DialogHeader>
 
         <div className="space-y-3 mt-2">
+          <button
+            onClick={() => setSelected("dev")}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${selected === "dev" ? "border-amber-500 bg-amber-500/5" : "border-border hover:border-amber-500/40"}`}
+          >
+            <div className="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center shrink-0">
+              <CreditCard size={18} className="text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-sm text-foreground">Demo Payment</p>
+              <p className="text-xs text-muted-foreground">Simulated — no real charge (dev mode)</p>
+            </div>
+          </button>
+
           {isPKR && (
             <>
               <button

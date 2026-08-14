@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { testSessionsTable, questionsTable } from '@workspace/db';
 import { eq, and, inArray, sql } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { findQbankBySlug, hasActiveEntitlement } from '../utils/entitlements.js';
 
 export const sessionsRouter = Router();
 
@@ -120,8 +121,22 @@ sessionsRouter.post('/create', authenticate, async (req: AuthRequest, res: any) 
       questionIds, specificQuestionIds,
       subjects, systems, questionCount = 20, mode = 'tutor',
       difficulty, universityTag, examType,
-      title, blockSize, durationSeconds, questionFilter,
+      title, blockSize, durationSeconds, questionFilter, qbankSlug,
     } = req.body;
+
+    // Server-side entitlement gate for QBank-scoped sessions. Learners can only
+    // start a paid QBank session with an active entitlement (admins bypass).
+    if (qbankSlug) {
+      const qbank = await findQbankBySlug(qbankSlug);
+      if (!qbank) return res.status(404).json({ error: 'QBank not found' });
+      const isAdmin = req.user?.role === 'admin' || req.user?.role === 'superadmin';
+      if (!isAdmin && (qbank.status === 'available' || qbank.status === 'beta')) {
+        const hasAccess = await hasActiveEntitlement(req.user!.id, qbank.id);
+        if (!hasAccess) {
+          return res.status(403).json({ error: 'This QBank requires an active subscription', code: 'QBANK_LOCKED' });
+        }
+      }
+    }
 
     let finalQuestionIds: number[] = questionIds || specificQuestionIds || [];
 

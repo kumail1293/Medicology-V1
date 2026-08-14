@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { PageTransition } from "@/components/layout";
 import { useToast } from "@/hooks/use-toast";
-import { ShoppingBag, Check, Lock, Star, BookOpen, ChevronRight, ChevronDown, X, CreditCard, GraduationCap, Globe, Building2, Play, Loader2 } from "lucide-react";
+import { ShoppingBag, Check, Lock, Star, BookOpen, ChevronRight, ChevronDown, X, CreditCard, GraduationCap, Globe, Building2, Play, Loader2, Clock, Bell } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,10 @@ interface QBank {
   currency: string;
   description: string;
   purchased: boolean;
+  status: string;
+  notifyRegistered?: boolean;
+  questionCount?: number;
+  durationDays?: number;
   qbankKind?: string;
 }
 
@@ -39,6 +43,20 @@ const LOGO_MAP: Record<string, string> = {
   mrcp_part2:      "/logos/mrcp.png",
   plab1:           "/logos/gmc.png",
   plab2:           "/logos/gmc.png",
+  // DB-driven slugs (uhs-mbbs-*, fcps-part1, usmle-step1, ...)
+  "uhs-mbbs-1st-year":  "/logos/pakistan-flag.svg",
+  "uhs-mbbs-2nd-year":  "/logos/pakistan-flag.svg",
+  "uhs-mbbs-3rd-year":  "/logos/pakistan-flag.svg",
+  "uhs-mbbs-4th-year":  "/logos/pakistan-flag.svg",
+  "uhs-mbbs-final-year": "/logos/pakistan-flag.svg",
+  "uhs-bds-1st-year":   "/logos/pakistan-flag.svg",
+  "uhs-bds-2nd-year":   "/logos/pakistan-flag.svg",
+  "uhs-bds-3rd-year":   "/logos/pakistan-flag.svg",
+  "uhs-bds-4th-year":   "/logos/pakistan-flag.svg",
+  "kmu-mbbs":           "/logos/pakistan-flag.svg",
+  "fcps-part1":         "/logos/cpsp.png",
+  "usmle-step1":        "/logos/usmle.png",
+  "usmle-step2ck":      "/logos/usmle.png",
 };
 
 const HIGHLIGHT_MAP: Record<string, string> = {
@@ -49,11 +67,19 @@ const HIGHLIGHT_MAP: Record<string, string> = {
   fcps_part1: "border-purple-500/50 bg-gradient-to-br from-purple-500/5 to-purple-500/10",
   fcps_part2: "border-purple-500/50 bg-gradient-to-br from-purple-500/5 to-purple-500/10",
   fcps_fellowship: "border-purple-500/50 bg-gradient-to-br from-purple-500/5 to-purple-500/10",
+  "fcps-part1": "border-purple-500/50 bg-gradient-to-br from-purple-500/5 to-purple-500/10",
+  "usmle-step1": "border-blue-500/50 bg-gradient-to-br from-blue-500/5 to-blue-500/10",
+  "usmle-step2ck": "border-blue-500/50 bg-gradient-to-br from-blue-500/5 to-blue-500/10",
 };
 
-// Which catalogue IDs belong to which group
-const PAKISTAN_IDS = new Set(["mbbs", "fcps_part1", "fcps_part2", "fcps_fellowship", "nle_nle1", "nle_nle2", "neb_1", "neb_2"]);
+// Which catalogue IDs belong to which group (DB-driven slugs + legacy ids)
+const PAKISTAN_IDS = new Set([
+  "mbbs", "fcps_part1", "fcps_part2", "fcps_fellowship", "nle_nle1", "nle_nle2", "neb_1", "neb_2",
+  "uhs-mbbs-1st-year", "uhs-mbbs-2nd-year", "uhs-mbbs-3rd-year", "uhs-mbbs-4th-year", "uhs-mbbs-final-year",
+  "uhs-bds-1st-year", "uhs-bds-2nd-year", "uhs-bds-3rd-year", "uhs-bds-4th-year", "kmu-mbbs", "fcps-part1",
+]);
 const isInternational = (id: string) => !PAKISTAN_IDS.has(id);
+const isComingSoon = (q: QBank) => q.status === "coming_soon" || q.status === "planned";
 
 export default function QBanksPage() {
   const [catalogue, setCatalogue] = useState<QBank[]>([]);
@@ -102,12 +128,17 @@ export default function QBanksPage() {
     const key = `${uni.code}:${prog.code}:${year.name}`;
     setStarting(key);
     try {
+      // DB-driven QBank slug (e.g. UHS / MBBS / 2nd Year → uhs-mbbs-2nd-year);
+      // the server verifies the entitlement for this QBank before creating the
+      // session.
+      const qbankSlug = `${uni.code.toLowerCase()}-${prog.code.toLowerCase()}-${year.name.toLowerCase().replace(/\s+/g, "-")}`;
       const res = await fetch("/api/sessions/create", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           universityTag: uni.code,
           examType: `${prog.code} ${year.name}`,
+          qbankSlug,
           questionCount: Math.max(year.questionCount, 5),
           mode: "practice",
           title: `${uni.name} · ${prog.name} · ${year.name}`,
@@ -144,6 +175,24 @@ export default function QBanksPage() {
     setPayModal(qbank);
   };
 
+  const handleNotify = async (qbank: QBank) => {
+    try {
+      const res = await fetch(`/api/qbanks/${qbank.id}/notify`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to register");
+      const data = await res.json();
+      setCatalogue(prev => prev.map(q => q.id === qbank.id ? { ...q, notifyRegistered: true } : q));
+      toast({
+        title: data.created ? "You're on the list!" : "Already registered",
+        description: "We'll notify you when this QBank becomes available.",
+      });
+    } catch {
+      toast({ title: "Error", description: "Could not register for notifications.", variant: "destructive" });
+    }
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-64">
       <div className="text-muted-foreground animate-pulse">Loading QBanks…</div>
@@ -151,7 +200,8 @@ export default function QBanksPage() {
   );
 
   const myQBanks = catalogue.filter(q => q.purchased);
-  const available = catalogue.filter(q => !q.purchased);
+  const available = catalogue.filter(q => !q.purchased && !isComingSoon(q));
+  const comingSoon = catalogue.filter(q => !q.purchased && isComingSoon(q));
 
   return (
     <PageTransition className="space-y-8 max-w-5xl mx-auto pb-20">
@@ -337,6 +387,21 @@ export default function QBanksPage() {
         </section>
       )}
 
+      {/* Coming Soon QBanks */}
+      {comingSoon.length > 0 && (
+        <section className="space-y-6">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Clock size={17} /> Coming Soon
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {comingSoon.map(q => (
+              <QBankCard key={q.id} q={q} onNotify={() => handleNotify(q)} />
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">Join the waitlist to be notified the moment these QBanks launch.</p>
+        </section>
+      )}
+
       {/* Purchase Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -353,7 +418,13 @@ export default function QBanksPage() {
             </div>
             <div className="text-center mb-6">
               <div className="text-4xl font-extrabold text-foreground">{showModal.currency} {showModal.price.toLocaleString()}</div>
-              <div className="text-sm text-muted-foreground mt-1">One-time payment · Lifetime access</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                {showModal.durationDays && showModal.durationDays >= 365
+                  ? `One-time payment · ${Math.round(showModal.durationDays / 365) === 1 ? "1 year" : `${Math.round(showModal.durationDays / 365)} years`} access`
+                  : showModal.durationDays
+                    ? `One-time payment · ${Math.round(showModal.durationDays / 30)} month access`
+                    : "One-time payment"}
+              </div>
             </div>
             <div className="space-y-3">
               <Button
@@ -376,23 +447,39 @@ export default function QBanksPage() {
   );
 }
 
-function QBankCard({ q, onUnlock }: { q: { id: string; label: string; subtitle: string; price: number; currency: string; description: string; purchased: boolean }; onUnlock: () => void }) {
+function QBankCard({ q, onUnlock, onNotify }: { q: QBank; onUnlock?: () => void; onNotify?: () => void }) {
+  const coming = isComingSoon(q);
   return (
     <Card className="border border-border hover:border-primary/40 transition-all hover:-translate-y-0.5 hover:shadow-md">
       <CardContent className="p-5">
         <div className="flex items-start justify-between mb-3">
           <LogoImg src={LOGO_MAP[q.id]} size={28} className="rounded-lg" />
           <div className="text-right">
-            <div className="font-extrabold text-lg text-foreground">{q.currency} {q.price.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">one-time</div>
+            {coming ? (
+              <Badge variant="secondary" className="text-xs"><Clock size={11} className="mr-1" /> Coming Soon</Badge>
+            ) : (
+              <>
+                <div className="font-extrabold text-lg text-foreground">{q.currency} {q.price.toLocaleString()}</div>
+                <div className="text-xs text-muted-foreground">one-time</div>
+              </>
+            )}
           </div>
         </div>
         <h3 className="font-extrabold text-base mb-0.5">{q.label}</h3>
         <p className="text-xs text-muted-foreground mb-3">{q.subtitle}</p>
+        {q.questionCount !== undefined && (
+          <p className="text-xs text-muted-foreground mb-1">{q.questionCount} questions</p>
+        )}
         <p className="text-xs text-muted-foreground leading-relaxed mb-4 line-clamp-2">{q.description}</p>
-        <Button size="sm" className="w-full gap-1.5" variant="outline" onClick={onUnlock}>
-          <Lock size={13} /> Unlock Access
-        </Button>
+        {coming ? (
+          <Button size="sm" className="w-full gap-1.5" variant="outline" onClick={onNotify} disabled={q.notifyRegistered}>
+            {q.notifyRegistered ? <><Check size={13} /> Registered — we'll notify you</> : <><Bell size={13} /> Notify Me</>}
+          </Button>
+        ) : (
+          <Button size="sm" className="w-full gap-1.5" variant="outline" onClick={onUnlock}>
+            <Lock size={13} /> Unlock Access
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

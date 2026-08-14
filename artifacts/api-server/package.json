@@ -7,7 +7,8 @@
   "dev": "node --env-file=../../.env --watch --import tsx/esm src/app.ts",
   "build": "tsc --noEmit",
   "start": "node --env-file=../../.env --import tsx/esm src/app.ts",
-  "typecheck": "tsc --noEmit"
+  "typecheck": "tsc --noEmit",
+  "test": "node --import tsx/esm --test --test-force-exit src/p0.test.ts"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",

@@ -573,7 +573,10 @@ export async function executeImport(req: ImportExecuteRequest): Promise<{ insert
         if (taxonomy[key] !== undefined) values[key] = taxonomy[key];
       }
 
-      values.status = data.status || 'published';
+      // Imported content enters the review pipeline rather than publishing
+      // directly — a human/medical reviewer approves it in the admin Review
+      // Queue before students see it.
+      values.status = data.status || 'pending_review';
       values.publishedAt = values.status === 'published' ? new Date() : null;
 
       await db.insert(questionsTable).values(values);

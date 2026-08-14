@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 
-export type PaymentProvider = "jazzcash" | "easypaisa" | "stripe";
+export type PaymentProvider = "jazzcash" | "easypaisa" | "stripe" | "dev";
 
 export interface PaymentRequest {
   qbankType: string;

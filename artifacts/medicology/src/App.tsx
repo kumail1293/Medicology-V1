@@ -30,6 +30,7 @@ const AdminFlags       = lazy(() => import("./pages/admin-flags"));
 const AdminSettings    = lazy(() => import("./pages/admin-settings"));
 const AdminTaxonomy    = lazy(() => import("./pages/admin-taxonomy"));
 const AdminImport      = lazy(() => import("./pages/admin-import"));
+const AdminReview      = lazy(() => import("./pages/admin-review"));
 const FlashcardsPage   = lazy(() => import("./pages/flashcards"));
 const SettingsPage     = lazy(() => import("./pages/settings"));
 const CreateTestPage   = lazy(() => import("./pages/create-test"));
@@ -158,6 +159,9 @@ function Router() {
         </Route>
         <Route path="/admin/import">
           {() => <AdminRoute component={() => <AdminLayout><AdminImport /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/review">
+          {() => <AdminRoute component={() => <AdminLayout><AdminReview /></AdminLayout>} />}
         </Route>
 
         <Route path="/payment/callback" component={PaymentCallback} />

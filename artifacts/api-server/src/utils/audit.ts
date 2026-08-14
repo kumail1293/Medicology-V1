@@ -166,10 +166,17 @@ export async function recordQuestionVersion(params: {
   newValues?: Record<string, any>;
   actor?: Actor;
   reviewStatus?: 'pending' | 'approved' | 'rejected';
+  reviewerId?: number;
+  reviewerName?: string;
+  reviewedAt?: Date;
 }): Promise<void> {
-  // Query the highest version number for this question.
+  // Query the highest version number for this question (select the questionId
+  // too — the filter below relies on it).
   const rows = await db
-    .select({ versionNumber: questionVersionsTable.versionNumber })
+    .select({
+      questionId: questionVersionsTable.questionId,
+      versionNumber: questionVersionsTable.versionNumber,
+    })
     .from(questionVersionsTable);
 
   const maxVersion = rows
@@ -187,6 +194,9 @@ export async function recordQuestionVersion(params: {
     changedBy: params.actor?.id ?? null,
     changedByName: params.actor?.name ?? null,
     reviewStatus: params.reviewStatus ?? 'pending',
+    reviewerId: params.reviewerId ?? null,
+    reviewerName: params.reviewerName ?? null,
+    reviewedAt: params.reviewedAt ?? null,
   });
 }
 

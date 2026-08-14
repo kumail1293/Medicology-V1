@@ -158,6 +158,7 @@ export default function AdminDashboard() {
     activeUsers: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [waitlist, setWaitlist] = useState<Array<{ qbankId: number; slug: string; name: string; count: number }>>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -188,6 +189,19 @@ export default function AdminDashboard() {
     };
 
     fetchStats();
+
+    const fetchWaitlist = async () => {
+      try {
+        const response = await fetch('/api/admin/waitlist');
+        if (response.ok) {
+          const data = await response.json();
+          setWaitlist(data.demand || []);
+        }
+      } catch {
+        // Non-fatal — the demand list is supplementary.
+      }
+    };
+    fetchWaitlist();
   }, [toast]);
 
   return (
@@ -238,6 +252,29 @@ export default function AdminDashboard() {
             color="indigo"
           />
         </div>
+
+        {/* Coming Soon demand (Notify Me waitlist) */}
+        {waitlist.length > 0 && (
+          <div className="mb-8 rounded-xl border border-border bg-card">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4">
+              <h3 className="font-semibold flex items-center gap-2">
+                <Zap size={16} className="text-primary" /> Coming Soon Demand
+              </h3>
+              <span className="text-xs text-muted-foreground">Notify Me registrations</span>
+            </div>
+            <div className="divide-y divide-border">
+              {waitlist.map((item) => (
+                <div key={item.qbankId} className="flex items-center justify-between px-6 py-3">
+                  <div>
+                    <p className="text-sm font-medium">{item.name}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{item.slug}</p>
+                  </div>
+                  <span className="text-sm font-bold text-primary">{item.count.toLocaleString()} interested</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

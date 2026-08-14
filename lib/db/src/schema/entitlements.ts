@@ -1,0 +1,57 @@
+import { pgTable, serial, integer, text, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { usersTable } from "./users.js";
+import { qbanksTable } from "./qbanks.js";
+
+// ============================================================================
+// Entitlements — the access-control model. A purchase/payment row is NOT the
+// entitlement; this table is. It supports subscription, lifetime, complimentary,
+// scholarship, beta and institutional grants, all verified server-side.
+// ============================================================================
+
+export type EntitlementStatus =
+  | "active"
+  | "expired"
+  | "revoked"
+  | "complimentary"
+  | "scholarship"
+  | "beta"
+  | "institutional";
+
+export const ENTITLEMENT_STATUSES: EntitlementStatus[] = [
+  "active",
+  "expired",
+  "revoked",
+  "complimentary",
+  "scholarship",
+  "beta",
+  "institutional",
+];
+
+export type EntitlementSource =
+  | "payment"
+  | "complimentary"
+  | "scholarship"
+  | "beta"
+  | "institutional"
+  | "coupon";
+
+export const entitlementsTable = pgTable("entitlements", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => usersTable.id),
+  qbankId: integer("qbank_id")
+    .notNull()
+    .references(() => qbanksTable.id),
+  source: text("source").$type<EntitlementSource>().notNull().default("payment"),
+  status: text("status").$type<EntitlementStatus>().notNull().default("active"),
+  startAt: timestamp("start_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"), // null = lifetime/never expires
+  // Payment order that produced this grant (idempotency anchor — one grant per order).
+  orderRef: text("order_ref"),
+  grantedBy: integer("granted_by").references(() => usersTable.id),
+  metadata: jsonb("metadata").$type<Record<string, any>>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type Entitlement = typeof entitlementsTable.$inferSelect;

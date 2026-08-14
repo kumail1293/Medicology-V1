@@ -3,6 +3,7 @@ import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import * as schema from '@workspace/db/schema';
 import { SEED_QUESTIONS } from './mock-seed.js';
+import { SEED_QBANKS, buildQbankQuestionMapping } from './mock-qbank-seed.js';
 import {
   SEED_COUNTRIES,
   SEED_EXAM_SYSTEMS,
@@ -78,7 +79,48 @@ if (useSQLite) {
     systems: SEED_SYSTEMS.map((s) => ({ ...s, createdAt: now })),
     topics: SEED_TOPICS.map((t) => ({ ...t, createdAt: now })),
     subtopics: SEED_SUBTOPICS.map((st) => ({ ...st, createdAt: now })),
+    qbanks: SEED_QBANKS.map((q) => ({ ...q, questionCount: 0, createdAt: now, updatedAt: now })),
+    qbank_questions: [] as any[],
+    entitlements: [] as any[],
+    waitlist: [] as any[],
   };
+
+  // Map seeded questions to QBanks via their legacy tag fields, then backfill
+  // the cached questionCount on each QBank.
+  const qbankMapping = buildQbankQuestionMapping(
+    mockData.questions.map((q: any) => ({
+      id: q.id,
+      universityTag: q.universityTag,
+      examType: q.examType,
+      qbankType: q.qbankType,
+    }))
+  );
+  mockData.qbank_questions = qbankMapping.map((m, i) => ({
+    id: i + 1,
+    qbankId: m.qbankId,
+    questionId: m.questionId,
+    createdAt: now,
+  }));
+  for (const qb of mockData.qbanks) {
+    qb.questionCount = qbankMapping.filter((m) => m.qbankId === qb.id).length;
+  }
+
+  // Dev convenience: grant the seeded admin beta access to every available
+  // QBank so the whole purchase/entitlement loop is exercisable locally.
+  const availableQbanks = mockData.qbanks.filter((q: any) => q.status === 'available');
+  mockData.entitlements = availableQbanks.map((q: any, i: number) => ({
+    id: i + 1,
+    userId: 1,
+    qbankId: q.id,
+    source: 'beta',
+    status: 'beta',
+    startAt: now,
+    expiresAt: null,
+    orderRef: null,
+    grantedBy: null,
+    metadata: { note: 'Dev beta access for seeded admin' },
+    createdAt: now,
+  }));
 
   const nextId: Record<string, number> = {
     users: 2,
@@ -92,6 +134,10 @@ if (useSQLite) {
     systems: SEED_SYSTEMS.length + 1,
     topics: SEED_TOPICS.length + 1,
     subtopics: SEED_SUBTOPICS.length + 1,
+    qbanks: SEED_QBANKS.length + 1,
+    qbank_questions: qbankMapping.length + 1,
+    entitlements: mockData.entitlements.length + 1,
+    waitlist: 1,
   };
 
   const getTableName = (table: any): string => {
@@ -321,6 +367,7 @@ if (useSQLite) {
 
     let limitValue: number | undefined;
     let offsetValue: number | undefined;
+    let groupedResult: any[] | undefined;
 
     const query: any = {
       from: () => query,
@@ -339,7 +386,38 @@ if (useSQLite) {
       orderBy() {
         return query;
       },
+      // GROUP BY — aggregates rows by the group column(s); when the select
+      // spec includes a "count" column it becomes the group size (emulating
+      // SQL count(*) over each group).
+      groupBy(...columns: any[]) {
+        if (columns.length === 0 || !selectSpec || typeof selectSpec !== 'object') {
+          return query;
+        }
+        const groupFields = columns.map((column) => getFieldName(column));
+        const groups = new Map<string, any[]>();
+        for (const row of applyFilter()) {
+          const key = groupFields.map((field) => String(row[field ?? ''])).join('\u0000');
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(row);
+        }
+        groupedResult = Array.from(groups.values()).map((groupRows) => {
+          const out: any = {};
+          for (const [alias, column] of Object.entries(selectSpec)) {
+            if (alias === 'count') {
+              out[alias] = groupRows.length;
+            } else {
+              const field = getFieldName(column);
+              out[alias] = groupRows[0][field ?? alias];
+            }
+          }
+          return out;
+        });
+        return query;
+      },
       then(cb: any) {
+        if (groupedResult) {
+          return Promise.resolve(cb(groupedResult));
+        }
         const result = applyFilter();
         if (selectSpec && typeof selectSpec === 'object' && 'count' in selectSpec) {
           return Promise.resolve(cb([{ count: result.length }]));
@@ -347,6 +425,9 @@ if (useSQLite) {
         return Promise.resolve(cb(project(paginate(result))));
       },
       returning() {
+        if (groupedResult) {
+          return Promise.resolve(groupedResult);
+        }
         const result = applyFilter();
         if (selectSpec && typeof selectSpec === 'object' && 'count' in selectSpec) {
           return Promise.resolve([{ count: result.length }]);

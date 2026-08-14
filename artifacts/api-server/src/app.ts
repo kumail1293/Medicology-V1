@@ -20,6 +20,7 @@ import { announcementsRouter } from './routes/announcements.js';
 import { storageRouter } from './routes/storage.js';
 import { taxonomyRouter } from './routes/taxonomy.js';
 import { importRouter } from './routes/import.js';
+import { paymentsRouter } from './routes/payments.js';
 import { testConnection } from './db.js';
 import { errorHandler } from './utils/errors.js';
 import { rateLimit, startRateLimitCleanup } from './middleware/rateLimit.js';
@@ -51,6 +52,13 @@ function loadLocalEnvFile() {
 
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
+    }
+
+    // Dotenv convention: an explicitly-set environment variable wins over the
+    // local env file, so callers can override (e.g. DATABASE_URL=sqlite:mock
+    // for the mock DB, PORT for a custom port).
+    if (process.env[key] !== undefined) {
+      continue;
     }
 
     process.env[key] = value;
@@ -115,6 +123,7 @@ app.use('/api/storage', storageRouter);
 app.use('/api/announcements', announcementsRouter);
 app.use('/api/taxonomy', taxonomyRouter);
 app.use('/api/admin/import', importRouter);
+app.use('/api/payments', paymentsRouter);
 
 // 404 handler
 app.use((req: any, res: any) => {
