@@ -11,7 +11,7 @@ import {
   academicYearsTable,
   countriesTable,
 } from '@workspace/db';
-import { ilike } from './drizzle.js';
+import { ilike, eq } from './drizzle.js';
 import { generateQid, isValidQid } from './qid.js';
 import { QUESTION_STATUSES } from '@workspace/db';
 
@@ -444,6 +444,15 @@ export async function buildImportPreview(buffer: Buffer, fileName: string): Prom
   const baseNumber = Number((await generateQid(db)).replace('QID-MED-', ''));
   let qidCounter = baseNumber;
 
+  // Existing QIDs in the DB (for conflict detection on supplied QIDs) and
+  // QIDs already seen within this file (in-file duplicates).
+  const existingQuestions = await db.select({ id: questionsTable.id, qid: questionsTable.qid }).from(questionsTable);
+  const existingQids = new Map<string, number>();
+  for (const q of existingQuestions) {
+    if (q.qid) existingQids.set(q.qid, Number(q.id));
+  }
+  const seenFileQids = new Map<string, number>();
+
   const results: ImportRowResult[] = [];
 
   for (const parsed of rows) {
@@ -454,6 +463,26 @@ export async function buildImportPreview(buffer: Buffer, fileName: string): Prom
       status: 'valid',
       messages: [...messages],
     };
+
+    // QID conflict detection — a supplied QID must be unique across the DB and
+    // within the file itself ("duplicate QID" per P0.4/P0.6).
+    const suppliedQid = stringValue(data.qid);
+    if (suppliedQid) {
+      const dbMatch = existingQids.get(suppliedQid);
+      if (dbMatch !== undefined) {
+        result.status = 'duplicate';
+        result.existingId = dbMatch;
+        result.messages.push(`QID ${suppliedQid} already exists (question #${dbMatch}) — it will not be overwritten`);
+      } else {
+        const fileMatch = seenFileQids.get(suppliedQid);
+        if (fileMatch !== undefined) {
+          result.status = 'duplicate';
+          result.messages.push(`QID ${suppliedQid} appears more than once in this file (first used on row ${fileMatch})`);
+        } else {
+          seenFileQids.set(suppliedQid, parsed.rowNumber);
+        }
+      }
+    }
 
     // Duplicate detection
     if (data.questionText) {
@@ -557,8 +586,15 @@ export async function executeImport(req: ImportExecuteRequest): Promise<{ insert
       if (!values.subject) values.subject = stringValue(data.subject) || 'General';
       if (!values.topic) values.topic = stringValue(data.topic) || 'General';
 
-      // QID: explicit (validated) or freshly generated — never reuse one in the DB.
+      // QID: explicit (validated + not already in the DB) or freshly generated
+      // — a supplied QID that already exists is never reused or overwritten.
       if (data.qid && isValidQid(stringValue(data.qid))) {
+        const [existing] = await db.select({ id: questionsTable.id }).from(questionsTable).where(eq(questionsTable.qid, stringValue(data.qid)));
+        if (existing) {
+          skipped++;
+          errors.push(`Row ${row.rowNumber}: QID ${stringValue(data.qid)} already exists (question #${existing.id}) — skipped to avoid overwriting`);
+          continue;
+        }
         values.qid = stringValue(data.qid);
       } else {
         values.qid = await generateQid(db);
