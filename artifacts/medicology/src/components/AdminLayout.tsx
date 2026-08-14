@@ -20,6 +20,7 @@ import {
   UploadCloud,
   ClipboardCheck,
   Database,
+  Layers,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -100,6 +101,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       label: 'QBanks',
       icon: <Database size={18} />,
       path: '/admin/qbanks',
+    },
+    {
+      label: 'Flashcards',
+      icon: <Layers size={18} />,
+      path: '/admin/flashcards',
     },
     {
       label: 'Announcements',

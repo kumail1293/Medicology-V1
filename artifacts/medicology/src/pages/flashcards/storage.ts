@@ -1,4 +1,5 @@
 import { Flashcard, Deck, DeckOptions, ReviewLog, Rating, DEFAULT_DECK_OPTIONS, StudyStats } from "./types";
+import { markdownImagesToHtml } from "@/lib/richText";
 
 export const CARDS_KEY = "medi_fc_cards_v2";
 export const DECKS_KEY = "medi_fc_decks_v2";
@@ -246,7 +247,8 @@ export function getDeckStudyStats(cards: Flashcard[], deckId: string, options: D
 
 export function sanitizeAnkiContent(text: string): string {
   if (!text) return "";
-  return text
+  const withImages = markdownImagesToHtml(text);
+  return withImages
     .replace(/\[sound:[^\]]+\]/g, "")
     .replace(
       /<img([^>]*?)src="(?!https?:\/\/)([^"]+?)"([^>]*?)>/gi,
@@ -254,6 +256,13 @@ export function sanitizeAnkiContent(text: string): string {
         const name = (src.split(/[\\/]/).pop() ?? src).slice(0, 40);
         return `<img${pre}src="${src}"${post} onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span class=\\'anki-img-missing\\'>📷 ${name}</span>');" style="max-width:100%;border-radius:8px;">`;
       },
+    )
+    // External image links that fail to load get a graceful fallback instead
+    // of a broken-image icon, and every image is lazy-loaded.
+    .replace(
+      /<img([^>]*?)src="(https?:\/\/[^"]+)"([^>]*?)>/gi,
+      (_, pre, src, post) =>
+        `<img${pre}src="${src}"${post} loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span class=\\'anki-img-missing\\'>📷 ${(src.split("/").pop() ?? src).slice(0, 40)}</span>');" style="max-width:100%;border-radius:8px;">`,
     )
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .trim();

@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Flashcard, Deck, CardType, CardFlag, SUBJECTS, FLAG_COLORS, FLAG_LABELS } from "./types";
+import RichTextEditor from "@/components/RichTextEditor";
 import { sm2Defaults } from "./storage";
 
 interface Props {
@@ -101,18 +102,24 @@ export default function EditCard({ card, deckId, decks, onSave, onCancel }: Prop
         {form.type === "cloze" && (
           <p className="text-xs text-muted-foreground mb-2 bg-muted/50 rounded-lg px-3 py-2 font-mono whitespace-pre">{CLOZE_HINT}</p>
         )}
-        <textarea value={form.front} onChange={e => set("front", e.target.value)} rows={3}
-          className="w-full p-3 border border-border rounded-xl bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-          placeholder={form.type === "cloze" ? "The {{c1::mitochondria}} is the powerhouse\u2026" : "Enter question or term\u2026"} />
+        <RichTextEditor
+          value={form.front}
+          onChange={html => set("front", html)}
+          placeholder={form.type === "cloze" ? "The {{c1::mitochondria}} is the powerhouse…" : "Question / term — tables, images, formatting…"}
+          minHeight={110}
+        />
       </div>
 
       {/* Back */}
       {form.type === "basic" && (
         <div>
           <label className="text-xs font-medium mb-1 block text-muted-foreground uppercase tracking-wide">Back · Answer / Definition</label>
-          <textarea value={form.back} onChange={e => set("back", e.target.value)} rows={4}
-            className="w-full p-3 border border-border rounded-xl bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="Enter answer or definition\u2026" />
+          <RichTextEditor
+            value={form.back}
+            onChange={html => set("back", html)}
+            placeholder="Answer / definition — tables, images, formatting…"
+            minHeight={130}
+          />
         </div>
       )}
 
@@ -120,18 +127,24 @@ export default function EditCard({ card, deckId, decks, onSave, onCancel }: Prop
       {form.type === "cloze" && (
         <div>
           <label className="text-xs font-medium mb-1 block text-muted-foreground uppercase tracking-wide">Extra Info (shown with answer)</label>
-          <textarea value={form.back} onChange={e => set("back", e.target.value)} rows={2}
-            className="w-full p-3 border border-border rounded-xl bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-            placeholder="Optional extra context\u2026" />
+          <RichTextEditor
+            value={form.back}
+            onChange={html => set("back", html)}
+            placeholder="Optional extra context…"
+            minHeight={90}
+          />
         </div>
       )}
 
       {/* Private note */}
       <div>
         <label className="text-xs font-medium mb-1 block text-muted-foreground uppercase tracking-wide">Private Note (shown during study)</label>
-        <textarea value={form.note ?? ""} onChange={e => set("note", e.target.value)} rows={2}
-          className="w-full p-3 border border-border rounded-xl bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-          placeholder="Mnemonic, tip, or extra context\u2026" />
+        <RichTextEditor
+          value={form.note ?? ""}
+          onChange={html => set("note", html)}
+          placeholder="Mnemonic, tip, or extra context…"
+          minHeight={80}
+        />
       </div>
 
       {/* Image */}

@@ -69,3 +69,16 @@ export function requireAdmin(req: any, res: any, next: any): void {
   }
   next();
 }
+
+// Content editors — admin, superadmin, editor and teacher roles — may create
+// and edit educational content (questions, explanations, flashcards,
+// announcements). System administration (users, payments, settings) stays
+// behind requireAdmin.
+const CONTENT_EDITOR_ROLES = ['admin', 'superadmin', 'editor', 'teacher'];
+export function requireContentEditor(req: any, res: any, next: any): void {
+  if (!req.user?.isAdmin && !CONTENT_EDITOR_ROLES.includes(req.user?.role)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  next();
+}

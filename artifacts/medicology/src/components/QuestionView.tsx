@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Bookmark, BookmarkCheck, ChevronLeft, ChevronRight, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import RichText from "@/components/RichText";
 
 interface QuestionViewProps {
   question: Question;
@@ -131,7 +132,7 @@ export function QuestionView({
               <img src={(question as any).imageUrl} alt="Question" className="max-h-64 w-full object-contain" />
             </button>
           )}
-          <p className="text-base leading-relaxed font-medium">{question.questionText}</p>
+          <RichText html={question.questionText} className="text-base leading-relaxed font-medium" />
         </CardContent>
       </Card>
 
@@ -192,7 +193,7 @@ export function QuestionView({
                 <p className="font-medium text-green-600 dark:text-green-400 mb-1">
                   ✓ Why {question.correctAnswer} is correct:
                 </p>
-                <p className="text-muted-foreground">{question.explanation}</p>
+                <RichText html={question.explanation} className="text-muted-foreground" />
                 {(question as any).explanationImageUrl && (
                   <button
                     onClick={() => setFullscreenImage((question as any).explanationImageUrl)}

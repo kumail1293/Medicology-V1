@@ -15,6 +15,13 @@
       "when": 1786736467580,
       "tag": "0001_p0_performance_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786737241310,
+      "tag": "0002_flashcard_decks_and_cards",
+      "breakpoints": true
     }
   ]
 }

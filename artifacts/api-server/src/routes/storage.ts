@@ -35,7 +35,7 @@ storageRouter.post('/upload-url', authenticate, async (req, res: any) => {
     const ext = path.extname(name || '.jpg');
     const filename = `${unique}${ext}`;
     res.json({
-      uploadURL: `http://localhost:8080/api/storage/upload/${filename}`,
+      uploadURL: `${req.protocol}://${req.get('host')}/api/storage/upload/${filename}`,
       objectPath: `/uploads/${filename}`,
     });
   } catch (err: any) { res.status(500).json({ error: err.message }); }

@@ -8,7 +8,7 @@ import {
   loadDecks, saveDecks,
   loadOptions, saveOptions,
   getDeckOptions, buildStudyQueue, getDeckStudyStats,
-  todayStr, stripHtml,
+  todayStr, stripHtml, sm2Defaults,
 } from "./storage";
 import {
   dbLoadCards, dbUpsertCard, dbDeleteCard, dbSaveCards,
@@ -21,10 +21,11 @@ import StatsView from "./StatsView";
 import EditCard from "./EditCard";
 import ImportView from "./ImportView";
 import DeckOptionsModal from "./DeckOptions";
-import { Plus, BookOpen } from "lucide-react";
+import { Plus, BookOpen, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
 
 type View =
   | { type: "decks" }
@@ -52,7 +53,72 @@ export default function FlashcardsPage() {
   const [logs, setLogs] = useState<ReviewLog[]>([]);
   const [view, setView] = useState<View>({ type: "decks" });
   const [seenToday, setSeenToday] = useState<Record<string, string[]>>({});
+  const [syncingAdmin, setSyncingAdmin] = useState(false);
   const { toast } = useToast();
+
+  /* ── Admin deck sync (database decks → local study system) ──────── */
+  const syncAdminDecks = useCallback(async () => {
+    try {
+      setSyncingAdmin(true);
+      const res = await apiFetch("/api/flashcards/decks");
+      if (!res.ok) return; // not signed in / not available — silently skip
+      const { decks: adminDecks } = await res.json();
+      if (!Array.isArray(adminDecks) || adminDecks.length === 0) return;
+
+      let added = 0;
+      const localDecks = loadDecks();
+      const localCards = await dbLoadCards();
+      const nextDecks = [...localDecks];
+      const nextCards = [...localCards];
+
+      for (const deck of adminDecks) {
+        const localId = `admin-${deck.id}`;
+        if (!nextDecks.some((d) => d.id === localId)) {
+          nextDecks.push({
+            id: localId,
+            name: deck.name,
+            subject: deck.subject || "Other",
+            description: deck.description || "Official deck",
+            createdAt: new Date().toISOString(),
+          });
+        }
+        const cardsRes = await apiFetch(`/api/flashcards/decks/${deck.id}/cards`);
+        if (!cardsRes.ok) continue;
+        const { cards: deckCards } = await cardsRes.json();
+        const existing = new Set(nextCards.filter((c) => c.deckId === localId).map((c) => c.front));
+        for (const c of deckCards || []) {
+          if (!c?.front || existing.has(c.front)) continue;
+          nextCards.push({
+            id: `admin-${deck.id}-${c.id}`,
+            front: c.front,
+            back: c.back || "",
+            subject: deck.subject || "Other",
+            deckId: localId,
+            image: c.image || undefined,
+            createdAt: new Date().toISOString(),
+            type: "basic",
+            tags: c.tags || [],
+            flag: 0,
+            suspended: false,
+            note: c.note || undefined,
+            ...sm2Defaults(),
+          });
+          existing.add(c.front);
+          added++;
+        }
+      }
+
+      saveDecks(nextDecks);
+      await dbSaveCards(nextCards);
+      setDecks(nextDecks);
+      setCards(nextCards);
+      if (added > 0) toast({ title: `Synced ${added} card(s) from official decks` });
+    } catch {
+      // Offline / transient — local decks keep working.
+    } finally {
+      setSyncingAdmin(false);
+    }
+  }, [toast]);
 
   /* ── Load on mount ──────────────────────────────────────────────── */
   useEffect(() => {
@@ -61,11 +127,12 @@ export default function FlashcardsPage() {
       const [loadedCards, loadedLogs] = await Promise.all([dbLoadCards(), dbLoadLogs()]);
       setCards(loadedCards);
       setLogs(loadedLogs);
+      void syncAdminDecks();
     })();
     setDecks(loadDecks());
     setAllOptions(loadOptions());
     setSeenToday(getSeenToday());
-  }, []);
+  }, [syncAdminDecks]);
 
   const persistDecks = useCallback((d: Deck[]) => { setDecks(d); saveDecks(d); }, []);
   const persistOptions = useCallback((o: Record<string, DeckOptions>) => { setAllOptions(o); saveOptions(o); }, []);
@@ -356,6 +423,8 @@ export default function FlashcardsPage() {
       decks={decks}
       cards={cards}
       allStats={allStats}
+      syncing={syncingAdmin}
+      onSyncAdmin={() => void syncAdminDecks()}
       onOpenDeck={id => setView({ type: "deck", deckId: id })}
       onStudy={id => setView({ type: "study", deckId: id })}
       onCreateDeck={(name, subject) => {

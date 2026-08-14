@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { PageTransition } from '@/components/layout';
+import { richTextToPlain } from '@/lib/richText';
 import { Target, Flame, Activity, ChevronRight, Stethoscope, ClipboardCheck, Plus, BookOpen, Clock, CheckCircle, XCircle, BarChart2, TrendingUp, X, Gift, ShoppingBag } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -398,7 +399,7 @@ export default function Dashboard() {
                   <span className="text-[10px] text-muted-foreground ml-auto">#{idx + 1}</span>
                 </div>
                 <p className="text-sm font-medium text-foreground line-clamp-3 mb-3">
-                  {q.questionText}
+                  {richTextToPlain(q.questionText)}
                 </p>
                 <div className="space-y-1">
                   {Object.entries(q.options as Record<string, string>).slice(0, 2).map(([key, val]) => (

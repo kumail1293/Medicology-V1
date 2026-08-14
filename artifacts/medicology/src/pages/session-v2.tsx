@@ -9,6 +9,7 @@ import {
   Save, FolderPlus, Copy, Trash2, PenLine, AlertCircle, Send
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import RichText from '@/components/RichText';
 import { useSettings } from '@/lib/settings';
 import { Toolbar } from '@/components/Toolbar';
 
@@ -803,9 +804,7 @@ export default function SessionV2() {
                       {currentQ.difficulty}
                     </span>
                   </div>
-                  <p className="text-base sm:text-lg font-medium leading-relaxed text-foreground">
-                    {currentQ.questionText}
-                  </p>
+                  <RichText html={currentQ.questionText} className="text-base sm:text-lg font-medium leading-relaxed text-foreground" />
                 </div>
                 <div className="flex flex-col gap-2 shrink-0">
                   {!isReviewMode && (
@@ -925,7 +924,11 @@ export default function SessionV2() {
                       <div className="flex items-center gap-1.5 text-xs font-semibold text-green-600 dark:text-green-400">
                         <CheckCircle size={13} /> Why this is correct
                       </div>
-                      <p className="text-sm leading-relaxed text-foreground pl-5">{currentQ.explanation || "No explanation provided."}</p>
+                      {currentQ.explanation ? (
+                        <RichText html={currentQ.explanation} className="text-sm leading-relaxed text-foreground pl-5" />
+                      ) : (
+                        <p className="text-sm leading-relaxed text-foreground pl-5">No explanation provided.</p>
+                      )}
                     </div>
 
                     {/* Why each incorrect option is wrong */}

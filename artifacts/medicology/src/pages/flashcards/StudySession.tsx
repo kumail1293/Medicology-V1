@@ -11,9 +11,11 @@ import { processRating, previewIntervals, renderClozeQuestion, renderClozeAnswer
 function CardBody({ text, className }: { text: string; className?: string }) {
   const clean = sanitizeAnkiContent(text);
   if (isHtmlContent(clean)) {
+    // Rich content (tables, images, lists) needs left alignment and full width;
+    // plain text stays centered like a classic flashcard.
     return (
       <div
-        className={cn("anki-card-html w-full", className)}
+        className={cn("rich-text anki-card-html w-full text-left", className)}
         dangerouslySetInnerHTML={{ __html: clean }}
       />
     );
@@ -268,7 +270,7 @@ export default function StudySession({ queue: initialQueue, deckName, options, i
                     {card.note && (
                       <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl text-sm text-left">
                         <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-400 mb-1">Note</p>
-                        <p className="text-muted-foreground">{card.note}</p>
+                        <CardBody text={card.note} className="text-muted-foreground" />
                       </div>
                     )}
                   </div>

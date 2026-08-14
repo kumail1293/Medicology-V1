@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { BookMarked, XOctagon, FileText, Play, Save, Trash2, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { richTextToPlain } from "@/lib/richText";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -93,7 +94,7 @@ function BookmarksTab() {
           <CardContent className="p-3">
             <div className="flex items-start gap-2">
               <Badge variant="outline" className="text-xs shrink-0">{q.subject}</Badge>
-              <p className="text-sm line-clamp-2">{q.questionText}</p>
+              <p className="text-sm line-clamp-2">{richTextToPlain(q.questionText)}</p>
             </div>
           </CardContent>
         </Card>
@@ -144,7 +145,7 @@ function WrongTab() {
           <CardContent className="p-3">
             <div className="flex items-start gap-2">
               <Badge variant="outline" className="text-xs shrink-0">{q.subject}</Badge>
-              <p className="text-sm line-clamp-2">{q.questionText}</p>
+              <p className="text-sm line-clamp-2">{richTextToPlain(q.questionText)}</p>
             </div>
           </CardContent>
         </Card>

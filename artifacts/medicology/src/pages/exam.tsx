@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Timer, Play, Trophy, ChevronLeft, ChevronRight, CheckCircle2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import RichText from "@/components/RichText";
 
 type Phase = "setup" | "running" | "results";
 
@@ -184,12 +185,12 @@ export default function ExamMode() {
                 <CardContent className="p-4">
                   <div className="flex items-start gap-2 mb-2">
                     <Badge variant="outline" className="text-xs shrink-0">Q{i + 1}</Badge>
-                    <p className="text-sm font-medium">{q.questionText}</p>
+                    <RichText html={q.questionText} className="text-sm font-medium" />
                   </div>
                   <div className="text-xs space-y-1 ml-10">
                     <p>Your answer: <span className={cn("font-semibold", isCorrect ? "text-green-600" : "text-red-600")}>{a.selected ?? "Not attempted"}</span></p>
                     {!isCorrect && <p>Correct answer: <span className="font-semibold text-green-600">{q.correctAnswer}</span></p>}
-                    {q.explanation && <p className="text-muted-foreground mt-1">{q.explanation}</p>}
+                    {q.explanation && <RichText html={q.explanation} className="text-muted-foreground mt-1" />}
                   </div>
                 </CardContent>
               </Card>
@@ -227,7 +228,7 @@ export default function ExamMode() {
             <Badge variant="secondary" className="text-xs">{currentQ.subject}</Badge>
             {currentQ.system && <Badge variant="outline" className="text-xs">{currentQ.system}</Badge>}
           </div>
-          <p className="text-base leading-relaxed font-medium">{currentQ.questionText}</p>
+          <RichText html={currentQ.questionText} className="text-base leading-relaxed font-medium" />
         </CardContent>
       </Card>
 

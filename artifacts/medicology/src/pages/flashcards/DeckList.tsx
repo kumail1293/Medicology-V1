@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Plus, Trash2, ChevronRight, ChevronDown, FolderOpen, Upload, Settings, BarChart2, Search } from "lucide-react";
+import { Plus, Trash2, ChevronRight, ChevronDown, FolderOpen, Upload, Settings, BarChart2, Search, RefreshCw, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,8 @@ interface Props {
   decks: Deck[];
   cards: Flashcard[];
   allStats: Record<string, StudyStats>;
+  syncing?: boolean;
+  onSyncAdmin?: () => void;
   onOpenDeck: (id: string) => void;
   onStudy: (id: string) => void;
   onCreateDeck: (name: string, subject: string) => void;
@@ -22,7 +24,7 @@ interface Props {
   onBrowse: () => void;
 }
 
-export default function DeckList({ decks, cards, allStats, onOpenDeck, onStudy, onCreateDeck, onDeleteDeck, onImport, onOpenStats, onOpenOptions, onBrowse }: Props) {
+export default function DeckList({ decks, cards, allStats, syncing, onSyncAdmin, onOpenDeck, onStudy, onCreateDeck, onDeleteDeck, onImport, onOpenStats, onOpenOptions, onBrowse }: Props) {
   const [showMenu, setShowMenu] = useState(false);
   const [showNewDeck, setShowNewDeck] = useState(false);
   const [newName, setNewName] = useState("");
@@ -59,6 +61,13 @@ export default function DeckList({ decks, cards, allStats, onOpenDeck, onStudy, 
           <p className="text-sm text-muted-foreground mt-0.5">{decks.length} decks · {totalCards} cards</p>
         </div>
         <div className="flex gap-2 items-center">
+          {onSyncAdmin && (
+            <button onClick={onSyncAdmin} disabled={syncing}
+              className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
+              title="Sync official decks">
+              <RefreshCw size={18} className={cn(syncing && "animate-spin")} />
+            </button>
+          )}
           <button onClick={onBrowse} className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title="Card Browser">
             <Search size={18} />
           </button>
@@ -145,6 +154,12 @@ export default function DeckList({ decks, cards, allStats, onOpenDeck, onStudy, 
           const count = cards.filter(c => c.deckId === deck.id).length;
           const stats = allStats[deck.id] ?? { new: 0, learning: 0, review: 0 };
           const hasStudy = stats.new + stats.learning + stats.review > 0;
+          const isAdminDeck = deck.id.startsWith("admin-");
+          const adminBadge = isAdminDeck ? (
+            <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary ml-1.5 align-middle" title="Official deck">
+              <ShieldCheck size={10} /> Admin
+            </span>
+          ) : null;
 
           return (
             <Card key={deck.id}
@@ -155,11 +170,10 @@ export default function DeckList({ decks, cards, allStats, onOpenDeck, onStudy, 
                 <div className="flex items-center gap-3 sm:hidden">
                   <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                     <SubjectIcon name={deck.subject} size={18} className="text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">{deck.name}</p>
-                    <p className="text-xs text-muted-foreground">{count} cards · {deck.subject}</p>
-                  </div>
+                  </div>                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">{deck.name}{adminBadge}</p>
+                      <p className="text-xs text-muted-foreground">{count} cards · {deck.subject}</p>
+                    </div>
                   <div className="flex items-center gap-2 text-xs">
                     {stats.new > 0 && <span className="text-blue-600 dark:text-blue-400 font-bold">{stats.new}</span>}
                     {stats.learning > 0 && <span className="text-orange-500 font-bold">{stats.learning}</span>}
@@ -177,7 +191,7 @@ export default function DeckList({ decks, cards, allStats, onOpenDeck, onStudy, 
                       <SubjectIcon name={deck.subject} size={15} className="text-primary" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-sm truncate">{deck.name}</p>
+                      <p className="font-semibold text-sm truncate">{deck.name}{adminBadge}</p>
                       <p className="text-[11px] text-muted-foreground">{count} cards</p>
                     </div>
                   </div>

@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useGetActiveAnnouncements, Announcement } from "@workspace/api-client-react";
 import { useAuth } from "../lib/auth";
 import { X, ExternalLink, Megaphone, ChevronLeft, ChevronRight } from "lucide-react";
+import RichText from "./RichText";
+import { richTextToPlain } from "../lib/richText";
 
 function PopupAnnouncement({ a, onClose }: { a: Announcement; onClose: () => void }) {
   return (
@@ -16,7 +18,7 @@ function PopupAnnouncement({ a, onClose }: { a: Announcement; onClose: () => voi
           </div>
           <h2 className="font-bold text-lg text-foreground leading-tight">{a.title}</h2>
         </div>
-        <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{a.content}</p>
+        <RichText html={a.content} className="text-sm text-muted-foreground leading-relaxed" />
         {a.buttonText && a.buttonUrl && (
           <a
             href={a.buttonUrl}
@@ -49,7 +51,7 @@ function BannerAnnouncement({ announcements }: { announcements: Announcement[] }
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <Megaphone size={14} className="shrink-0" />
         <span className="font-semibold shrink-0">{current.title}:</span>
-        <span className="truncate opacity-90">{current.content}</span>
+        <span className="truncate opacity-90">{richTextToPlain(current.content)}</span>
         {current.buttonText && current.buttonUrl && (
           <a href={current.buttonUrl} target="_blank" rel="noopener noreferrer"
             className="shrink-0 underline hover:no-underline font-medium flex items-center gap-1">
@@ -81,7 +83,7 @@ function TickerAnnouncement({ announcements }: { announcements: Announcement[] }
 
   if (dismissed || announcements.length === 0) return null;
 
-  const tickerText = announcements.map(a => `${a.title}: ${a.content}`).join("   •   ");
+  const tickerText = announcements.map(a => `${a.title}: ${richTextToPlain(a.content)}`).join("   •   ");
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[9997] bg-muted border-t border-border px-4 py-1.5 flex items-center gap-3">

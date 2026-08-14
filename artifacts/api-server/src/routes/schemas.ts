@@ -249,3 +249,59 @@ export type ReviewQuestion = z.infer<typeof reviewQuestionSchema>;
 export type CreateQbank = z.infer<typeof createQbankSchema>;
 export type UpdateQbank = z.infer<typeof updateQbankSchema>;
 export type QbankMapping = z.infer<typeof qbankMappingSchema>;
+
+// ---------------------------------------------------------------------------
+// Flashcard decks & cards (admin-authored, rich HTML content).
+// ---------------------------------------------------------------------------
+
+const flashcardDeckStatusEnum = z.enum(['draft', 'published', 'archived']);
+
+const stripEmptyTransform = <T extends Record<string, any>>(data: T): T => {
+  const out: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+    out[key] = value === '' ? null : value;
+  }
+  return out as T;
+};
+
+export const createFlashcardDeckSchema = z
+  .object({
+    slug: z.string().min(2).max(120).regex(/^[a-z0-9-]+$/, 'slug must be lowercase letters, numbers and hyphens'),
+    name: z.string().min(2).max(200),
+    subject: z.string().max(100).default('Other'),
+    description: z.string().max(2000).nullable().optional(),
+    status: flashcardDeckStatusEnum.default('draft'),
+  })
+  .transform((data) => stripEmptyTransform(data as Record<string, any>));
+
+export const updateFlashcardDeckSchema = z
+  .object({
+    slug: z.string().min(2).max(120).regex(/^[a-z0-9-]+$/, 'slug must be lowercase letters, numbers and hyphens').optional(),
+    name: z.string().min(2).max(200).optional(),
+    subject: z.string().max(100).optional(),
+    description: z.string().max(2000).nullable().optional(),
+    status: flashcardDeckStatusEnum.optional(),
+  })
+  .transform((data) => stripEmptyTransform(data as Record<string, any>));
+
+export const createFlashcardSchema = z.object({
+  front: z.string().min(1, 'Front (question/term) is required').max(20000),
+  back: z.string().max(20000).optional(),
+  note: z.string().max(5000).nullable().optional(),
+  tags: z.array(z.string().max(50)).max(30).optional(),
+  image: z.string().max(5000).nullable().optional(),
+  sortOrder: z.number().int().min(0).optional(),
+});
+
+export const updateFlashcardSchema = createFlashcardSchema.partial();
+
+export const bulkFlashcardsSchema = z.object({
+  cards: z.array(createFlashcardSchema).min(1).max(5000),
+});
+
+export type CreateFlashcardDeck = z.infer<typeof createFlashcardDeckSchema>;
+export type UpdateFlashcardDeck = z.infer<typeof updateFlashcardDeckSchema>;
+export type CreateFlashcard = z.infer<typeof createFlashcardSchema>;
+export type UpdateFlashcard = z.infer<typeof updateFlashcardSchema>;
+export type BulkFlashcards = z.infer<typeof bulkFlashcardsSchema>;

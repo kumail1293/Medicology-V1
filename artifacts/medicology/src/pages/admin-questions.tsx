@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Search, Plus, Pencil, Trash2, BookOpen, CheckCircle2, AlertCircle } from 'lucide-react';
+import RichTextEditor from '@/components/RichTextEditor';
 import type { Question } from '@workspace/api-client-react';
 
 interface TaxonomyNode {
@@ -333,12 +334,10 @@ export default function AdminQuestionsPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium">Question Text</label>
-                <textarea
-                  required
-                  rows={3}
+                <RichTextEditor
                   value={form.questionText}
-                  onChange={(event) => setForm({ ...form, questionText: event.target.value })}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                  onChange={(html) => setForm({ ...form, questionText: html })}
+                  placeholder="Stem — supports tables, images, flowcharts, formatting…"
                 />
               </div>
 
@@ -408,11 +407,10 @@ export default function AdminQuestionsPage() {
 
               <div>
                 <label className="mb-1 block text-sm font-medium">Explanation</label>
-                <textarea
-                  rows={3}
+                <RichTextEditor
                   value={form.explanation}
-                  onChange={(event) => setForm({ ...form, explanation: event.target.value })}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                  onChange={(html) => setForm({ ...form, explanation: html })}
+                  placeholder="Explanation — tables, images, exam pearls…"
                 />
               </div>
 

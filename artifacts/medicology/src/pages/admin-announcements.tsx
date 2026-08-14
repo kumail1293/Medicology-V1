@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Megaphone, CheckCircle2 } from 'lucide-react';
+import RichTextEditor from '@/components/RichTextEditor';
 
 interface AnnouncementItem {
   id: number;
@@ -154,7 +155,11 @@ export default function AdminAnnouncementsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Message</label>
-                <textarea required rows={4} value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+                <RichTextEditor
+                  value={form.content}
+                  onChange={(html) => setForm({ ...form, content: html })}
+                  placeholder="Announcement — supports formatting, images, tables…"
+                />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>

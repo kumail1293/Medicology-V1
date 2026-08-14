@@ -22,4 +22,5 @@ export * from "./qbanks.js";
 export * from "./qbank_questions.js";
 export * from "./entitlements.js";
 export * from "./waitlist.js";
+export * from "./flashcards.js";
 //# sourceMappingURL=index.d.ts.map
