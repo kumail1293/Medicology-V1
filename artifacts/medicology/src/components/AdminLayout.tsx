@@ -19,6 +19,7 @@ import {
   Network,
   UploadCloud,
   ClipboardCheck,
+  Database,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -94,6 +95,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       icon: <ClipboardCheck size={18} />,
       path: '/admin/review',
       badge: reviewBadge,
+    },
+    {
+      label: 'QBanks',
+      icon: <Database size={18} />,
+      path: '/admin/qbanks',
     },
     {
       label: 'Announcements',

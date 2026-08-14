@@ -1,7 +1,19 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { questionsTable, usersTable, userProgressTable, waitlistTable, qbanksTable } from '@workspace/db';
-import { eq, ilike, and, or, sql } from '../utils/drizzle.js';
+import {
+  questionsTable,
+  usersTable,
+  userProgressTable,
+  waitlistTable,
+  qbanksTable,
+  qbankQuestionsTable,
+  countriesTable,
+  examsTable,
+  programsTable,
+  academicYearsTable,
+  examSystemsTable,
+} from '@workspace/db';
+import { eq, ilike, and, or, sql, inArray } from '../utils/drizzle.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import {
   validateBody,
@@ -14,12 +26,18 @@ import {
   getQuestionsQuerySchema,
   questionIdParamSchema,
   reviewQuestionSchema,
+  createQbankSchema,
+  updateQbankSchema,
+  qbankMappingSchema,
 } from './schemas.js';
 import type {
   CreateQuestion,
   UpdateQuestion,
   GetQuestionsQuery,
   ReviewQuestion,
+  CreateQbank,
+  UpdateQbank,
+  QbankMapping,
 } from './schemas.js';
 import { generateQid, isValidQid } from '../utils/qid.js';
 import { resolveTaxonomyFields } from '../utils/taxonomy.js';
@@ -290,6 +308,238 @@ adminRouter.get(
     }
   }
 );
+
+// ---------------------------------------------------------------------------
+// QBank management — database-driven products: create/edit/archive, set
+// status/price, and map questions (many-to-many).
+// ---------------------------------------------------------------------------
+
+// List QBanks enriched with taxonomy names + live question counts.
+adminRouter.get('/qbanks', async (req: any, res: any) => {
+  try {
+    const [qbanks, counts, countries, exams, programs, years, examSystems] = await Promise.all([
+      db.select().from(qbanksTable),
+      db
+        .select({ qbankId: qbankQuestionsTable.qbankId, count: sql<number>`count(*)` })
+        .from(qbankQuestionsTable)
+        .groupBy(qbankQuestionsTable.qbankId),
+      db.select().from(countriesTable),
+      db.select().from(examsTable),
+      db.select().from(programsTable),
+      db.select().from(academicYearsTable),
+      db.select().from(examSystemsTable),
+    ]);
+
+    const byId = (rows: any[]) => new Map(rows.map((r) => [Number(r.id), r]));
+    const countryMap = byId(countries);
+    const examMap = byId(exams);
+    const programMap = byId(programs);
+    const yearMap = byId(years);
+    const examSystemMap = byId(examSystems);
+    const countMap = new Map(counts.map((c: any) => [Number(c.qbankId), Number(c.count)]));
+
+    const rows = qbanks.map((qb: any) => {
+      const program = qb.programId ? programMap.get(Number(qb.programId)) : undefined;
+      const year = qb.academicYearId ? yearMap.get(Number(qb.academicYearId)) : undefined;
+      const exam = qb.examId ? examMap.get(Number(qb.examId)) : undefined;
+      const examSystem = qb.examSystemId ? examSystemMap.get(Number(qb.examSystemId)) : undefined;
+      const country = qb.countryId ? countryMap.get(Number(qb.countryId)) : undefined;
+      return {
+        ...qb,
+        questionCount: countMap.get(Number(qb.id)) ?? 0,
+        countryName: country?.name ?? null,
+        countryFlag: country?.flag ?? null,
+        examSystemName: examSystem?.name ?? null,
+        examName: exam?.name ?? null,
+        examCode: exam?.code ?? null,
+        programName: program?.name ?? null,
+        yearName: year?.name ?? null,
+      };
+    });
+    rows.sort((a: any, b: any) => a.sortOrder - b.sortOrder);
+    res.json({ qbanks: rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create QBank
+adminRouter.post('/qbanks', validateBody(createQbankSchema), async (req: any, res: any) => {
+  try {
+    const data = req.validatedBody as CreateQbank;
+    const existing = await db.select().from(qbanksTable).where(eq(qbanksTable.slug, data.slug));
+    if (existing.length > 0) {
+      return res.status(409).json({ error: `Slug "${data.slug}" is already in use` });
+    }
+    const [qbank] = await db.insert(qbanksTable).values(data).returning();
+    const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+    await recordAudit({
+      actor,
+      action: 'qbank.create',
+      entityType: 'qbank',
+      entityId: qbank.id,
+      entityLabel: qbank.slug,
+      summary: `Created QBank "${qbank.name}"`,
+      newValues: qbank,
+      ip: req.ip,
+    });
+    res.status(201).json(qbank);
+  } catch (err: any) {
+    console.error('Error in admin create qbank:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update QBank
+adminRouter.put('/qbanks/:id', validateParams(questionIdParamSchema), validateBody(updateQbankSchema), async (req: any, res: any) => {
+  try {
+    const { id } = req.validatedParams as { id: number };
+    const data = req.validatedBody as UpdateQbank;
+
+    if (data.slug) {
+      const slugMatches = await db.select().from(qbanksTable).where(eq(qbanksTable.slug, data.slug));
+      if (slugMatches.some((q: any) => Number(q.id) !== Number(id))) {
+        return res.status(409).json({ error: `Slug "${data.slug}" is already in use` });
+      }
+    }
+
+    const [existing] = await db.select().from(qbanksTable).where(eq(qbanksTable.id, id));
+    if (!existing) return res.status(404).json({ error: 'QBank not found' });
+
+    const [qbank] = await db
+      .update(qbanksTable)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(qbanksTable.id, id))
+      .returning();
+
+    const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+    const diff = diffValues(existing, qbank);
+    await recordAudit({
+      actor,
+      action: 'qbank.update',
+      entityType: 'qbank',
+      entityId: id,
+      entityLabel: qbank.slug,
+      summary: diff.status ? `QBank status changed from ${diff.status.old} to ${diff.status.new}` : `Updated QBank "${qbank.name}"`,
+      oldValues: diff,
+      newValues: qbank,
+      ip: req.ip,
+    });
+    res.json(qbank);
+  } catch (err: any) {
+    console.error('Error in admin update qbank:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Archive QBank (soft delete — keeps entitlement/reference integrity).
+adminRouter.delete('/qbanks/:id', validateParams(questionIdParamSchema), async (req: any, res: any) => {
+  try {
+    const { id } = req.validatedParams as { id: number };
+    const [existing] = await db.select().from(qbanksTable).where(eq(qbanksTable.id, id));
+    if (!existing) return res.status(404).json({ error: 'QBank not found' });
+    const [qbank] = await db
+      .update(qbanksTable)
+      .set({ status: 'archived', active: false, updatedAt: new Date() })
+      .where(eq(qbanksTable.id, id))
+      .returning();
+    const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+    await recordAudit({
+      actor,
+      action: 'qbank.archive',
+      entityType: 'qbank',
+      entityId: id,
+      entityLabel: qbank.slug,
+      summary: `Archived QBank "${qbank.name}"`,
+      oldValues: existing,
+      newValues: qbank,
+      ip: req.ip,
+    });
+    res.json({ success: true, qbank });
+  } catch (err: any) {
+    console.error('Error in admin archive qbank:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Currently mapped questions for a QBank.
+adminRouter.get('/qbanks/:id/questions', validateParams(questionIdParamSchema), async (req: any, res: any) => {
+  try {
+    const { id } = req.validatedParams as { id: number };
+    const [qbank] = await db.select().from(qbanksTable).where(eq(qbanksTable.id, id));
+    if (!qbank) return res.status(404).json({ error: 'QBank not found' });
+
+    const mappings = await db
+      .select({ questionId: qbankQuestionsTable.questionId })
+      .from(qbankQuestionsTable)
+      .where(eq(qbankQuestionsTable.qbankId, id));
+    const questionIds = mappings.map((m) => Number(m.questionId));
+
+    const questions = questionIds.length > 0
+      ? await db
+          .select({ id: questionsTable.id, qid: questionsTable.qid, questionText: questionsTable.questionText, subject: questionsTable.subject, topic: questionsTable.topic })
+          .from(questionsTable)
+          .where(inArray(questionsTable.id, questionIds))
+      : [];
+
+    res.json({ qbank: { id: qbank.id, slug: qbank.slug, name: qbank.name }, questionIds, questions });
+  } catch (err: any) {
+    console.error('Error in admin get qbank questions:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Replace the question↔qbank mapping (adds + removes to match the target set).
+adminRouter.post('/qbanks/:id/questions', validateParams(questionIdParamSchema), validateBody(qbankMappingSchema), async (req: any, res: any) => {
+  try {
+    const { id } = req.validatedParams as { id: number };
+    const { questionIds } = req.validatedBody as QbankMapping;
+    const [qbank] = await db.select().from(qbanksTable).where(eq(qbanksTable.id, id));
+    if (!qbank) return res.status(404).json({ error: 'QBank not found' });
+
+    const existing = await db
+      .select({ questionId: qbankQuestionsTable.questionId })
+      .from(qbankQuestionsTable)
+      .where(eq(qbankQuestionsTable.qbankId, id));
+    const current = new Set<number>(existing.map((m: any) => Number(m.questionId)));
+    const target = new Set<number>(questionIds.map((n) => Number(n)));
+
+    for (const qid of target) {
+      if (!current.has(qid)) {
+        await db.insert(qbankQuestionsTable).values({ qbankId: id, questionId: qid });
+      }
+    }
+    for (const qid of current) {
+      if (!target.has(qid)) {
+        await db.delete(qbankQuestionsTable).where(
+          and(eq(qbankQuestionsTable.qbankId, id), eq(qbankQuestionsTable.questionId, qid))
+        );
+      }
+    }
+
+    await db
+      .update(qbanksTable)
+      .set({ questionCount: target.size, updatedAt: new Date() })
+      .where(eq(qbanksTable.id, id));
+
+    const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+    await recordAudit({
+      actor,
+      action: 'qbank.questions_mapped',
+      entityType: 'qbank',
+      entityId: id,
+      entityLabel: qbank.slug,
+      summary: `Set ${target.size} question(s) on "${qbank.name}"`,
+      oldValues: { questionIds: Array.from(current) },
+      newValues: { questionIds: Array.from(target) },
+      ip: req.ip,
+    });
+    res.json({ questionCount: target.size });
+  } catch (err: any) {
+    console.error('Error in admin map qbank questions:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Coming Soon demand — who is waiting for which QBank ("Notify Me" registrations).
 adminRouter.get('/waitlist', async (req: any, res: any) => {

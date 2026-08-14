@@ -182,7 +182,70 @@ export const reviewQuestionSchema = z.object({
   note: z.string().max(2000).optional(),
 });
 
+const qbankStatusEnum = z.enum(['planned', 'coming_soon', 'beta', 'available', 'paused', 'archived']);
+const qbankAccessTypeEnum = z.enum(['subscription', 'lifetime', 'institutional']);
+
+// Empty-string taxonomy refs (from unset <select> values) become null.
+const stripEmpty = (data: Record<string, any>): Record<string, any> => {
+  const out: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+    out[key] = value === '' ? null : value;
+  }
+  return out;
+};
+
+export const createQbankSchema = z
+  .object({
+    slug: z.string().min(2).max(120).regex(/^[a-z0-9-]+$/, 'slug must be lowercase letters, numbers and hyphens'),
+    name: z.string().min(2).max(200),
+    // Taxonomy refs and price are nullable in the DB ("unset" selects send null),
+    // so accept explicit null from clients.
+    description: z.string().max(2000).nullable().optional(),
+    countryId: z.number().int().positive().nullable().optional(),
+    examSystemId: z.number().int().positive().nullable().optional(),
+    examId: z.number().int().positive().nullable().optional(),
+    programId: z.number().int().positive().nullable().optional(),
+    academicYearId: z.number().int().positive().nullable().optional(),
+    status: qbankStatusEnum.default('planned'),
+    price: z.number().int().min(0).nullable().optional(),
+    currency: z.string().max(8).default('PKR'),
+    durationDays: z.number().int().min(1).max(36500).default(365),
+    accessType: qbankAccessTypeEnum.default('subscription'),
+    sortOrder: z.number().int().min(0).default(0),
+    active: z.boolean().default(true),
+  })
+  .transform((data) => stripEmpty(data as Record<string, any>));
+
+export const updateQbankSchema = z
+  .object({
+    slug: z.string().min(2).max(120).regex(/^[a-z0-9-]+$/, 'slug must be lowercase letters, numbers and hyphens').optional(),
+    name: z.string().min(2).max(200).optional(),
+    // Taxonomy refs and price are nullable in the DB, so accept explicit null.
+    description: z.string().max(2000).nullable().optional(),
+    countryId: z.number().int().positive().nullable().optional(),
+    examSystemId: z.number().int().positive().nullable().optional(),
+    examId: z.number().int().positive().nullable().optional(),
+    programId: z.number().int().positive().nullable().optional(),
+    academicYearId: z.number().int().positive().nullable().optional(),
+    status: qbankStatusEnum.optional(),
+    price: z.number().int().min(0).nullable().optional(),
+    currency: z.string().max(8).optional(),
+    durationDays: z.number().int().min(1).max(36500).optional(),
+    accessType: qbankAccessTypeEnum.optional(),
+    sortOrder: z.number().int().min(0).optional(),
+    active: z.boolean().optional(),
+  })
+  .transform((data) => stripEmpty(data as Record<string, any>));
+
+export const qbankMappingSchema = z.object({
+  questionIds: z.array(z.number().int().positive()).max(10000),
+});
+
 export type CreateQuestion = z.infer<typeof createQuestionSchema>;
 export type UpdateQuestion = z.infer<typeof updateQuestionSchema>;
 export type GetQuestionsQuery = z.infer<typeof getQuestionsQuerySchema>;
 export type ReviewQuestion = z.infer<typeof reviewQuestionSchema>;
+export type CreateQbank = z.infer<typeof createQbankSchema>;
+export type UpdateQbank = z.infer<typeof updateQbankSchema>;
+export type QbankMapping = z.infer<typeof qbankMappingSchema>;
