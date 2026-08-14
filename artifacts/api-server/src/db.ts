@@ -1,5 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
+import bcrypt from 'bcryptjs';
 import * as schema from '@workspace/db/schema';
 import { SEED_QUESTIONS } from './mock-seed.js';
 import {
@@ -28,8 +29,32 @@ if (useSQLite) {
   console.log('📊 Using mock database for development (data not persisted)');
 
   const now = new Date();
+
+  // Seed a dev admin so the admin panel works out of the box with the mock
+  // database (mock DB never runs in production). Credentials come from
+  // ADMIN_EMAIL/ADMIN_PASSWORD when set, with a local default otherwise.
+  const adminEmail = (process.env.ADMIN_EMAIL || 'admin@medicology.com').toLowerCase().trim();
+  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn('⚠️  Using default dev admin credentials (admin@medicology.com / admin123). Set ADMIN_PASSWORD in .env.');
+  }
+  const mockAdmin = {
+    id: 1,
+    name: 'Admin',
+    email: adminEmail,
+    passwordHash: bcrypt.hashSync(adminPassword, 10),
+    college: 'Medicology',
+    university: 'UHS',
+    year: 1,
+    isAdmin: true,
+    role: 'admin',
+    customPermissions: {},
+    rewardPoints: 0,
+    createdAt: now,
+  };
+
   const mockData: Record<string, any[]> = {
-    users: [],
+    users: [mockAdmin],
     // Seed sample questions so practice/exam/daily flows have content in dev.
     // Each seeded question gets a stable public QID.
     questions: SEED_QUESTIONS.map((q, i) => ({
@@ -56,7 +81,7 @@ if (useSQLite) {
   };
 
   const nextId: Record<string, number> = {
-    users: 1,
+    users: 2,
     questions: SEED_QUESTIONS.length + 1,
     countries: SEED_COUNTRIES.length + 1,
     exam_systems: SEED_EXAM_SYSTEMS.length + 1,

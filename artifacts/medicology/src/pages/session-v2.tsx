@@ -121,6 +121,7 @@ interface SessionData {
   universityTag?: string | null;
   mbbsYear?: number | null;
   blockSize?: number | null;
+  durationSeconds?: number | null;
 }
 
 const ERRATA_ERROR_TYPES = [
@@ -156,6 +157,10 @@ export default function SessionV2() {
   const [showGrid, setShowGrid] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+
+  // One-shot time-warning markers (half-time, 5 min, 1 min)
+  const timeWarnedRef = useRef<Set<string>>(new Set());
 
   // ── Study tools (integrated into test interface) ──────────────────────────
   const [toolOpen, setToolOpen] = useState(false);
@@ -276,6 +281,8 @@ export default function SessionV2() {
         setFlagged(data.session.flaggedQuestions || []);
         setCurrentIndex(isReviewMode ? 0 : (data.session.currentIndex || 0));
         setSessionBlockSize(data.session.blockSize || 40);
+        // Resume elapsed time so a suspended timed exam keeps its countdown.
+        setTotalSeconds(data.session.totalTime || 0);
         if (data.session.status === 'completed') setShowResults(true);
       } catch {
         toast({ title: "Error", description: "Failed to load session", variant: "destructive" });
@@ -308,6 +315,34 @@ export default function SessionV2() {
     totalTimerRef.current = setInterval(() => setTotalSeconds(s => s + 1), 1000);
     return () => { if (totalTimerRef.current) clearInterval(totalTimerRef.current); };
   }, [session?.id, showResults, isReviewMode]);
+
+  // ── Countdown: time warnings + auto-submit on expiry ─────────────────────
+  const isCountdown = !!session?.durationSeconds && !showResults && !isReviewMode;
+
+  useEffect(() => {
+    if (!isCountdown) return;
+    const dur = session!.durationSeconds!;
+    const remaining = dur - totalSeconds;
+    if (remaining <= 0) return;
+
+    const fire = (id: string, title: string, opts?: { destructive?: boolean }) => {
+      if (timeWarnedRef.current.has(id)) return;
+      timeWarnedRef.current.add(id);
+      toast({ title, description: `${formatSeconds(remaining)} remaining`, variant: opts?.destructive ? 'destructive' : undefined });
+    };
+
+    if (remaining <= 60) fire('1min', '⏰ 1 minute remaining', { destructive: true });
+    else if (remaining <= 300) fire('5min', '⏰ 5 minutes remaining');
+    else if (dur >= 600 && remaining <= dur / 2) fire('half', '⏱ Half-time — halfway through');
+  }, [totalSeconds, isCountdown, session, toast]);
+
+  // Auto-submit when the countdown expires
+  useEffect(() => {
+    if (!isCountdown) return;
+    if (totalSeconds >= session!.durationSeconds!) {
+      handleFinish();
+    }
+  }, [totalSeconds, isCountdown]);
 
   // Block break countdown
   useEffect(() => {
@@ -410,9 +445,9 @@ export default function SessionV2() {
     setFlagged(newFlagged);
     await saveToServer(answers, currentIndex, newFlagged);
 
-    // Also update global flags
+    // Also persist a global flag so the admin review queue sees it
     try {
-      await apiCall(`/api/flags/${qId}`, { method: 'POST' });
+      await apiCall('/api/flags', { method: 'POST', body: JSON.stringify({ questionId: qId }) });
     } catch {}
   };
 
@@ -445,6 +480,15 @@ export default function SessionV2() {
     await saveToServer(answers, currentIndex, flagged, 'completed', totalCorrect);
     if (totalTimerRef.current) clearInterval(totalTimerRef.current);
     setShowResults(true);
+  };
+
+  // Manual submit goes through a confirmation dialog; time-expiry submits directly.
+  const requestSubmit = () => {
+    if (session?.mode === 'block') {
+      handleFinish();
+      return;
+    }
+    setShowConfirmSubmit(true);
   };
 
   const handleErrataSubmit = async () => {
@@ -583,6 +627,7 @@ export default function SessionV2() {
 
   const answeredCount = Object.keys(answers).length;
   const correctCount = Object.values(answers).filter(a => a.isCorrect).length;
+  const countdownRemaining = session.durationSeconds ? Math.max(0, session.durationSeconds - totalSeconds) : 0;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -639,10 +684,24 @@ export default function SessionV2() {
           {/* Right: Timer + actions */}
           <div className="flex items-center gap-2">
             {!isReviewMode && (
-              <div className={clsx("text-sm font-mono font-bold flex items-center gap-1", session.mode === 'timed' && questionSeconds > 70 ? "text-red-500" : "text-muted-foreground")}>
-                <Timer size={14} />
-                {formatSeconds(questionSeconds)}
-              </div>
+              session.durationSeconds ? (
+                <div className={clsx(
+                  "text-sm font-mono font-bold flex items-center gap-1 px-2.5 py-1 rounded-lg transition-colors",
+                  countdownRemaining <= 60
+                    ? "bg-red-500/15 text-red-500 animate-pulse"
+                    : countdownRemaining <= 300
+                      ? "bg-amber-500/15 text-amber-600"
+                      : "bg-muted text-muted-foreground"
+                )}>
+                  <Timer size={14} />
+                  {formatSeconds(countdownRemaining)}
+                </div>
+              ) : (
+                <div className="text-sm font-mono font-bold flex items-center gap-1 text-muted-foreground">
+                  <Timer size={14} />
+                  {formatSeconds(questionSeconds)}
+                </div>
+              )
             )}
             {!isReviewMode && (
               <>
@@ -650,7 +709,7 @@ export default function SessionV2() {
                   <PauseCircle size={18} />
                 </button>
                 {answeredCount > 0 && (
-                  <button onClick={handleFinish} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 text-green-600 hover:bg-green-500/20 rounded-lg text-sm font-semibold transition-colors">
+                  <button onClick={requestSubmit} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 text-green-600 hover:bg-green-500/20 rounded-lg text-sm font-semibold transition-colors">
                     <CheckCircle size={14} /> End
                   </button>
                 )}
@@ -907,6 +966,73 @@ export default function SessionV2() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* ── Submit Confirmation Modal ──────────────────────────────────────── */}
+      <AnimatePresence>
+        {showConfirmSubmit && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5"
+            >
+              <div className="text-center">
+                <div className="w-14 h-14 rounded-full bg-amber-500/15 flex items-center justify-center mx-auto mb-3 text-2xl">
+                  ⚠️
+                </div>
+                <h3 className="text-xl font-display font-extrabold">Submit Exam?</h3>
+                <p className="text-sm text-muted-foreground mt-1">Once submitted, answers can't be changed.</p>
+              </div>
+
+              {/* Summary tiles */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-green-500/10 rounded-2xl p-3 text-center">
+                  <div className="text-2xl font-bold text-green-600">{answeredCount}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">Answered</div>
+                </div>
+                <div className="bg-muted rounded-2xl p-3 text-center">
+                  <div className="text-2xl font-bold text-muted-foreground">{questions.length - answeredCount}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">Unanswered</div>
+                </div>
+                <div className="bg-orange-500/10 rounded-2xl p-3 text-center">
+                  <div className="text-2xl font-bold text-orange-500">{flagged.length}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">Marked</div>
+                </div>
+              </div>
+
+              {questions.length - answeredCount > 0 && (
+                <p className="text-xs text-center text-amber-600 bg-amber-500/10 border border-amber-500/20 rounded-xl py-2.5">
+                  You still have {questions.length - answeredCount} unanswered question{questions.length - answeredCount > 1 ? 's' : ''}.
+                </p>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setShowConfirmSubmit(false)}
+                  className="flex-1 py-3 rounded-xl border border-border text-sm font-bold hover:bg-muted transition-all"
+                >
+                  Keep Working
+                </button>
+                <button
+                  onClick={() => {
+                    setShowConfirmSubmit(false);
+                    handleFinish();
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all"
+                >
+                  Submit Exam
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Block Break Screen ───────────────────────────────────────────────── */}
       <AnimatePresence>
@@ -1350,7 +1476,7 @@ export default function SessionV2() {
             </button>
           ) : currentIndex === questions.length - 1 && !isReviewMode ? (
             <button
-              onClick={handleFinish}
+              onClick={requestSubmit}
               className="flex items-center gap-1.5 px-4 py-2 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 transition-all text-sm"
             >
               <CheckCircle size={16} /> Finish

@@ -10,6 +10,7 @@ import {
   systemsTable,
   topicsTable,
   subtopicsTable,
+  questionsTable,
 } from '@workspace/db';
 import { eq } from '../utils/drizzle.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
@@ -84,6 +85,123 @@ taxonomyRouter.get('/tree', authenticate, async (_req: AuthRequest, res: any) =>
     res.json(tree);
   } catch (err: any) {
     console.error('Error in taxonomy tree:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Browse catalogue — university → program → year with live question counts.
+// Taxonomy provides the structure (exams/programs/years); the questions table
+// provides counts. Program codes are collapsed on their first token so
+// taxonomy programs (USMLE-S1) and question-derived programs ("USMLE") merge.
+// ---------------------------------------------------------------------------
+
+taxonomyRouter.get('/browse', authenticate, async (_req: AuthRequest, res: any) => {
+  try {
+    const [countries, exams, programs, years, questions] = await Promise.all([
+      db.select().from(countriesTable),
+      db.select().from(examsTable),
+      db.select().from(programsTable),
+      db.select().from(academicYearsTable),
+      db.select({
+        id: questionsTable.id,
+        universityTag: questionsTable.universityTag,
+        examType: questionsTable.examType,
+      }).from(questionsTable),
+    ]);
+
+    const countryOf = (countryId: number) => countries.find((c: Table) => c.id === countryId);
+
+    // ── Question-derived counts: university → program → level ───────────────
+    const counts = new Map<string, Map<string, Map<string, number>>>();
+    const bump = (university: string, program: string, level: string) => {
+      if (!university) return;
+      if (!counts.has(university)) counts.set(university, new Map());
+      const pm = counts.get(university)!;
+      if (!pm.has(program)) pm.set(program, new Map());
+      const ym = pm.get(program)!;
+      ym.set(level, (ym.get(level) || 0) + 1);
+    };
+    for (const q of questions) {
+      const examType: string = q.examType || '';
+      const parts = examType.split(' ').filter(Boolean);
+      const program = parts.length >= 2 ? parts[0] : examType;
+      const level = parts.length >= 2 ? parts.slice(1).join(' ') : '';
+      bump(q.universityTag || '', program, level);
+    }
+
+    // Program key: collapse taxonomy codes on their first token (USMLE-S1 → USMLE)
+    const programKey = (code: string) => code.split('-')[0].toUpperCase();
+
+    // ── Merge taxonomy structure + question counts ──────────────────────────
+    interface ProgramNode { code: string; name: string; years: Map<string, { name: string; questionCount: number }>; }
+    interface UniversityNode { code: string; name: string; flag: string; countryCode: string; programs: Map<string, ProgramNode>; }
+    const universities = new Map<string, UniversityNode>();
+
+    const ensureUniversity = (code: string, name: string, flag: string, countryCode: string): UniversityNode => {
+      if (!universities.has(code)) {
+        universities.set(code, { code, name, flag, countryCode, programs: new Map() });
+      }
+      return universities.get(code)!;
+    };
+    const ensureProgram = (u: UniversityNode, code: string, name: string): ProgramNode => {
+      if (!u.programs.has(code)) {
+        u.programs.set(code, { code, name, years: new Map() });
+      }
+      return u.programs.get(code)!;
+    };
+
+    // Taxonomy structure first (only exams that have programs)
+    for (const exam of exams) {
+      const country = countryOf(exam.countryId);
+      const related = programs.filter((p: Table) => p.examId === exam.id);
+      if (related.length === 0) continue;
+      const u = ensureUniversity(exam.code, exam.name, country?.flag || '🇵🇰', country?.code || '');
+      for (const prog of related) {
+        const key = programKey(prog.code);
+        const p = ensureProgram(u, key, key);
+        for (const year of years.filter((y: Table) => y.programId === prog.id)) {
+          if (!p.years.has(year.name)) p.years.set(year.name, { name: year.name, questionCount: 0 });
+        }
+      }
+    }
+
+    // Question structure + counts on top
+    for (const [university, pm] of counts) {
+      const u = ensureUniversity(university, university, '🇵🇰', 'PK');
+      for (const [program, ym] of pm) {
+        const p = ensureProgram(u, program, program);
+        for (const [level, count] of ym) {
+          if (!p.years.has(level)) p.years.set(level, { name: level, questionCount: 0 });
+          p.years.get(level)!.questionCount += count;
+        }
+      }
+    }
+
+    const result = Array.from(universities.values())
+      .map((u) => ({
+        code: u.code,
+        name: u.name,
+        flag: u.flag,
+        countryCode: u.countryCode,
+        programs: Array.from(u.programs.values())
+          .map((p) => ({
+            code: p.code,
+            name: p.name,
+            years: Array.from(p.years.values()).map((y) => ({ name: y.name, questionCount: y.questionCount })),
+            questionCount: Array.from(p.years.values()).reduce((sum, y) => sum + y.questionCount, 0),
+          }))
+          .sort((a: Table, b: Table) => b.questionCount - a.questionCount),
+        questionCount: Array.from(u.programs.values()).reduce(
+          (sum, p) => sum + Array.from(p.years.values()).reduce((s, y) => s + y.questionCount, 0),
+          0
+        ),
+      }))
+      .sort((a: Table, b: Table) => b.questionCount - a.questionCount);
+
+    res.json({ universities: result });
+  } catch (err: any) {
+    console.error('Error in taxonomy browse:', err);
     res.status(500).json({ error: err.message });
   }
 });

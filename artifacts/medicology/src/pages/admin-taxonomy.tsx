@@ -78,6 +78,9 @@ const FIELD_LABELS: Record<string, string> = {
 
 const EXAM_STATUSES = ['planned', 'coming_soon', 'beta', 'available', 'paused', 'archived'];
 
+// "Countries" -> "Country", "Exam Systems" -> "Exam System", etc.
+const singular = (label: string) => label.replace(/ies$/, 'y').replace(/s$/, '');
+
 interface Row {
   id: number;
   [key: string]: any;
@@ -322,7 +325,7 @@ export default function AdminTaxonomyPage() {
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
         >
           <Plus size={16} />
-          New {entityDef.label.replace(/s$/, '')}
+          New {singular(entityDef.label)}
         </button>
       </div>
 
@@ -362,7 +365,7 @@ export default function AdminTaxonomyPage() {
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xl font-semibold">
-                {modal.mode === 'edit' ? `Edit ${entityDef.label.replace(/s$/, '')}` : `New ${entityDef.label.replace(/s$/, '')}`}
+                {modal.mode === 'edit' ? `Edit ${singular(entityDef.label)}` : `New ${singular(entityDef.label)}`}
               </h3>
               <button onClick={() => setModal(null)} className="text-muted-foreground hover:text-foreground">
                 <X size={18} />

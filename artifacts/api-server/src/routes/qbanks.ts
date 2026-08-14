@@ -27,7 +27,26 @@ qbanksRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
         p.status === 'active' &&
         (!p.expiresAt || new Date(p.expiresAt) > now)
       );
-      return { ...qb, purchased: !!purchase, expiresAt: purchase?.expiresAt || null };
+      // The store page renders a flat `price` (one-time) + `currency`.
+      return { ...qb, price: qb.prices.oneMonth, purchased: !!purchase, expiresAt: purchase?.expiresAt || null };
+    });
+    res.json({ catalogue, purchasedCount: purchases.length });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Alias used by the store page: GET /api/qbanks/catalogue
+qbanksRouter.get('/catalogue', authenticate, async (req: AuthRequest, res: any) => {
+  try {
+    const purchases = await db.select().from(qbankPurchasesTable)
+      .where(eq(qbankPurchasesTable.userId, req.user!.id));
+    const now = new Date();
+    const catalogue = QBANKS.map(qb => {
+      const purchase = purchases.find((p: any) =>
+        p.qbankType === qb.id &&
+        p.status === 'active' &&
+        (!p.expiresAt || new Date(p.expiresAt) > now)
+      );
+      return { ...qb, price: qb.prices.oneMonth, purchased: !!purchase, expiresAt: purchase?.expiresAt || null };
     });
     res.json({ catalogue, purchasedCount: purchases.length });
   } catch (err: any) { res.status(500).json({ error: err.message }); }

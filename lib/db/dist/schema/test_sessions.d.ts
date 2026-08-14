@@ -256,6 +256,23 @@ export declare const testSessionsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        durationSeconds: import("drizzle-orm/pg-core").PgColumn<{
+            name: "duration_seconds";
+            tableName: "test_sessions";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         examType: import("drizzle-orm/pg-core").PgColumn<{
             name: "exam_type";
             tableName: "test_sessions";
@@ -292,6 +309,23 @@ export declare const testSessionsTable: import("drizzle-orm/pg-core").PgTableWit
         }, {}, {}>;
         mbbsYear: import("drizzle-orm/pg-core").PgColumn<{
             name: "mbbs_year";
+            tableName: "test_sessions";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        blockSize: import("drizzle-orm/pg-core").PgColumn<{
+            name: "block_size";
             tableName: "test_sessions";
             dataType: "number";
             columnType: "PgInteger";

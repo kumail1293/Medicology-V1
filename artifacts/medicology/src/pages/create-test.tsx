@@ -198,6 +198,16 @@ const EXAM_TYPE_ICONS: Record<string, React.ReactNode> = {
 
 const QUESTION_COUNTS = [5, 10, 15, 20, 25, 30, 40, 50];
 
+// Duration presets for Timed/Exam mode. 'auto' = 1.5 min per question.
+const DURATIONS = [
+  { id: 'auto', label: 'Auto', sub: '1.5 min / Q', minutes: null },
+  { id: '15', label: '15 min', sub: 'Quick', minutes: 15 },
+  { id: '30', label: '30 min', sub: 'Short', minutes: 30 },
+  { id: '60', label: '60 min', sub: 'Standard', minutes: 60 },
+  { id: '90', label: '90 min', sub: 'Long', minutes: 90 },
+  { id: '120', label: '120 min', sub: 'Full exam', minutes: 120 },
+];
+
 const MODES = [
   { id: 'tutor',    label: 'Tutor Mode',    description: 'See answer & explanation after each question', color: 'border-green-500/50 bg-green-500/5', activeColor: 'border-green-500 bg-green-500/15 ring-2 ring-green-500/30' },
   { id: 'timed',   label: 'Timed Mode',    description: 'USMLE-style: 1.5 min/question, reveal at end',  color: 'border-blue-500/50 bg-blue-500/5',  activeColor: 'border-blue-500 bg-blue-500/15 ring-2 ring-blue-500/30' },
@@ -271,6 +281,7 @@ export default function CreateTestPage() {
   const [randomOrder, setRandomOrder] = useState(true);
   const [blockSize, setBlockSize] = useState<20 | 40 | 46>(40);
   const [blockCount, setBlockCount] = useState(1);
+  const [duration, setDuration] = useState('auto');
   const [isCreating, setIsCreating] = useState(false);
 
   /* ── Derived ───────────────────────────────────────────────────────────── */
@@ -364,6 +375,10 @@ export default function CreateTestPage() {
         : undefined;
       const paperType = selectedParent?.isMBBS ? selectedExamType : undefined;
 
+      const durationSeconds = mode === 'timed'
+        ? (DURATIONS.find(d => d.id === duration)?.minutes ?? Math.round(effectiveQuestionCount * 90 / 60)) * 60
+        : undefined;
+
       const response = await fetch('/api/sessions/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -372,6 +387,7 @@ export default function CreateTestPage() {
           systems: selectedSystems.length > 0 ? selectedSystems : undefined,
           questionCount: effectiveQuestionCount,
           mode,
+          durationSeconds,
           blockSize: isBlockMode ? blockSize : undefined,
           questionFilter: filter,
           difficulty: difficulty === 'all' ? undefined : difficulty,
@@ -738,6 +754,45 @@ export default function CreateTestPage() {
                 ))}
               </div>
             </section>
+
+            {/* Duration (Timed / Exam mode) */}
+            <AnimatePresence>
+              {mode === 'timed' && (
+                <motion.section
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
+                  className="bg-blue-500/5 border-2 border-blue-500/30 rounded-2xl p-5 space-y-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <Timer size={20} className="text-blue-500 shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-bold text-sm">Time Limit</p>
+                      <p className="text-xs text-muted-foreground">
+                        {DURATIONS.find(d => d.id === duration)?.minutes
+                          ? `${DURATIONS.find(d => d.id === duration)!.minutes} minutes for ${effectiveQuestionCount} questions`
+                          : `~${Math.round(effectiveQuestionCount * 90 / 60)} minutes (1.5 min per question) for ${effectiveQuestionCount} questions`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {DURATIONS.map(d => (
+                      <button
+                        key={d.id}
+                        onClick={() => setDuration(d.id)}
+                        className={clsx(
+                          'flex-1 min-w-[70px] px-3 py-2.5 rounded-xl border-2 text-center transition-all',
+                          duration === d.id
+                            ? 'bg-blue-500 text-white border-blue-500'
+                            : 'border-blue-500/30 hover:border-blue-500/60'
+                        )}
+                      >
+                        <span className="block font-bold text-sm">{d.label}</span>
+                        <span className={clsx('block text-[10px]', duration === d.id ? 'text-white/80' : 'text-muted-foreground')}>{d.sub}</span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.section>
+              )}
+            </AnimatePresence>
 
             {/* Block Config */}
             <AnimatePresence>

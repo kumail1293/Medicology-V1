@@ -77,9 +77,16 @@ sessionsRouter.get('/:id', authenticate, async (req: AuthRequest, res: any) => {
 // Update session (save progress)
 sessionsRouter.put('/:id', authenticate, async (req: AuthRequest, res: any) => {
   try {
-    const { answers, currentIndex, status, totalCorrect } = req.body;
+    const { answers, currentIndex, status, totalCorrect, flaggedQuestions, totalTime } = req.body;
     const [session] = await db.update(testSessionsTable)
-      .set({ answers, currentIndex, status, totalCorrect })
+      .set({
+        answers,
+        currentIndex,
+        status,
+        totalCorrect,
+        flaggedQuestions,
+        totalTime,
+      })
       .where(and(
         eq(testSessionsTable.id, Number(req.params.id)),
         eq(testSessionsTable.userId, req.user!.id)
@@ -113,6 +120,7 @@ sessionsRouter.post('/create', authenticate, async (req: AuthRequest, res: any) 
       questionIds, specificQuestionIds,
       subjects, systems, questionCount = 20, mode = 'tutor',
       difficulty, universityTag, examType,
+      title, blockSize, durationSeconds, questionFilter,
     } = req.body;
 
     let finalQuestionIds: number[] = questionIds || specificQuestionIds || [];
@@ -141,6 +149,10 @@ sessionsRouter.post('/create', authenticate, async (req: AuthRequest, res: any) 
     const [session] = await db.insert(testSessionsTable).values({
       userId: req.user!.id,
       mode,
+      title: title || null,
+      blockSize: blockSize || null,
+      durationSeconds: durationSeconds || null,
+      questionFilter: questionFilter || 'all',
       questionIds: finalQuestionIds,
       currentIndex: 0,
       answers: {},

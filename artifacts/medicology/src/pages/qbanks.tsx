@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { PageTransition } from "@/components/layout";
 import { useToast } from "@/hooks/use-toast";
-import { ShoppingBag, Check, Lock, Star, BookOpen, ChevronRight, X, CreditCard, GraduationCap, Globe, Building2 } from "lucide-react";
+import { ShoppingBag, Check, Lock, Star, BookOpen, ChevronRight, ChevronDown, X, CreditCard, GraduationCap, Globe, Building2, Play, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +64,68 @@ export default function QBanksPage() {
   const { toast } = useToast();
   const token = localStorage.getItem("medicology_token");
 
+  // Taxonomy-driven browse: university → program → year
+  const [browse, setBrowse] = useState<any[] | null>(null);
+  const [expandedUni, setExpandedUni] = useState<Set<string>>(new Set());
+  const [expandedProg, setExpandedProg] = useState<Set<string>>(new Set());
+  const [starting, setStarting] = useState<string | null>(null);
+
+  const loadBrowse = async () => {
+    try {
+      const res = await fetch("/api/taxonomy/browse", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setBrowse(data.universities || []);
+      }
+    } catch {
+      // Non-fatal: the store below still works without the explorer
+    }
+  };
+
+  useEffect(() => { loadBrowse(); }, []);
+
+  const toggleUni = (code: string) =>
+    setExpandedUni(prev => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code); else next.add(code);
+      return next;
+    });
+
+  const toggleProg = (key: string) =>
+    setExpandedProg(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+
+  const startYearSession = async (uni: any, prog: any, year: any) => {
+    const key = `${uni.code}:${prog.code}:${year.name}`;
+    setStarting(key);
+    try {
+      const res = await fetch("/api/sessions/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          universityTag: uni.code,
+          examType: `${prog.code} ${year.name}`,
+          questionCount: Math.max(year.questionCount, 5),
+          mode: "practice",
+          title: `${uni.name} · ${prog.name} · ${year.name}`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.session) {
+        toast({ title: "Could not start", description: data.error || data.message || "No questions match this year yet.", variant: "destructive" });
+        return;
+      }
+      window.location.href = `/session/${data.session.id}`;
+    } catch {
+      toast({ title: "Network error", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setStarting(null);
+    }
+  };
+
   const load = async () => {
     try {
       const res = await fetch("/api/qbanks/catalogue", { headers: { Authorization: `Bearer ${token}` } });
@@ -113,6 +175,82 @@ export default function QBanksPage() {
           <span className="font-semibold">Demo Mode:</span> Purchases are simulated — no real payment is required. Full payment integration (credit card, JazzCash, EasyPaisa) will be enabled at launch.
         </div>
       </div>
+
+      {/* Browse by University (taxonomy-driven explorer) */}
+      {browse !== null && browse.length > 0 && (
+        <section>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Building2 size={18} className="text-emerald-600" /> Browse by University
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5 mb-4">Pick your university → program → year to jump straight into studying.</p>
+          <div className="space-y-2">
+            {browse.map(uni => (
+              <div key={uni.code} className="rounded-2xl border border-border bg-card overflow-hidden">
+                <button
+                  onClick={() => toggleUni(uni.code)}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/40 transition-colors"
+                >
+                  <span className="text-2xl shrink-0">{uni.flag}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm truncate">{uni.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{uni.programs.map((p: any) => p.code).join(' · ')}</p>
+                  </div>
+                  {uni.questionCount > 0 ? (
+                    <span className="text-xs font-bold bg-emerald-500/10 text-emerald-600 px-2.5 py-1 rounded-full shrink-0">{uni.questionCount} questions</span>
+                  ) : (
+                    <span className="text-xs font-bold bg-muted text-muted-foreground px-2.5 py-1 rounded-full shrink-0">Coming Soon</span>
+                  )}
+                  <ChevronDown className={cn("w-4 h-4 text-muted-foreground shrink-0 transition-transform", expandedUni.has(uni.code) && "rotate-180")} />
+                </button>
+
+                {expandedUni.has(uni.code) && (
+                  <div className="border-t border-border bg-muted/20 px-4 py-3 space-y-2">
+                    {uni.programs.map((prog: any) => (
+                      <div key={prog.code} className="rounded-xl border border-border bg-card overflow-hidden">
+                        <button
+                          onClick={() => toggleProg(`${uni.code}:${prog.code}`)}
+                          className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-muted/40 transition-colors"
+                        >
+                          <GraduationCap size={15} className="text-primary shrink-0" />
+                          <span className="font-bold text-sm flex-1">{prog.name}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{prog.questionCount} questions</span>
+                          <ChevronDown className={cn("w-4 h-4 text-muted-foreground shrink-0 transition-transform", expandedProg.has(`${uni.code}:${prog.code}`) && "rotate-180")} />
+                        </button>
+                        {expandedProg.has(`${uni.code}:${prog.code}`) && (
+                          <div className="border-t border-border divide-y divide-border">
+                            {prog.years.length === 0 && (
+                              <p className="px-3.5 py-2.5 text-xs text-muted-foreground">No years published yet.</p>
+                            )}
+                            {prog.years.map((year: any) => {
+                              const startKey = `${uni.code}:${prog.code}:${year.name}`;
+                              const isStarting = starting === startKey;
+                              return (
+                                <div key={year.name} className="flex items-center gap-3 px-3.5 py-2.5">
+                                  <span className="text-sm flex-1">{year.name}</span>
+                                  <span className="text-xs text-muted-foreground shrink-0">{year.questionCount} Qs</span>
+                                  <Button
+                                    size="sm"
+                                    disabled={year.questionCount === 0 || isStarting}
+                                    onClick={() => startYearSession(uni, prog, year)}
+                                    className="shrink-0 gap-1.5"
+                                  >
+                                    {isStarting ? <Loader2 size={13} className="animate-spin" /> : <Play size={12} />}
+                                    {year.questionCount === 0 ? "Coming Soon" : "Start"}
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* My Active QBanks */}
       {myQBanks.length > 0 && (
