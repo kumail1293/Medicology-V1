@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { usersTable } from "./users.js";
 import { qbanksTable } from "./qbanks.js";
 
@@ -21,7 +21,11 @@ export const waitlistTable = pgTable(
     status: text("status").notNull().default("waiting"), // waiting | notified | removed
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [uniqueIndex("waitlist_user_qbank_uq").on(table.userId, table.qbankId)]
+  (table) => [
+    uniqueIndex("waitlist_user_qbank_uq").on(table.userId, table.qbankId),
+    // Admin "demand per QBank" counts group by qbank.
+    index("waitlist_qbank_idx").on(table.qbankId),
+  ]
 );
 
 export type WaitlistEntry = typeof waitlistTable.$inferSelect;

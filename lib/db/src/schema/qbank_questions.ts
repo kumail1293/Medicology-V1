@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { qbanksTable } from "./qbanks.js";
 import { questionsTable } from "./questions.js";
 
@@ -21,7 +21,12 @@ export const qbankQuestionsTable = pgTable(
       .references(() => questionsTable.id),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [uniqueIndex("qbank_questions_qbank_question_uq").on(table.qbankId, table.questionId)]
+  (table) => [
+    uniqueIndex("qbank_questions_qbank_question_uq").on(table.qbankId, table.questionId),
+    // Question counts and mapping reads are per-QBank; reverse lookups per question.
+    index("qbank_questions_qbank_idx").on(table.qbankId),
+    index("qbank_questions_question_idx").on(table.questionId),
+  ]
 );
 
 export type QbankQuestion = typeof qbankQuestionsTable.$inferSelect;

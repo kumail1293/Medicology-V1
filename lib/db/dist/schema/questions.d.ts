@@ -557,13 +557,6 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
     dialect: "pg";
 }>;
 export declare const insertQuestionSchema: z.ZodObject<{
-    countryId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
-    status: z.ZodOptional<z.ZodString>;
-    examId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
-    programId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
-    subjectId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
-    systemId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
-    topicId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     qid: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     questionText: z.ZodString;
     imageUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -583,8 +576,15 @@ export declare const insertQuestionSchema: z.ZodObject<{
     difficulty: z.ZodOptional<z.ZodString>;
     tags: z.ZodOptional<z.ZodNullable<z.ZodType<string[], string[], z.core.$ZodTypeInternals<string[], string[]>>>>;
     isFree: z.ZodOptional<z.ZodBoolean>;
+    countryId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
+    examId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
+    programId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     yearId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
+    subjectId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
+    systemId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
+    topicId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     subtopicId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
+    status: z.ZodOptional<z.ZodString>;
     publishedAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
 }, {
     out: {};

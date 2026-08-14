@@ -8,6 +8,13 @@
       "when": 1786728716741,
       "tag": "0000_p0_qbanks_entitlements_waitlist",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786736467580,
+      "tag": "0001_p0_performance_indexes",
+      "breakpoints": true
     }
   ]
 }
