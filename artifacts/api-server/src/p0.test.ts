@@ -617,3 +617,73 @@ test('settings history: audit snapshots + restore roundtrip', async () => {
   const forbidden = await fetch(`${BASE}/admin/settings/restore`, postJson({ Authorization: `Bearer ${userToken}` }, { id: updateEntry.id }));
   assert.equal(forbidden.status, 403);
 });
+
+test('announcements: scheduling window, themes/priorities, and reusable template CRUD', async () => {
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminBody: any = await adminLogin.json();
+  const auth = { Authorization: `Bearer ${adminBody.token}` };
+  const postJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+  const putJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+
+  // 1. Create a scheduled announcement (starts tomorrow) + one live now.
+  const future = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+  const past = new Date(Date.now() - 3600 * 1000).toISOString();
+  const upcoming = await fetch(`${BASE}/announcements`, postJson(auth, {
+    title: 'Scheduled', content: '<p>Not yet</p>', type: 'banner', theme: 'warning',
+    priority: 'high', startsAt: future, isActive: true,
+  }));
+  assert.equal(upcoming.status, 201);
+  const live = await fetch(`${BASE}/announcements`, postJson(auth, {
+    title: 'Live Now', content: '<p>Hello</p>', type: 'toast', theme: 'success',
+    priority: 'high', startsAt: past, isActive: true,
+  }));
+  assert.equal(live.status, 201);
+
+  // 2. Active feed only returns the live one (scheduling enforced) and sorts high priority first.
+  const { token: userToken } = await registerUser('ann-user@test.com');
+  const userAuth = { Authorization: `Bearer ${userToken}` };
+  const active: any = await (await fetch(`${BASE}/announcements/active`, { headers: userAuth })).json();
+  const titles = active.announcements.map((a: any) => a.title);
+  assert.ok(titles.includes('Live Now'), 'live announcement is served');
+  assert.ok(!titles.includes('Scheduled'), 'future-dated announcement is not served');
+  assert.equal(active.announcements[0].title, 'Live Now');
+
+  // 3. Invalid theme/priority rejected.
+  const bad = await fetch(`${BASE}/announcements`, postJson(auth, {
+    title: 'X', content: '<p>Y</p>', type: 'banner', theme: 'neon',
+  }));
+  assert.equal(bad.status, 400);
+
+  // 4. Template CRUD: create, list, use-prefill is client-side but server round-trips, update, delete.
+  const tpl = await fetch(`${BASE}/announcements/templates`, postJson(auth, {
+    name: 'Exam Alert', category: 'exam_alert', type: 'exam_alert', theme: 'error',
+    title: 'Midterm coming up', content: '<p>Prepare now</p>', buttonText: 'Open',
+  }));
+  assert.equal(tpl.status, 201);
+  const tplBody: any = await tpl.json();
+  const tplId = tplBody.id;
+  const list: any = await (await fetch(`${BASE}/announcements/templates`, { headers: auth })).json();
+  assert.ok(list.templates.some((t: any) => t.id === tplId && t.category === 'exam_alert'), 'template listed');
+
+  const upd = await fetch(`${BASE}/announcements/templates/${tplId}`, putJson(auth, { title: 'Midterm TOMORROW' }));
+  assert.equal(upd.status, 200);
+  const updBody: any = await upd.json();
+  assert.equal(updBody.title, 'Midterm TOMORROW');
+
+  const del = await fetch(`${BASE}/announcements/templates/${tplId}`, { method: 'DELETE', headers: auth });
+  assert.equal(del.status, 200);
+
+  // 5. Non-admin cannot create announcements or templates.
+  const forbidden = await fetch(`${BASE}/announcements`, postJson(userAuth, { title: 'Nope', content: '<p>nope</p>' }));
+  assert.equal(forbidden.status, 403);
+  const tplForbidden = await fetch(`${BASE}/announcements/templates`, { headers: userAuth });
+  assert.equal(tplForbidden.status, 403);
+});

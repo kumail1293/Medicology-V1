@@ -1,4 +1,12 @@
 import { z } from "zod/v4";
+export declare const ANNOUNCEMENT_TYPES: readonly ["popup", "banner", "ticker", "modal", "toast", "exam_alert", "promotion"];
+export type AnnouncementType = (typeof ANNOUNCEMENT_TYPES)[number];
+export declare const ANNOUNCEMENT_THEMES: readonly ["info", "success", "warning", "error", "primary"];
+export type AnnouncementTheme = (typeof ANNOUNCEMENT_THEMES)[number];
+export declare const ANNOUNCEMENT_PRIORITIES: readonly ["low", "normal", "high"];
+export type AnnouncementPriority = (typeof ANNOUNCEMENT_PRIORITIES)[number];
+export declare const ANNOUNCEMENT_FREQUENCIES: readonly ["once", "daily", "every_visit"];
+export type AnnouncementFrequency = (typeof ANNOUNCEMENT_FREQUENCIES)[number];
 export declare const announcementsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "announcements";
     schema: undefined;
@@ -25,7 +33,7 @@ export declare const announcementsTable: import("drizzle-orm/pg-core").PgTableWi
             tableName: "announcements";
             dataType: "string";
             columnType: "PgText";
-            data: string;
+            data: "popup" | "banner" | "ticker" | "modal" | "toast" | "exam_alert" | "promotion";
             driverParam: string;
             notNull: true;
             hasDefault: true;
@@ -36,7 +44,9 @@ export declare const announcementsTable: import("drizzle-orm/pg-core").PgTableWi
             baseColumn: never;
             identity: undefined;
             generated: undefined;
-        }, {}, {}>;
+        }, {}, {
+            $type: "popup" | "banner" | "ticker" | "modal" | "toast" | "exam_alert" | "promotion";
+        }>;
         title: import("drizzle-orm/pg-core").PgColumn<{
             name: "title";
             tableName: "announcements";
@@ -122,15 +132,15 @@ export declare const announcementsTable: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
-        isActive: import("drizzle-orm/pg-core").PgColumn<{
-            name: "is_active";
+        startsAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "starts_at";
             tableName: "announcements";
-            dataType: "boolean";
-            columnType: "PgBoolean";
-            data: boolean;
-            driverParam: boolean;
-            notNull: true;
-            hasDefault: true;
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
             isPrimaryKey: false;
             isAutoincrement: false;
             hasRuntimeDefault: false;
@@ -156,8 +166,133 @@ export declare const announcementsTable: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        priority: import("drizzle-orm/pg-core").PgColumn<{
+            name: "priority";
+            tableName: "announcements";
+            dataType: "string";
+            columnType: "PgText";
+            data: "low" | "normal" | "high";
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: "low" | "normal" | "high";
+        }>;
+        theme: import("drizzle-orm/pg-core").PgColumn<{
+            name: "theme";
+            tableName: "announcements";
+            dataType: "string";
+            columnType: "PgText";
+            data: "info" | "success" | "warning" | "error" | "primary";
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: "info" | "success" | "warning" | "error" | "primary";
+        }>;
+        dismissible: import("drizzle-orm/pg-core").PgColumn<{
+            name: "dismissible";
+            tableName: "announcements";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        frequency: import("drizzle-orm/pg-core").PgColumn<{
+            name: "frequency";
+            tableName: "announcements";
+            dataType: "string";
+            columnType: "PgText";
+            data: "once" | "daily" | "every_visit";
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: "once" | "daily" | "every_visit";
+        }>;
+        targetRoute: import("drizzle-orm/pg-core").PgColumn<{
+            name: "target_route";
+            tableName: "announcements";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        isActive: import("drizzle-orm/pg-core").PgColumn<{
+            name: "is_active";
+            tableName: "announcements";
+            dataType: "boolean";
+            columnType: "PgBoolean";
+            data: boolean;
+            driverParam: boolean;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
+            tableName: "announcements";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        updatedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "updated_at";
             tableName: "announcements";
             dataType: "date";
             columnType: "PgTimestamp";
@@ -177,13 +312,19 @@ export declare const announcementsTable: import("drizzle-orm/pg-core").PgTableWi
     dialect: "pg";
 }>;
 export declare const insertAnnouncementSchema: z.ZodObject<{
-    title: z.ZodString;
-    expiresAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
     type: z.ZodOptional<z.ZodString>;
+    title: z.ZodString;
     content: z.ZodString;
     buttonText: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     buttonUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     targetRoles: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    startsAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
+    expiresAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
+    priority: z.ZodOptional<z.ZodString>;
+    theme: z.ZodOptional<z.ZodString>;
+    dismissible: z.ZodOptional<z.ZodBoolean>;
+    frequency: z.ZodOptional<z.ZodString>;
+    targetRoute: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     isActive: z.ZodOptional<z.ZodBoolean>;
 }, {
     out: {};
@@ -191,4 +332,259 @@ export declare const insertAnnouncementSchema: z.ZodObject<{
 }>;
 export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
 export type Announcement = typeof announcementsTable.$inferSelect;
+export declare const ANNOUNCEMENT_TEMPLATE_CATEGORIES: readonly ["exam_alert", "qbank_launch", "promotion", "system_notice", "maintenance", "feature", "custom"];
+export type AnnouncementTemplateCategory = (typeof ANNOUNCEMENT_TEMPLATE_CATEGORIES)[number];
+export declare const announcementTemplatesTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
+    name: "announcement_templates";
+    schema: undefined;
+    columns: {
+        id: import("drizzle-orm/pg-core").PgColumn<{
+            name: "id";
+            tableName: "announcement_templates";
+            dataType: "number";
+            columnType: "PgSerial";
+            data: number;
+            driverParam: number;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: true;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        name: import("drizzle-orm/pg-core").PgColumn<{
+            name: "name";
+            tableName: "announcement_templates";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        category: import("drizzle-orm/pg-core").PgColumn<{
+            name: "category";
+            tableName: "announcement_templates";
+            dataType: "string";
+            columnType: "PgText";
+            data: "exam_alert" | "promotion" | "custom" | "qbank_launch" | "system_notice" | "maintenance" | "feature";
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: "exam_alert" | "promotion" | "custom" | "qbank_launch" | "system_notice" | "maintenance" | "feature";
+        }>;
+        type: import("drizzle-orm/pg-core").PgColumn<{
+            name: "type";
+            tableName: "announcement_templates";
+            dataType: "string";
+            columnType: "PgText";
+            data: "popup" | "banner" | "ticker" | "modal" | "toast" | "exam_alert" | "promotion";
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: "popup" | "banner" | "ticker" | "modal" | "toast" | "exam_alert" | "promotion";
+        }>;
+        title: import("drizzle-orm/pg-core").PgColumn<{
+            name: "title";
+            tableName: "announcement_templates";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        content: import("drizzle-orm/pg-core").PgColumn<{
+            name: "content";
+            tableName: "announcement_templates";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: true;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        buttonText: import("drizzle-orm/pg-core").PgColumn<{
+            name: "button_text";
+            tableName: "announcement_templates";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        buttonUrl: import("drizzle-orm/pg-core").PgColumn<{
+            name: "button_url";
+            tableName: "announcement_templates";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        theme: import("drizzle-orm/pg-core").PgColumn<{
+            name: "theme";
+            tableName: "announcement_templates";
+            dataType: "string";
+            columnType: "PgText";
+            data: "info" | "success" | "warning" | "error" | "primary";
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: "info" | "success" | "warning" | "error" | "primary";
+        }>;
+        priority: import("drizzle-orm/pg-core").PgColumn<{
+            name: "priority";
+            tableName: "announcement_templates";
+            dataType: "string";
+            columnType: "PgText";
+            data: "low" | "normal" | "high";
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: "low" | "normal" | "high";
+        }>;
+        targetRoles: import("drizzle-orm/pg-core").PgColumn<{
+            name: "target_roles";
+            tableName: "announcement_templates";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        createdAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "created_at";
+            tableName: "announcement_templates";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        updatedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "updated_at";
+            tableName: "announcement_templates";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+    };
+    dialect: "pg";
+}>;
+export declare const insertAnnouncementTemplateSchema: z.ZodObject<{
+    type: z.ZodOptional<z.ZodString>;
+    name: z.ZodString;
+    title: z.ZodString;
+    content: z.ZodString;
+    buttonText: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    buttonUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    targetRoles: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    priority: z.ZodOptional<z.ZodString>;
+    theme: z.ZodOptional<z.ZodString>;
+    category: z.ZodOptional<z.ZodString>;
+}, {
+    out: {};
+    in: {};
+}>;
+export type InsertAnnouncementTemplate = z.infer<typeof insertAnnouncementTemplateSchema>;
+export type AnnouncementTemplate = typeof announcementTemplatesTable.$inferSelect;
 //# sourceMappingURL=announcements.d.ts.map

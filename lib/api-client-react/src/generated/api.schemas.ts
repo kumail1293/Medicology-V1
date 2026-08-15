@@ -554,6 +554,10 @@ export const AnnouncementType = {
   popup: 'popup',
   banner: 'banner',
   ticker: 'ticker',
+  modal: 'modal',
+  toast: 'toast',
+  exam_alert: 'exam_alert',
+  promotion: 'promotion',
 } as const;
 
 export interface Announcement {
@@ -564,9 +568,35 @@ export interface Announcement {
   buttonText?: string;
   buttonUrl?: string;
   targetRoles?: string;
-  isActive: boolean;
+  startsAt?: string;
   expiresAt?: string;
+  priority?: string;
+  theme?: string;
+  dismissible?: boolean;
+  frequency?: string;
+  targetRoute?: string;
+  isActive: boolean;
   createdAt: string;
+}
+
+export interface AnnouncementTemplate {
+  id: number;
+  name: string;
+  category: string;
+  type: AnnouncementType;
+  title: string;
+  content: string;
+  buttonText?: string;
+  buttonUrl?: string;
+  theme: string;
+  priority: string;
+  targetRoles?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AnnouncementTemplatesResponse {
+  templates: AnnouncementTemplate[];
 }
 
 export interface AnnouncementsResponse {

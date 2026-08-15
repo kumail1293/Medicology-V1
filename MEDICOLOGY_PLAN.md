@@ -365,9 +365,21 @@ no duplicate systems.
     with per-section zod validation.
 -   Cache invalidation for flags + maintenance after every settings write.
 
-Deferred (documented in the settings plan): announcement templates,
-animation controls (reduced-motion aware), media library, coming-soon
-catalogue, scoped QBank/exam overrides, granular admin roles.
+## P0.5.8 ✅ Announcement templates + scheduling (shipped)
+
+-   Migration `0005` (additive): `announcements` gains `starts_at`
+    (scheduling window with `expires_at`), `priority`, `theme`,
+    `dismissible`, `frequency` (once/daily/every-visit), `target_route`;
+    new `announcement_templates` table.
+-   Reusable admin-authored templates (exam alert, QBank launch,
+    promotion, system notice, maintenance, feature) with full CRUD +
+    audit; "Use template" prefills the announcement builder.
+-   Active feed enforces the schedule window, role targeting, and sorts
+    by priority; display honours themes, modal/toast/exam-alert/promotion
+    types, dismissibility frequency, and route targeting.
+-   Deferred next: animation controls (reduced-motion aware), media
+    library, coming-soon catalogue, scoped QBank/exam overrides, granular
+    admin roles.
 
 ------------------------------------------------------------------------
 

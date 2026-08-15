@@ -36,6 +36,13 @@
       "when": 1786778154712,
       "tag": "0004_p1_question_types_structured_explanations",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786782227107,
+      "tag": "0005_announcement_templates_and_scheduling",
+      "breakpoints": true
     }
   ]
 }
