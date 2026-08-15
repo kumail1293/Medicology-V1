@@ -114,6 +114,8 @@ if (useSQLite) {
     qbank_questions: [] as any[],
     entitlements: [] as any[],
     waitlist: [] as any[],
+    announcements: [] as any[],
+    announcement_templates: [] as any[],
   };
 
   // Map seeded questions to QBanks via their legacy tag fields, then backfill
@@ -180,6 +182,8 @@ if (useSQLite) {
     qbank_questions: qbankMapping.length + 1,
     entitlements: mockData.entitlements.length + 1,
     waitlist: 1,
+    announcements: 1,
+    announcement_templates: 1,
   };
 
   const getTableName = (table: any): string => {

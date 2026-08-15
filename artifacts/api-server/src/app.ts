@@ -31,6 +31,7 @@ import { seedEmailTemplates } from './utils/seed-email-templates.js';
 import { seedRbac } from './utils/seed-rbac.js';
 import { startEntitlementSweeper } from './utils/entitlement-sweeper.js';
 import { testConnection } from './db.js';
+import { seedAnnouncements } from './utils/seed-announcements.js';
 import { errorHandler } from './utils/errors.js';
 import { rateLimit } from './middleware/rateLimit.js';
 
@@ -179,6 +180,13 @@ if (!process.env.VERCEL) {
       if (rbacSeeded > 0) console.log('🔐 Seeded RBAC (permissions, account types, roles)');
     } catch (err: any) {
       console.warn('RBAC seeding skipped:', err.message);
+    }
+    try {
+      const annSeeded = await seedAnnouncements();
+      const total = annSeeded.templates + annSeeded.generalAnnouncements + annSeeded.personalizedAnnouncements;
+      if (total > 0) console.log(`📢 Seeded ${annSeeded.templates} templates, ${annSeeded.generalAnnouncements} general + ${annSeeded.personalizedAnnouncements} personalized announcements`);
+    } catch (err: any) {
+      console.warn('Announcement seeding skipped:', err.message);
     }
     startEntitlementSweeper();
     app.listen(PORT, () => {
