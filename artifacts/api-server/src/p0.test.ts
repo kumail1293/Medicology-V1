@@ -906,3 +906,146 @@ test('scoped overrides: QBank session creation applies resolved rules', async ()
   assert.equal(explicitData.session.durationSeconds, 120, 'explicit duration wins');
   assert.ok(explicitData.session.questionIds.length === 5, 'explicit questionCount wins');
 });
+test('import: downloadable template has headers, an example row per type, and a guide', async () => {
+  const token = await adminLogin();
+  const res = await fetch(`${BASE}/admin/import/template`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type') ?? '', /spreadsheetml/, 'xlsx content type');
+  const buf = Buffer.from(await res.arrayBuffer());
+
+  const wb = XLSX.read(buf, { type: 'buffer' });
+  assert.ok(wb.SheetNames.includes('Template'), 'Template sheet present');
+  assert.ok(wb.SheetNames.includes('Guide'), 'Guide sheet present');
+
+  const rows: any[][] = XLSX.utils.sheet_to_json(wb.Sheets['Template'], { header: 1, defval: '' });
+  const headers = rows[0].map((h: any) => String(h));
+  for (const required of ['Question', 'Option A', 'Option B', 'Correct Answer', 'Subject', 'Topic', 'Question Type']) {
+    assert.ok(headers.includes(required), `header ${required} present`);
+  }
+
+  const exampleRows = rows.slice(1).filter((r: any) => String(r[0] ?? '').trim() !== '' && String(r[0] ?? '').trim() !== 'Question Type');
+  const types = exampleRows.map((r: any) => r[0]).join(',');
+  for (const t of ['SBA', 'Best of Five', 'True/False', 'Assertion/Reason', 'EMQ', 'Image-Based', 'Clinical Vignette', 'Case-Based']) {
+    assert.ok(types.includes(t), `example row for ${t}`);
+  }
+
+  const tf = await fetch(`${BASE}/admin/import/template?type=true_false`, { headers: { Authorization: `Bearer ${token}` } });
+  const tfBuf = Buffer.from(await tf.arrayBuffer());
+  const tfRows: any[][] = XLSX.utils.sheet_to_json(XLSX.read(tfBuf, { type: 'buffer' }).Sheets['Template'], { header: 1, defval: '' });
+  const tfExamples = tfRows.slice(1).filter((r: any) => String(r[0] ?? '').trim() !== '');
+  assert.equal(tfExamples.length, 1);
+  assert.match(String(tfExamples[0][0]), /True\/False/);
+});
+
+test('import: type-aware validation (True/False, Assertion/Reason) + structured explanations', async () => {
+  const token = await adminLogin();
+  const buf = makeXlsxBuffer([
+    {
+      'Question Type': 'True/False',
+      Question: 'The right coronary artery supplies the inferior wall of the heart.',
+      'Option A': 'True',
+      'Option B': 'False',
+      'Correct Answer': 'True',
+      Explanation: 'The RCA supplies the inferior wall.',
+      Subject: 'Medicine',
+      Topic: 'Cardiology',
+    },
+    {
+      'Question Type': 'Assertion/Reason',
+      Question: 'Assertion: RCA occludes in inferior MI. Reason: RCA supplies the inferior wall.',
+      Assertion: 'The RCA is the most common culprit in inferior wall MI.',
+      Reason: 'The RCA supplies the inferior wall of the heart.',
+      'Correct Answer': 'A',
+      Explanation: 'Both true; the reason explains the assertion.',
+      Subject: 'Medicine',
+      Topic: 'Cardiology',
+    },
+    {
+      'Question Type': 'True/False',
+      Question: 'The LAD supplies the inferior wall.',
+      'Option A': 'True',
+      'Option B': 'False',
+      'Correct Answer': 'True',
+      Explanation: 'Wrong — the LAD supplies the anterior wall.',
+      Subject: 'Medicine',
+      Topic: 'Cardiology',
+      'Exam Pearl': 'Inferior MI = RCA.',
+      'Common Trap': 'Never pick LAD for inferior wall.',
+      'Why Correct': 'RCA supplies the inferior wall.',
+      'Why Wrong': 'LAD is anterior.',
+    },
+    { 'Question Type': 'MysteryFormat', Question: 'Broken', 'Option A': 'a', 'Option B': 'b', 'Correct Answer': 'A', Subject: 'Medicine', Topic: 'Cardiology' },
+  ]);
+
+  const previewRes = await uploadImport(token, buf);
+  assert.equal(previewRes.status, 200);
+  const preview: any = await previewRes.json();
+  assert.equal(preview.totalRows, 4);
+  assert.equal(preview.stats.valid, 3, 'TF + AR + TF-with-pearls validate');
+  assert.equal(preview.stats.error, 1, 'unknown type flagged');
+
+  const tf = preview.rows.find((r: any) => r.data.correctAnswer === 'A' && r.data.questionType === 'true_false');
+  assert.ok(tf, 'TF row normalized (True → A)');
+  const tf2 = preview.rows.find((r: any) => r.data.examPearl);
+  assert.equal(tf2.data.examPearl, 'Inferior MI = RCA.');
+  assert.equal(tf2.data.questionType, 'true_false');
+
+  const ar = preview.rows.find((r: any) => r.data.questionType === 'assertion_reason');
+  assert.ok(ar, 'AR row valid');
+  assert.ok(ar.data.options.A.includes('Both assertion and reason'), 'AR auto-generates the classic 5 options');
+  assert.equal(ar.data.correctAnswer, 'A');
+
+  const bad = preview.rows.find((r: any) => r.status === 'error');
+  assert.ok(bad.messages.some((m: string) => m.includes('Unknown question type')));
+
+  const exec = await fetch(`${BASE}/admin/import/execute`, json({ Authorization: `Bearer ${token}` }, { rows: preview.rows }));
+  const result: any = await exec.json();
+  assert.equal(result.inserted, 3);
+
+  const list: any = await (await fetch(`${BASE}/admin/questions?limit=100`, { headers: { Authorization: `Bearer ${token}` } })).json();
+  const imported = (list.questions ?? []).find((q: any) => q.qid === tf2.qid);
+  assert.ok(imported, 'structured row imported');
+  assert.equal(imported.questionType, 'true_false');
+  assert.equal(imported.examPearl, 'Inferior MI = RCA.');
+  assert.equal(imported.commonTrap, 'Never pick LAD for inferior wall.');
+});
+
+test('import: bulkImport settings drive status, thresholds, allowed types and file types', async () => {
+  const token = await adminLogin();
+  const auth = { Authorization: `Bearer ${token}` };
+
+  const cur: any = await (await fetch(`${BASE}/admin/settings/bulkImport`, { headers: auth })).json();
+  const put = (body: any) => fetch(`${BASE}/admin/settings`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json', ...auth }, body: JSON.stringify(body),
+  });
+  try {
+    const csvOnly = await put({ bulkImport: { allowedFileTypes: ['xlsx'] } });
+    assert.equal(csvOnly.status, 200);
+    const form = new FormData();
+    form.append('file', new Blob(['a,b,c\n1,2,3']), 'qa.csv');
+    const csvRes = await fetch(`${BASE}/admin/import/preview`, { method: 'POST', headers: auth, body: form });
+    assert.equal(csvRes.status, 400, 'csv rejected when disabled');
+    const csvErr: any = await csvRes.json();
+    assert.match(csvErr.error, /Only \.xlsx/);
+
+    await put({ bulkImport: { allowedQuestionTypes: ['sba', 'true_false'], defaultImportStatus: 'draft', defaultDifficulty: 'hard', requireReviewBeforePublish: false } });
+    const buf = makeXlsxBuffer([
+      { 'Question Type': 'True/False', Question: 'TF question A', 'Option A': 'True', 'Option B': 'False', 'Correct Answer': 'True', Subject: 'Medicine', Topic: 'Cardiology' },
+      { 'Question Type': 'Best of Five', Question: 'Disabled type row', 'Option A': 'a', 'Option B': 'b', 'Option C': 'c', 'Option D': 'd', 'Correct Answer': 'A', Subject: 'Medicine', Topic: 'Cardiology' },
+    ]);
+    const preview: any = await (await uploadImport(token, buf)).json();
+    assert.equal(preview.stats.error, 1, 'disabled type flagged');
+    assert.match(preview.rows.find((r: any) => r.status === 'error').messages.join(' '), /disabled in the bulk import settings/);
+    const okRow = preview.rows.find((r: any) => r.status === 'valid');
+    assert.equal(okRow.data.difficulty, 'hard', 'settings default difficulty applied');
+
+    const exec = await fetch(`${BASE}/admin/import/execute`, json(auth, { rows: [okRow] }));
+    const execResult: any = await exec.json();
+    assert.equal(execResult.inserted, 1);
+    const list: any = await (await fetch(`${BASE}/admin/questions?limit=100`, { headers: auth })).json();
+    const imported = (list.questions ?? []).find((q: any) => q.qid === okRow.qid);
+    assert.equal(imported.status, 'draft', 'settings defaultImportStatus applied');
+  } finally {
+    await put({ bulkImport: cur.settings ?? { allowedFileTypes: ['xlsx', 'xls', 'csv', 'tsv'], allowedQuestionTypes: ['sba', 'best_of_five', 'true_false', 'assertion_reason', 'emq', 'image_based', 'clinical_vignette', 'case_based'], defaultImportStatus: 'pending_review', defaultDifficulty: 'medium', requireReviewBeforePublish: true } });
+  }
+});

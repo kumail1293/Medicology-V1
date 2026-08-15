@@ -454,6 +454,18 @@ export const featureFlagsSettingsSchema = z.object({
   newExamEngine: z.boolean(),
 });
 
+export const bulkImportSettingsSchema = z.object({
+  defaultImportStatus: z.enum(['draft', 'pending_review', 'published']),
+  requireReviewBeforePublish: z.boolean(),
+  duplicateThreshold: z.number().min(0.5).max(0.95),
+  autoCreateTaxonomy: z.boolean(),
+  maxFileSizeMB: z.number().int().min(1).max(100),
+  allowedFileTypes: z.array(z.enum(['xlsx', 'xls', 'csv', 'tsv'])).min(1),
+  allowedQuestionTypes: z.array(z.string().min(1)).min(1),
+  defaultDifficulty: z.enum(['easy', 'medium', 'hard']),
+  notifyOnImport: z.boolean(),
+});
+
 export const examSettingsSchema = z.object({
   trialQuestions: z.number().int().min(0).max(1000),
   attemptLimit: z.number().int().min(0).max(100),
@@ -496,6 +508,7 @@ export const updateSettingsSchema = z.object({
   animations: animationsSettingsSchema.partial().optional(),
   featureFlags: featureFlagsSettingsSchema.partial().optional(),
   examSettings: examSettingsSchema.partial().optional(),
+  bulkImport: bulkImportSettingsSchema.partial().optional(),
 });
 
 export type UpdateSettings = z.infer<typeof updateSettingsSchema>;
@@ -514,4 +527,5 @@ export const UPDATE_SETTINGS_SHAPE = {
   animations: animationsSettingsSchema.partial(),
   featureFlags: featureFlagsSettingsSchema.partial(),
   examSettings: examSettingsSchema.partial(),
+  bulkImport: bulkImportSettingsSchema.partial(),
 } as const;

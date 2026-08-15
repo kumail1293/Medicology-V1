@@ -124,6 +124,19 @@ export interface ExamSettings {
   answerReveal: "after_answer" | "end";
 }
 
+// Bulk question import policy (Bulk Import admin page).
+export interface BulkImportSettings {
+  defaultImportStatus: "draft" | "pending_review" | "published";
+  requireReviewBeforePublish: boolean;
+  duplicateThreshold: number;
+  autoCreateTaxonomy: boolean;
+  maxFileSizeMB: number;
+  allowedFileTypes: string[];
+  allowedQuestionTypes: string[];
+  defaultDifficulty: "easy" | "medium" | "hard";
+  notifyOnImport: boolean;
+}
+
 export interface PlatformSettings {
   general: GeneralSettings;
   branding: BrandingSettings;
@@ -137,6 +150,7 @@ export interface PlatformSettings {
   animations: AnimationsSettings;
   featureFlags: FeatureFlagsSettings;
   examSettings: ExamSettings;
+  bulkImport: BulkImportSettings;
 }
 
 export const DEFAULT_SETTINGS: PlatformSettings = {
@@ -243,6 +257,17 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     resultVisibility: "immediate",
     explanationBehavior: "after_answer",
     answerReveal: "after_answer",
+  },
+  bulkImport: {
+    defaultImportStatus: "pending_review",
+    requireReviewBeforePublish: true,
+    duplicateThreshold: 0.85,
+    autoCreateTaxonomy: true,
+    maxFileSizeMB: 20,
+    allowedFileTypes: ["xlsx", "xls", "csv", "tsv"],
+    allowedQuestionTypes: ["sba", "best_of_five", "true_false", "assertion_reason", "emq", "image_based", "clinical_vignette", "case_based"],
+    defaultDifficulty: "medium",
+    notifyOnImport: true,
   },
 };
 

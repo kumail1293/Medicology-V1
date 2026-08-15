@@ -1,144 +1,47 @@
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Plus, Pencil, Trash2, BookOpen, CheckCircle2, AlertCircle } from 'lucide-react';
-import RichTextEditor from '@/components/RichTextEditor';
+import { Search, Plus, Pencil, Trash2, BookOpen } from 'lucide-react';
 import type { Question } from '@workspace/api-client-react';
+import QuestionEditorModal, {
+  QuestionFormState,
+  emptyQuestionForm,
+  QUESTION_TYPE_LABELS,
+} from '@/components/QuestionEditorModal';
 
-interface TaxonomyNode {
-  id: number;
-  code?: string;
-  name: string;
-  flag?: string;
-  icon?: string;
-  status?: string;
-  examSystems?: TaxonomyNode[];
-  exams?: TaxonomyNode[];
-  programs?: TaxonomyNode[];
-  years?: TaxonomyNode[];
-  systems?: TaxonomyNode[];
-  topics?: TaxonomyNode[];
-  subtopics?: TaxonomyNode[];
-}
-
-interface TaxonomyTree {
-  countries: TaxonomyNode[];
-  subjects: TaxonomyNode[];
-}
-
-const QUESTION_TYPE_LABELS: Record<string, string> = {
-  sba: 'Single Best Answer (SBA)',
-  best_of_five: 'Best of Five (MCQ)',
-  true_false: 'True / False',
-  assertion_reason: 'Assertion / Reason',
-  emq: 'Extended Matching (EMQ)',
-  image_based: 'Image-based (ECG, X-ray, CT…)',
-  clinical_vignette: 'Clinical Vignette',
-  case_based: 'Case-based',
-};
-
-interface QuestionFormState {
-  questionText: string;
-  questionType: string;
-  subject: string;
-  system?: string;
-  topic: string;
-  subtopic?: string;
-  universityTag?: string;
-  explanation: string;
-  whyCorrect: string;
-  whyWrong: string;
-  examPearl: string;
-  commonTrap: string;
-  correctAnswer: 'A' | 'B' | 'C' | 'D' | 'E';
-  optionA: string;
-  optionB: string;
-  optionC: string;
-  optionD: string;
-  optionE: string;
-  difficulty: string;
-  examType: string;
-  tags: string;
-  isFree: boolean;
-  // Hybrid relational taxonomy IDs
-  countryId?: number;
-  examId?: number;
-  programId?: number;
-  yearId?: number;
-  subjectId?: number;
-  systemId?: number;
-  topicId?: number;
-  subtopicId?: number;
-}
-
-const emptyForm = (): QuestionFormState => ({
-  questionText: '',
-  questionType: 'sba',
-  subject: '',
-  topic: '',
-  explanation: '',
-  whyCorrect: '',
-  whyWrong: '',
-  examPearl: '',
-  commonTrap: '',
-  correctAnswer: 'A',
-  optionA: '',
-  optionB: '',
-  optionC: '',
-  optionD: '',
-  optionE: '',
-  difficulty: 'medium',
-  examType: '',
-  tags: '',
-  isFree: false,
-  countryId: undefined,
-  examId: undefined,
-  programId: undefined,
-  yearId: undefined,
-  subjectId: undefined,
-  systemId: undefined,
-  topicId: undefined,
-  subtopicId: undefined,
-});
-
-function buildPayload(form: QuestionFormState) {
-  const options = {
-    A: form.optionA,
-    B: form.optionB,
-    C: form.optionC,
-    D: form.optionD,
-    ...(form.optionE ? { E: form.optionE } : {}),
-  };
-
+function formFromQuestion(question: Question): QuestionFormState {
   return {
-    questionText: form.questionText,
-    questionType: form.questionType || 'sba',
-    options,
-    correctAnswer: form.correctAnswer,
-    explanation: form.explanation,
-    whyCorrect: form.whyCorrect || undefined,
-    whyWrong: form.whyWrong || undefined,
-    examPearl: form.examPearl || undefined,
-    commonTrap: form.commonTrap || undefined,
-    subject: form.subject,
-    system: form.system || undefined,
-    topic: form.topic,
-    subtopic: form.subtopic || undefined,
-    universityTag: form.universityTag || undefined,
-    difficulty: form.difficulty || 'medium',
-    examType: form.examType || undefined,
-    tags: form.tags
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter(Boolean),
-    isFree: form.isFree,
-    countryId: form.countryId,
-    examId: form.examId,
-    programId: form.programId,
-    yearId: form.yearId,
-    subjectId: form.subjectId,
-    systemId: form.systemId,
-    topicId: form.topicId,
-    subtopicId: form.subtopicId,
+    questionText: question.questionText || '',
+    subject: question.subject || '',
+    system: (question as any).system || '',
+    topic: question.topic || '',
+    subtopic: (question as any).subtopic || '',
+    universityTag: (question as any).universityTag || '',
+    explanation: question.explanation || '',
+    questionType: (question as any).questionType || 'sba',
+    whyCorrect: (question as any).whyCorrect || '',
+    whyWrong: (question as any).whyWrong || '',
+    examPearl: (question as any).examPearl || '',
+    commonTrap: (question as any).commonTrap || '',
+    assertion: (question as any).assertion || '',
+    reason: (question as any).reason || '',
+    correctAnswer: (question.correctAnswer as QuestionFormState['correctAnswer']) || 'A',
+    optionA: question.options?.A || '',
+    optionB: question.options?.B || '',
+    optionC: question.options?.C || '',
+    optionD: question.options?.D || '',
+    optionE: question.options?.E || '',
+    difficulty: question.difficulty || 'medium',
+    examType: (question as any).examType || '',
+    tags: Array.isArray(question.tags) ? question.tags.join(', ') : '',
+    isFree: Boolean((question as any).isFree),
+    countryId: (question as any).countryId ?? undefined,
+    examId: (question as any).examId ?? undefined,
+    programId: (question as any).programId ?? undefined,
+    yearId: (question as any).yearId ?? undefined,
+    subjectId: (question as any).subjectId ?? undefined,
+    systemId: (question as any).systemId ?? undefined,
+    topicId: (question as any).topicId ?? undefined,
+    subtopicId: (question as any).subtopicId ?? undefined,
   };
 }
 
@@ -148,8 +51,7 @@ export default function AdminQuestionsPage() {
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
-  const [form, setForm] = useState<QuestionFormState>(emptyForm());
-  const [taxonomy, setTaxonomy] = useState<TaxonomyTree>({ countries: [], subjects: [] });
+  const [initialForm, setInitialForm] = useState<QuestionFormState>(emptyQuestionForm());
   const { toast } = useToast();
 
   const fetchQuestions = async (query = search) => {
@@ -176,89 +78,36 @@ export default function AdminQuestionsPage() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  // Load the taxonomy tree once so the form can pick relational IDs.
-  useEffect(() => {
-    const loadTaxonomy = async () => {
-      try {
-        const response = await fetch('/api/taxonomy/tree');
-        if (response.ok) {
-          const data = await response.json();
-          setTaxonomy({ countries: data.countries ?? [], subjects: data.subjects ?? [] });
-        }
-      } catch {
-        // Taxonomy is optional — the form still works with free-text fields.
-      }
-    };
-    void loadTaxonomy();
-  }, []);
-
   const openCreateModal = () => {
     setEditingQuestion(null);
-    setForm(emptyForm());
+    setInitialForm(emptyQuestionForm());
     setIsModalOpen(true);
   };
 
   const openEditModal = (question: Question) => {
     setEditingQuestion(question);
-    setForm({
-      questionText: question.questionText || '',
-      subject: question.subject || '',
-      system: (question as any).system || '',
-      topic: question.topic || '',
-      subtopic: (question as any).subtopic || '',
-      universityTag: (question as any).universityTag || '',
-      explanation: question.explanation || '',
-      questionType: (question as any).questionType || 'sba',
-      whyCorrect: (question as any).whyCorrect || '',
-      whyWrong: (question as any).whyWrong || '',
-      examPearl: (question as any).examPearl || '',
-      commonTrap: (question as any).commonTrap || '',
-      correctAnswer: (question.correctAnswer as QuestionFormState['correctAnswer']) || 'A',
-      optionA: question.options?.A || '',
-      optionB: question.options?.B || '',
-      optionC: question.options?.C || '',
-      optionD: question.options?.D || '',
-      optionE: question.options?.E || '',
-      difficulty: question.difficulty || 'medium',
-      examType: (question as any).examType || '',
-      tags: Array.isArray(question.tags) ? question.tags.join(', ') : '',
-      isFree: Boolean((question as any).isFree),
-      countryId: (question as any).countryId ?? undefined,
-      examId: (question as any).examId ?? undefined,
-      programId: (question as any).programId ?? undefined,
-      yearId: (question as any).yearId ?? undefined,
-      subjectId: (question as any).subjectId ?? undefined,
-      systemId: (question as any).systemId ?? undefined,
-      topicId: (question as any).topicId ?? undefined,
-      subtopicId: (question as any).subtopicId ?? undefined,
-    });
+    setInitialForm(formFromQuestion(question));
     setIsModalOpen(true);
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    try {
-      const payload = buildPayload(form);
-      const url = editingQuestion ? `/api/admin/questions/${editingQuestion.id}` : '/api/admin/questions';
-      const method = editingQuestion ? 'PUT' : 'POST';
+  const handleSave = async (payload: Record<string, any>) => {
+    const url = editingQuestion ? `/api/admin/questions/${editingQuestion.id}` : '/api/admin/questions';
+    const method = editingQuestion ? 'PUT' : 'POST';
 
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.error || 'Failed to save question');
-      }
-
-      toast({ title: 'Success', description: editingQuestion ? 'Question updated' : 'Question created' });
-      setIsModalOpen(false);
-      await fetchQuestions();
-    } catch (error) {
-      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Save failed', variant: 'destructive' });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || 'Failed to save question');
     }
+
+    toast({ title: 'Success', description: editingQuestion ? 'Question updated' : 'Question created' });
+    setIsModalOpen(false);
+    await fetchQuestions();
   };
 
   const handleDelete = async (questionId: number) => {
@@ -326,7 +175,7 @@ export default function AdminQuestionsPage() {
                     <span className="rounded-full bg-muted px-2 py-1">{question.topic}</span>
                     <span className="rounded-full bg-muted px-2 py-1">{question.difficulty}</span>
                     {(question as any).questionType && (question as any).questionType !== 'sba' && (
-                      <span className="rounded-full bg-primary/10 px-2 py-1 text-primary">{(QUESTION_TYPE_LABELS[(question as any).questionType] || (question as any).questionType)}</span>
+                      <span className="rounded-full bg-primary/10 px-2 py-1 text-primary">{QUESTION_TYPE_LABELS[(question as any).questionType] || (question as any).questionType}</span>
                     )}
                     {(question as any).status && (question as any).status !== 'published' && (
                       <span className="rounded-full bg-amber-500/15 px-2 py-1 text-amber-600">{(question as any).status}</span>
@@ -355,378 +204,14 @@ export default function AdminQuestionsPage() {
         )}
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xl font-semibold">{editingQuestion ? 'Edit Question' : 'Create Question'}</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-foreground">
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium">Question Text</label>
-                <RichTextEditor
-                  value={form.questionText}
-                  onChange={(html) => setForm({ ...form, questionText: html })}
-                  placeholder="Stem — supports tables, images, flowcharts, formatting…"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Question Type</label>
-                <select
-                  value={form.questionType}
-                  onChange={(event) => setForm({ ...form, questionType: event.target.value })}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                >
-                  {Object.entries(QUESTION_TYPE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Subject</label>
-                  <input
-                    required
-                    value={form.subject}
-                    onChange={(event) => setForm({ ...form, subject: event.target.value })}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Topic</label>
-                  <input
-                    required
-                    value={form.topic}
-                    onChange={(event) => setForm({ ...form, topic: event.target.value })}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                  />
-                </div>
-              </div>
-
-              {/* Hybrid taxonomy pickers — picking a node fills the text fields above. */}
-              <TaxonomyPickers taxonomy={taxonomy} form={form} setForm={setForm} />
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Correct Answer</label>
-                  <select
-                    value={form.correctAnswer}
-                    onChange={(event) => setForm({ ...form, correctAnswer: event.target.value as QuestionFormState['correctAnswer'] })}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                  >
-                    {(['A', 'B', 'C', 'D', 'E'] as const).map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Difficulty</label>
-                  <select
-                    value={form.difficulty}
-                    onChange={(event) => setForm({ ...form, difficulty: event.target.value })}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                  >
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                {(['optionA', 'optionB', 'optionC', 'optionD', 'optionE'] as const).map((field) => (
-                  <div key={field}>
-                    <label className="mb-1 block text-sm font-medium">{field.replace('option', 'Option ')}</label>
-                    <input
-                      value={form[field]}
-                      onChange={(event) => setForm({ ...form, [field]: event.target.value })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Explanation</label>
-                <RichTextEditor
-                  value={form.explanation}
-                  onChange={(html) => setForm({ ...form, explanation: html })}
-                  placeholder="Explanation — tables, images, exam pearls…"
-                />
-              </div>
-
-              {/* Structured explanations (P1 exam engine) */}
-              <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
-                <div className="text-sm font-semibold">Structured Explanation (optional)</div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-green-600">Why this answer is correct</label>
-                  <RichTextEditor
-                    value={form.whyCorrect}
-                    onChange={(html) => setForm({ ...form, whyCorrect: html })}
-                    placeholder="The mechanism/reason the correct answer works…"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-red-500">Why wrong answers are wrong</label>
-                  <RichTextEditor
-                    value={form.whyWrong}
-                    onChange={(html) => setForm({ ...form, whyWrong: html })}
-                    placeholder="Why the distractors fail…"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-amber-600">Exam Pearl</label>
-                  <RichTextEditor
-                    value={form.examPearl}
-                    onChange={(html) => setForm({ ...form, examPearl: html })}
-                    placeholder="High-yield one-liner for the exam…"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-purple-600">Common Trap</label>
-                  <RichTextEditor
-                    value={form.commonTrap}
-                    onChange={(html) => setForm({ ...form, commonTrap: html })}
-                    placeholder="The classic mistake students make…"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Tags</label>
-                <input
-                  value={form.tags}
-                  onChange={(event) => setForm({ ...form, tags: event.target.value })}
-                  placeholder="anatomy, physiology"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                />
-              </div>
-
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={form.isFree}
-                  onChange={(event) => setForm({ ...form, isFree: event.target.checked })}
-                />
-                Free question
-              </label>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg border border-border px-4 py-2 text-sm">
-                  Cancel
-                </button>
-                <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white">
-                  Save
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface TaxonomyPickersProps {
-  taxonomy: TaxonomyTree;
-  form: QuestionFormState;
-  setForm: React.Dispatch<React.SetStateAction<QuestionFormState>>;
-}
-
-/**
- * Cascading selects over the exam + subject taxonomy. Picking a node stores the
- * relational ID and auto-fills the legacy free-text columns (subject, topic,
- * universityTag) so both sides of the hybrid schema stay consistent.
- */
-function TaxonomyPickers({ taxonomy, form, setForm }: TaxonomyPickersProps) {
-  const update = (patch: Partial<QuestionFormState>) => setForm((prev) => ({ ...prev, ...patch }));
-
-  // Country → exam system → exam → program → year chain
-  const countries = taxonomy.countries ?? [];
-  const exams = countries.flatMap((c) => (c.examSystems ?? []).flatMap((es) => es.exams ?? []));
-  const selectedExam = exams.find((e) => e.id === form.examId);
-  const programs = selectedExam?.programs ?? [];
-  const selectedProgram = programs.find((p) => p.id === form.programId);
-  const years = selectedProgram?.years ?? [];
-
-  const onCountry = (id: string) =>
-    update({ countryId: id ? Number(id) : undefined, examId: undefined, programId: undefined, yearId: undefined, examType: undefined });
-  const onExam = (id: string) =>
-    update({
-      examId: id ? Number(id) : undefined,
-      programId: undefined,
-      yearId: undefined,
-      universityTag: id ? exams.find((e) => e.id === Number(id))?.code : undefined,
-      examType: 'annual',
-    });
-  const onProgram = (id: string) => update({ programId: id ? Number(id) : undefined, yearId: undefined });
-  const onYear = (id: string) => update({ yearId: id ? Number(id) : undefined });
-
-  // Subject → system → topic → subtopic chain
-  const subjects = taxonomy.subjects ?? [];
-  const selectedSubject = subjects.find((s) => s.id === form.subjectId);
-  const systems = selectedSubject?.systems ?? [];
-  const selectedSystem = systems.find((s) => s.id === form.systemId);
-  const topics = selectedSystem?.topics ?? [];
-  const selectedTopic = topics.find((t) => t.id === form.topicId);
-  const subtopics = selectedTopic?.subtopics ?? [];
-
-  const onSubject = (id: string) =>
-    update({
-      subjectId: id ? Number(id) : undefined,
-      systemId: undefined,
-      topicId: undefined,
-      subtopicId: undefined,
-      subject: id ? subjects.find((s) => s.id === Number(id))?.name : undefined,
-    });
-  const onSystem = (id: string) =>
-    update({
-      systemId: id ? Number(id) : undefined,
-      topicId: undefined,
-      subtopicId: undefined,
-      system: id ? systems.find((s) => s.id === Number(id))?.name : undefined,
-    });
-  const onTopic = (id: string) =>
-    update({
-      topicId: id ? Number(id) : undefined,
-      subtopicId: undefined,
-      topic: id ? topics.find((t) => t.id === Number(id))?.name : undefined,
-    });
-  const onSubtopic = (id: string) =>
-    update({
-      subtopicId: id ? Number(id) : undefined,
-      subtopic: id ? subtopics.find((st) => st.id === Number(id))?.name : undefined,
-    });
-
-  if (countries.length === 0 && subjects.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Exam &amp; Subject Taxonomy</p>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Country</label>
-          <select
-            value={form.countryId ?? ''}
-            onChange={(event) => onCountry(event.target.value)}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          >
-            <option value="">— None —</option>
-            {countries.map((country) => (
-              <option key={country.id} value={country.id}>{country.flag} {country.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">University / Exam</label>
-          <select
-            value={form.examId ?? ''}
-            onChange={(event) => onExam(event.target.value)}
-            disabled={exams.length === 0}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <option value="">— None —</option>
-            {exams.map((exam) => (
-              <option key={exam.id} value={exam.id}>{exam.code} — {exam.name}{exam.status === 'available' ? '' : ' (coming soon)'}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Program</label>
-          <select
-            value={form.programId ?? ''}
-            onChange={(event) => onProgram(event.target.value)}
-            disabled={programs.length === 0}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <option value="">— None —</option>
-            {programs.map((program) => (
-              <option key={program.id} value={program.id}>{program.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Academic Year</label>
-          <select
-            value={form.yearId ?? ''}
-            onChange={(event) => onYear(event.target.value)}
-            disabled={years.length === 0}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <option value="">— None —</option>
-            {years.map((year) => (
-              <option key={year.id} value={year.id}>{year.name}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Subject</label>
-          <select
-            value={form.subjectId ?? ''}
-            onChange={(event) => onSubject(event.target.value)}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          >
-            <option value="">— None —</option>
-            {subjects.map((subject) => (
-              <option key={subject.id} value={subject.id}>{subject.icon} {subject.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">System</label>
-          <select
-            value={form.systemId ?? ''}
-            onChange={(event) => onSystem(event.target.value)}
-            disabled={systems.length === 0}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <option value="">— None —</option>
-            {systems.map((system) => (
-              <option key={system.id} value={system.id}>{system.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Topic</label>
-          <select
-            value={form.topicId ?? ''}
-            onChange={(event) => onTopic(event.target.value)}
-            disabled={topics.length === 0}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <option value="">— None —</option>
-            {topics.map((topic) => (
-              <option key={topic.id} value={topic.id}>{topic.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Subtopic</label>
-          <select
-            value={form.subtopicId ?? ''}
-            onChange={(event) => onSubtopic(event.target.value)}
-            disabled={subtopics.length === 0}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <option value="">— None —</option>
-            {subtopics.map((subtopic) => (
-              <option key={subtopic.id} value={subtopic.id}>{subtopic.name}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <QuestionEditorModal
+        open={isModalOpen}
+        title={editingQuestion ? 'Edit Question' : 'Create Question'}
+        initial={initialForm}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSave}
+        submitLabel={editingQuestion ? 'Save Changes' : 'Create Question'}
+      />
     </div>
   );
 }

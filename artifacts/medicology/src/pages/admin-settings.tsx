@@ -4,7 +4,7 @@ import {
   Settings, Palette, BookOpen, UserPlus, Bell, Shield, CreditCard,
   Database, Plug, Save, RotateCcw, Loader2, ChevronRight, Globe, LayoutDashboard,
   FileText, Type, Ruler, Flag, History, Sparkles, Play, Pause, Timer, GitBranch,
-  Trash2, Plus, X,
+  Trash2, Plus, X, Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -16,6 +16,7 @@ import {
   ResolvedResult, OverrideContext,
 } from "@/lib/adminSettings";
 import { apiFetch } from "@/lib/api";
+import { QUESTION_TYPE_LABELS } from "@/components/QuestionEditorModal";
 import { applyBranding } from "@/components/BrandingApplier";
 import { hexToHslTriplet } from "@/components/BrandingApplier";
 
@@ -117,6 +118,7 @@ const GROUPS: { id: SettingsGroup | "history" | "overrides"; label: string; icon
   { id: "animations", label: "Animations", icon: Sparkles, blurb: "Platform-wide motion — always respects prefers-reduced-motion." },
   { id: "featureFlags", label: "Feature Flags", icon: Flag, blurb: "Toggle protected capabilities platform-wide (enforced server-side)." },
   { id: "examSettings", label: "Exam & QBank Defaults", icon: Timer, blurb: "Platform-wide exam behavior — question count, timing, marking, navigation." },
+  { id: "bulkImport", label: "Bulk Import", icon: Upload, blurb: "Import policy — default status, review gate, duplicate strictness, file limits, allowed question types." },
   { id: "overrides", label: "Scoped Overrides", icon: GitBranch, blurb: "University/exam/QBank-specific rules layered over the platform defaults." },
   { id: "history", label: "Activity & History", icon: History, blurb: "Audit trail of settings changes with one-click restore." },
 ];
@@ -347,6 +349,75 @@ function ExamSettingsSection({ draft, set }: { draft: PlatformSettings; set: (pa
       <div className="space-y-2 pt-2">
         {EXAM_KEY_META.filter((m) => m.kind === "boolean").map((m) => <div key={m.key}>{renderControl(m)}</div>)}
       </div>
+    </Card>
+  );
+}
+
+/* ── Bulk Import policy ────────────────────────────────────────────────── */
+
+function BulkImportSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["bulkImport"]>) => void }) {
+  const b = draft.bulkImport;
+  const toggleType = (list: string[], t: string) =>
+    list.includes(t) ? list.filter((x) => x !== t) : [...list, t];
+  return (
+    <Card title="Bulk Import policy" description="Controls the Bulk Import admin page — statuses, review gate, strictness and file limits. Imported questions never skip the Review Queue unless you allow direct publishing.">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Default import status" hint="What new imported questions are set to.">
+          <SelectInput value={b.defaultImportStatus} onChange={(v) => set({ defaultImportStatus: v as any })}
+            options={[
+              { value: "pending_review", label: "Pending review (recommended)" },
+              { value: "draft", label: "Draft" },
+              { value: "published", label: "Published" },
+            ]} />
+        </Field>
+        <Field label="Default difficulty" hint="Applied when a row has no difficulty column.">
+          <SelectInput value={b.defaultDifficulty} onChange={(v) => set({ defaultDifficulty: v as any })}
+            options={[
+              { value: "easy", label: "Easy" },
+              { value: "medium", label: "Medium" },
+              { value: "hard", label: "Hard" },
+            ]} />
+        </Field>
+        <Field label="Duplicate threshold" hint="Higher = stricter duplicate detection (0.5–0.95).">
+          <NumberInput value={b.duplicateThreshold} onChange={(v) => set({ duplicateThreshold: v })} min={0.5} max={0.95} step={0.05} />
+        </Field>
+        <Field label="Max upload size (MB)">
+          <NumberInput value={b.maxFileSizeMB} onChange={(v) => set({ maxFileSizeMB: v })} min={1} max={100} />
+        </Field>
+      </div>
+
+      <div className="grid gap-3 pt-2 sm:grid-cols-2">
+        <Toggle checked={b.requireReviewBeforePublish} onChange={(v) => set({ requireReviewBeforePublish: v })}
+          label="Require review before publish" hint="Any imported 'published' row is downgraded to pending_review and must be approved in the Review Queue." />
+        <Toggle checked={b.autoCreateTaxonomy} onChange={(v) => set({ autoCreateTaxonomy: v })}
+          label="Auto-create missing subjects/topics" hint="Default for the import checkbox — creates taxonomy rows for new subject/system/topic names." />
+        <Toggle checked={b.notifyOnImport} onChange={(v) => set({ notifyOnImport: v })}
+          label="Audit-log imports" hint="Record every bulk import (rows, inserted/skipped counts) in the audit trail." />
+      </div>
+
+      <Field label="Allowed file types">
+        <div className="flex flex-wrap gap-2 pt-1">
+          {["xlsx", "xls", "csv", "tsv"].map((t) => (
+            <button key={t} onClick={() => set({ allowedFileTypes: toggleType(b.allowedFileTypes, t) })}
+              className={cn("rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                b.allowedFileTypes.includes(t) ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted")}>
+              .{t}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Allowed question types" hint="Rows with a disabled type are rejected during validation.">
+        <div className="flex flex-wrap gap-2 pt-1">
+          {Object.entries(QUESTION_TYPE_LABELS).map(([value, label]) => (
+            <button key={value} onClick={() => set({ allowedQuestionTypes: toggleType(b.allowedQuestionTypes, value) })}
+              className={cn("rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                b.allowedQuestionTypes.includes(value) ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted")}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </Field>
     </Card>
   );
 }
@@ -923,6 +994,7 @@ function ActiveSection({ active, draft, setGroup }: {
     case "animations": return <AnimationsSection draft={draft} set={setGroup as any} />;
     case "featureFlags": return <FeatureFlagsSection draft={draft} set={setGroup as any} />;
     case "examSettings": return <ExamSettingsSection draft={draft} set={setGroup as any} />;
+    case "bulkImport": return <BulkImportSection draft={draft} set={setGroup as any} />;
     case "overrides": return <OverridesSection />;
     case "history": return <HistorySection />;
     default: return null;

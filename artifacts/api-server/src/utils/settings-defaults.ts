@@ -108,6 +108,21 @@ export interface FeatureFlagsSettings {
   newExamEngine: boolean; // NEW_EXAM_ENGINE
 }
 
+// Bulk question import policy (Bulk Import admin page). Controls the default
+// status imported questions receive, duplicate-detection strictness, which
+// question types are accepted, and file upload limits.
+export interface BulkImportSettings {
+  defaultImportStatus: 'draft' | 'pending_review' | 'published';
+  requireReviewBeforePublish: boolean;
+  duplicateThreshold: number; // 0.5–0.95 (higher = stricter duplicate detection)
+  autoCreateTaxonomy: boolean;
+  maxFileSizeMB: number;
+  allowedFileTypes: string[]; // xlsx, xls, csv, tsv
+  allowedQuestionTypes: string[]; // subset of QUESTION_TYPES
+  defaultDifficulty: 'easy' | 'medium' | 'hard';
+  notifyOnImport: boolean;
+}
+
 // QBank + exam behavior (plan items 10–11). These are the *platform-wide
 // defaults*; universities/exams and individual QBanks can override them via
 // the scoped-overrides system (see utils/scoped-overrides.ts). Resolution is
@@ -149,6 +164,7 @@ export interface PlatformSettings {
   animations: AnimationsSettings;
   featureFlags: FeatureFlagsSettings;
   examSettings: ExamSettings;
+  bulkImport: BulkImportSettings;
 }
 
 export const DEFAULT_SETTINGS: PlatformSettings = {
@@ -234,6 +250,17 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     delayMs: 0,
     repeat: 'once',
     trigger: 'on_load',
+  },
+  bulkImport: {
+    defaultImportStatus: 'pending_review',
+    requireReviewBeforePublish: true,
+    duplicateThreshold: 0.85,
+    autoCreateTaxonomy: true,
+    maxFileSizeMB: 20,
+    allowedFileTypes: ['xlsx', 'xls', 'csv', 'tsv'],
+    allowedQuestionTypes: ['sba', 'best_of_five', 'true_false', 'assertion_reason', 'emq', 'image_based', 'clinical_vignette', 'case_based'],
+    defaultDifficulty: 'medium',
+    notifyOnImport: true,
   },
   examSettings: {
     trialQuestions: 10,

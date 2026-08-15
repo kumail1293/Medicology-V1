@@ -430,6 +430,45 @@ no duplicate systems.
 
 ------------------------------------------------------------------------
 
+## P0.5.12 ✅ Bulk import upgrade: templates + per-row editing (shipped)
+
+-   **Templates per type**: Admin → Bulk Import → Download template gives a
+    downloadable `.xlsx` with every supported column as headers, one fully
+    filled example row per question type (SBA, Best-of-five, True/False,
+    Assertion/Reason, EMQ, Image-based, Clinical vignette, Case-based), and
+    a Guide sheet explaining exactly where to put what. The type dropdown
+    filters to a per-type template. (`GET /api/admin/import/template`)
+-   **Type-aware validation**: `validateRow` now checks per-type layout —
+    True/False needs exactly Option A (True) + Option B (False) with a
+    True/False answer; Assertion/Reason needs both Assertion and Reason
+    text with a classic A–E answer; standard MCQs need ≥4 options and a
+    valid A–E answer. Structured explanations (Why Correct, Why Wrong,
+    Exam Pearl, Common Trap) map from their columns.
+-   **Per-row editing before import**: every preview row has an **Edit**
+    button that opens the same rich question editor used for individual
+    questions (question text via the rich-text editor with media picker,
+    options, answer, structured explanations, taxonomy). Edits apply back
+    to the preview in-memory; nothing is written until the admin imports.
+-   **Review-gated import**: imports land in the Review Queue, never
+    straight into the QBank — with a "Review imported questions" CTA after
+    a successful import. Imported questions use the configured default
+    status (pending_review by default) and can be edited again from the
+    Review Queue.
+-   **Bulk Import settings group** (Admin → Settings → Bulk Import):
+    default import status, default difficulty, duplicate threshold,
+    max upload size, allowed file types, review-before-publish gate,
+    auto-create taxonomy, audit-logging of imports — all zod-validated,
+    read live by the importer (file limits + allowed types + validation
+    policy).
+-   Fixed: the import page used raw `fetch()` and relied on the
+    `window.fetch` auth patch; it now uses `apiFetch` like every other
+    admin page. Also fixed a column misalignment in the template's example
+    rows (6 of 8 rows had their Correct Answer one slot off, which broke
+    validation for those question types).
+-   Deferred next: coming-soon catalogue, granular admin roles.
+
+------------------------------------------------------------------------
+
 ------------------------------------------------------------------------
 
 # Phase P1 --- Examination Engine

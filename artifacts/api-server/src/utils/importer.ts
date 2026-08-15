@@ -13,16 +13,56 @@ import {
 } from '@workspace/db';
 import { ilike, eq } from './drizzle.js';
 import { generateQid, isValidQid } from './qid.js';
-import { QUESTION_STATUSES } from '@workspace/db';
+import { QUESTION_STATUSES, QUESTION_TYPES } from '@workspace/db';
+import type { BulkImportSettings } from './settings-defaults.js';
+import { platformGroup } from './scoped-overrides.js';
 
 // ============================================================================
 // Bulk question import engine.
 //
 // Pipeline:  Excel/CSV → parse → column mapping → validation → duplicate
 // detection → taxonomy mapping → QID generation → preview → execute.
+//
+// Type-aware: the "Question Type" column selects the layout each row must
+// follow — SBA/Best-of-five need 4–5 options, True/False needs exactly
+// True+False, Assertion/Reason uses Assertion/Reason text with no options.
+// Settings-driven: status, difficulty, duplicate threshold, allowed types and
+// file limits come from the admin bulkImport settings group.
 // ============================================================================
 
 export const DIFFICULTIES = ['easy', 'medium', 'hard'];
+
+// Friendly names accepted for the Question Type column → canonical type.
+export const QUESTION_TYPE_ALIASES: Record<string, string> = {
+  sba: 'sba',
+  'single best answer': 'sba',
+  singlebestanswer: 'sba',
+  mcq: 'sba',
+  'best of five': 'best_of_five',
+  bestoffive: 'best_of_five',
+  bof: 'best_of_five',
+  'true false': 'true_false',
+  truefalse: 'true_false',
+  tf: 'true_false',
+  'assertion reason': 'assertion_reason',
+  assertionreason: 'assertion_reason',
+  ar: 'assertion_reason',
+  emq: 'emq',
+  'extended matching': 'emq',
+  'extended matching question': 'emq',
+  'image based': 'image_based',
+  imagebased: 'image_based',
+  image: 'image_based',
+  'clinical vignette': 'clinical_vignette',
+  clinicalvignette: 'clinical_vignette',
+  'case based': 'case_based',
+  casebased: 'case_based',
+};
+
+/** Load the admin bulkImport settings (defaults merged with stored values). */
+export async function loadBulkImportSettings(): Promise<BulkImportSettings> {
+  return platformGroup('bulkImport');
+}
 
 // ---------------------------------------------------------------------------
 // Column mapping — the spreadsheet headers (case/space/punctuation-insensitive)
@@ -31,6 +71,7 @@ export const DIFFICULTIES = ['easy', 'medium', 'hard'];
 
 const HEADER_ALIASES: Record<string, string[]> = {
   qid: ['qid', 'questionid', 'question id'],
+  questionType: ['questiontype', 'question type', 'type', 'format', 'qtype', 'qbanktype', 'qbank type'],
   questionText: ['question', 'questiontext', 'question text', 'stem', 'questionstem', 'question stem', 'mcq'],
   optionA: ['optiona', 'option a', 'answera', 'answer a', 'choicea', 'choice a', 'option1', 'option 1'],
   optionB: ['optionb', 'option b', 'answerb', 'answer b', 'choiceb', 'choice b', 'option2', 'option 2'],
@@ -38,8 +79,13 @@ const HEADER_ALIASES: Record<string, string[]> = {
   optionD: ['optiond', 'option d', 'answerd', 'answer d', 'choiced', 'choice d', 'option4', 'option 4'],
   optionE: ['optione', 'option e', 'answere', 'answer e', 'choicee', 'choice e', 'option5', 'option 5'],
   correctAnswer: ['correctanswer', 'correct answer', 'answerkey', 'answer key', 'correctkey', 'correct key', 'answer'],
-  explanation: ['explanation', 'explanationtext', 'explanation text', 'reason', 'why'],
-  wrongAnswerExplanations: ['wronganswerexplanations', 'wrong answer explanations', 'distractorsexplanations', 'distractor explanations'],
+  assertion: ['assertion', 'assertiontext', 'assertiontext', 'statement'],
+  reason: ['reason', 'reasontext', 'reasontext'],
+  explanation: ['explanation', 'explanationtext', 'explanationtext', 'why'],
+  whyCorrect: ['whycorrect', 'whycorrect', 'whcorrect', 'whycorrectanswer', 'whycorrectanswer'],
+  whyWrong: ['whywrong', 'whywrong', 'whwrong', 'whywronganswer', 'whywronganswer', 'distractorsexplanations', 'distractorsexplanations'],
+  examPearl: ['exampearl', 'exampearl', 'expearl', 'pearl'],
+  commonTrap: ['commontrap', 'commontrap', 'trap', 'pitfall'],
   references: ['reference', 'references', 'source', 'book'],
   subject: ['subject', 'subjectname', 'subject name'],
   system: ['system', 'bodysystem', 'body system', 'organ system'],
@@ -182,9 +228,31 @@ export function parseSpreadsheet(buffer: Buffer, fileName: string): { rows: Pars
 
 const stringValue = (v: any) => (v === undefined || v === null ? '' : String(v));
 
-export function validateRow(parsed: ParsedRow): { messages: string[]; data: Record<string, any> } {
+/** Canonical question type for a row, or undefined when unparseable. */
+export function normalizeQuestionType(raw: any): string | undefined {
+  const value = stringValue(raw).trim().toLowerCase().replace(/[^a-z0-9 ]/g, '');
+  if (!value) return undefined;
+  if (QUESTION_TYPE_ALIASES[value]) return QUESTION_TYPE_ALIASES[value];
+  // Also try the alias table keys directly (e.g. "best_of_five" → best_of_five).
+  const direct = QUESTION_TYPE_ALIASES[value.replace(/[ _-]+/g, '')];
+  return direct ?? (QUESTION_TYPES.includes(value as any) ? value : undefined);
+}
+
+export function validateRow(parsed: ParsedRow, opts: { allowedQuestionTypes?: string[]; defaultDifficulty?: string } = {}): { messages: string[]; data: Record<string, any> } {
   const messages: string[] = [];
   const data: Record<string, any> = { ...parsed.data };
+
+  // Question type (optional — defaults to SBA).
+  const rawType = stringValue(data.questionType);
+  const questionType = normalizeQuestionType(rawType);
+  if (rawType && !questionType) {
+    messages.push(`Unknown question type "${rawType}" — expected one of: ${QUESTION_TYPES.join(', ')}`);
+  } else {
+    data.questionType = questionType || 'sba';
+  }
+  if (data.questionType && opts.allowedQuestionTypes && !opts.allowedQuestionTypes.includes(data.questionType)) {
+    messages.push(`Question type "${data.questionType}" is disabled in the bulk import settings`);
+  }
 
   // Required: question text
   const questionText = stringValue(data.questionText);
@@ -194,7 +262,13 @@ export function validateRow(parsed: ParsedRow): { messages: string[]; data: Reco
     data.questionText = questionText;
   }
 
-  // Options: at least 4 non-empty; map into the {A,B,C,D,E} shape.
+  // Assertion / Reason text (used by assertion_reason).
+  const assertion = stringValue(data.assertion);
+  const reason = stringValue(data.reason);
+  if (assertion) data.assertion = assertion;
+  if (reason) data.reason = reason;
+
+  // Options: layout depends on the question type.
   const options: Record<string, string> = {};
   let optionCount = 0;
   for (const key of OPTION_KEYS) {
@@ -204,25 +278,64 @@ export function validateRow(parsed: ParsedRow): { messages: string[]; data: Reco
       optionCount++;
     }
   }
-  if (optionCount < 4) {
-    messages.push(`Only ${optionCount} option(s) provided — at least 4 required`);
-  }
-  if (optionCount > 0) {
-    data.options = options;
-  }
 
-  // Correct answer: must be a letter referencing a non-empty option.
-  const correctAnswer = stringValue(data.correctAnswer).trim().toUpperCase();
-  if (correctAnswer) {
-    if (!OPTION_LETTERS.includes(correctAnswer)) {
-      messages.push(`Correct answer "${data.correctAnswer}" must be one of A–E`);
-    } else if (!options[correctAnswer]) {
-      messages.push(`Correct answer is ${correctAnswer} but option ${correctAnswer} is empty`);
+  if (data.questionType === 'true_false') {
+    // True/False: exactly the two standard options.
+    if (optionCount === 0) {
+      options.A = 'True';
+      options.B = 'False';
+    } else if (!(options.A && options.B) || optionCount > 2) {
+      messages.push(`True/False questions need exactly Option A (True) and Option B (False)`);
+    }
+    data.options = { A: options.A ?? 'True', B: options.B ?? 'False' };
+    const correctAnswer = stringValue(data.correctAnswer).trim().toUpperCase();
+    const normalizedTF = correctAnswer === 'T' || correctAnswer === 'TRUE' ? 'A' : correctAnswer === 'F' || correctAnswer === 'FALSE' ? 'B' : correctAnswer;
+    if (!correctAnswer) {
+      messages.push('Missing correct answer (True or False)');
+    } else if (normalizedTF !== 'A' && normalizedTF !== 'B') {
+      messages.push(`Correct answer "${data.correctAnswer}" must be True or False`);
     } else {
+      data.correctAnswer = normalizedTF;
+    }
+  } else if (data.questionType === 'assertion_reason') {
+    // Assertion/Reason: assertion + reason text; classic 5-option layout (A–E).
+    if (assertion && reason) {
+      data.options = {
+        A: 'Both assertion and reason are true, and reason is the correct explanation',
+        B: 'Both assertion and reason are true, but reason is NOT the correct explanation',
+        C: 'Assertion is true but reason is false',
+        D: 'Assertion is false but reason is true',
+        E: 'Both assertion and reason are false',
+      };
+    } else {
+      messages.push('Assertion/Reason questions need both Assertion and Reason text');
+    }
+    const correctAnswer = stringValue(data.correctAnswer).trim().toUpperCase();
+    if (correctAnswer && OPTION_LETTERS.includes(correctAnswer)) {
       data.correctAnswer = correctAnswer;
+    } else if (correctAnswer) {
+      messages.push(`Correct answer "${data.correctAnswer}" must be one of A–E`);
+    } else {
+      messages.push('Missing correct answer (A–E)');
     }
   } else {
-    messages.push('Missing correct answer');
+    // Standard MCQ layouts (SBA, best-of-five, EMQ, image-based, vignette, case).
+    if (optionCount < 4) {
+      messages.push(`Only ${optionCount} option(s) provided — at least 4 required`);
+    }
+    if (optionCount > 0) data.options = options;
+    const correctAnswer = stringValue(data.correctAnswer).trim().toUpperCase();
+    if (correctAnswer) {
+      if (!OPTION_LETTERS.includes(correctAnswer)) {
+        messages.push(`Correct answer "${data.correctAnswer}" must be one of A–E`);
+      } else if (!options[correctAnswer]) {
+        messages.push(`Correct answer is ${correctAnswer} but option ${correctAnswer} is empty`);
+      } else {
+        data.correctAnswer = correctAnswer;
+      }
+    } else {
+      messages.push('Missing correct answer');
+    }
   }
 
   // Explanation — recommended but not required.
@@ -240,6 +353,8 @@ export function validateRow(parsed: ParsedRow): { messages: string[]; data: Reco
     } else {
       data.difficulty = difficulty;
     }
+  } else if (opts.defaultDifficulty) {
+    data.difficulty = opts.defaultDifficulty;
   }
 
   // Status
@@ -438,6 +553,8 @@ export async function resolveTaxonomy(data: Record<string, any>): Promise<Taxono
 export async function buildImportPreview(buffer: Buffer, fileName: string): Promise<ImportPreview> {
   const { rows, columnMapping } = parseSpreadsheet(buffer, fileName);
   const index = await loadQuestionIndex();
+  const settings = await loadBulkImportSettings();
+  const duplicateThreshold = settings.duplicateThreshold ?? 0.85;
 
   // Sequential QIDs for the preview: starts at the next free number and
   // increments per new row so every row shows the QID it would receive.
@@ -456,7 +573,10 @@ export async function buildImportPreview(buffer: Buffer, fileName: string): Prom
   const results: ImportRowResult[] = [];
 
   for (const parsed of rows) {
-    const { messages, data } = validateRow(parsed);
+    const { messages, data } = validateRow(parsed, {
+      allowedQuestionTypes: settings.allowedQuestionTypes,
+      defaultDifficulty: settings.defaultDifficulty,
+    });
     const result: ImportRowResult = {
       ...parsed,
       data,
@@ -484,10 +604,10 @@ export async function buildImportPreview(buffer: Buffer, fileName: string): Prom
       }
     }
 
-    // Duplicate detection
+    // Duplicate detection (threshold from the bulkImport settings)
     if (data.questionText) {
       const duplicate = findDuplicate(data.questionText, index);
-      if (duplicate && duplicate.score >= DUPLICATE_THRESHOLD) {
+      if (duplicate && duplicate.score >= duplicateThreshold) {
         result.status = 'duplicate';
         result.existingId = duplicate.existing.id;
         result.similarity = Math.round(duplicate.score * 100);
@@ -509,6 +629,10 @@ export async function buildImportPreview(buffer: Buffer, fileName: string): Prom
       m.startsWith('Correct answer') ||
       m.startsWith('Difficulty') ||
       m.startsWith('Status') ||
+      m.startsWith('Unknown question type') ||
+      m.startsWith('True/False questions need') ||
+      m.startsWith('Assertion/Reason questions need') ||
+      m.includes('is disabled in the bulk import settings') ||
       m.includes('invalid format')
     );
     if (hasHardError) {
@@ -561,6 +685,7 @@ export async function executeImport(req: ImportExecuteRequest): Promise<{ insert
   const errors: string[] = [];
   let inserted = 0;
   let skipped = 0;
+  const settings = await loadBulkImportSettings();
 
   const eligible = req.rows.filter((row) => row.status === 'valid' || row.status === 'similar' || (req.includeDuplicates && row.status === 'duplicate'));
 
@@ -571,14 +696,22 @@ export async function executeImport(req: ImportExecuteRequest): Promise<{ insert
 
       // Required content
       values.questionText = stringValue(data.questionText);
+      values.questionType = data.questionType || 'sba';
       values.options = data.options ?? {};
       values.correctAnswer = stringValue(data.correctAnswer);
       values.explanation = stringValue(data.explanation) || '';
-      values.difficulty = data.difficulty || 'medium';
+      values.difficulty = data.difficulty || settings.defaultDifficulty || 'medium';
       values.tags = data.tags ?? [];
 
+      // Structured explanations (P1 fields) — optional passthrough.
+      for (const field of ['whyCorrect', 'whyWrong', 'examPearl', 'commonTrap']) {
+        if (data[field] !== undefined && data[field] !== '') values[field] = data[field];
+      }
+      if (data.assertion) values.assertion = stringValue(data.assertion);
+      if (data.reason) values.reason = stringValue(data.reason);
+
       // Optional passthrough fields
-      for (const field of ['imageUrl', 'explanationImageUrl', 'wrongAnswerExplanations', 'references', 'subject', 'system', 'topic', 'subtopic', 'universityTag', 'examType']) {
+      for (const field of ['imageUrl', 'explanationImageUrl', 'references', 'subject', 'system', 'topic', 'subtopic', 'universityTag', 'examType']) {
         if (data[field] !== undefined && data[field] !== '') values[field] = data[field];
       }
       // Legacy text fields fall back to the raw values so the question always
@@ -602,18 +735,22 @@ export async function executeImport(req: ImportExecuteRequest): Promise<{ insert
 
       // Taxonomy: resolve again at insert time, creating missing entries when asked.
       const taxonomy = await resolveTaxonomy(data);
-      if (req.createMissingTaxonomy) {
+      if (req.createMissingTaxonomy ?? settings.autoCreateTaxonomy) {
         await ensureTaxonomy(data, taxonomy);
       }
       for (const key of ['countryId', 'examId', 'programId', 'yearId', 'subjectId', 'systemId', 'topicId', 'subtopicId'] as const) {
         if (taxonomy[key] !== undefined) values[key] = taxonomy[key];
       }
 
-      // Imported content enters the review pipeline rather than publishing
-      // directly — a human/medical reviewer approves it in the admin Review
-      // Queue before students see it.
-      values.status = data.status || 'pending_review';
-      values.publishedAt = values.status === 'published' ? new Date() : null;
+      // Status policy from the bulkImport settings: imported content defaults
+      // to pending_review (safe), and "require review before publish" forces
+      // every imported question through the admin Review Queue.
+      let status = data.status || settings.defaultImportStatus || 'pending_review';
+      if (settings.requireReviewBeforePublish && status === 'published') {
+        status = 'pending_review';
+      }
+      values.status = status;
+      values.publishedAt = status === 'published' ? new Date() : null;
 
       await db.insert(questionsTable).values(values);
       inserted++;

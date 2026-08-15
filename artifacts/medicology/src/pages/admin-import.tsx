@@ -1,7 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, XCircle, Copy, Layers, Trash2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, XCircle, Copy, Layers, Trash2, Pencil, Download, ExternalLink, FileDown } from 'lucide-react';
 import { clsx } from 'clsx';
+import { apiFetch } from '@/lib/api';
+import QuestionEditorModal, { QuestionFormState, QUESTION_TYPE_LABELS } from '@/components/QuestionEditorModal';
 
 interface ImportRowData {
   [key: string]: any;
@@ -39,17 +41,59 @@ const STATUS_STYLES: Record<ImportRow['status'], { label: string; className: str
   error: { label: 'Error', className: 'bg-red-500/15 text-red-600' },
 };
 
+const TEMPLATE_TYPES: { value: string; label: string }[] = [
+  { value: '', label: 'Full template (all types)' },
+  ...Object.entries(QUESTION_TYPE_LABELS).map(([value, label]) => ({ value, label })),
+];
+
+/** Build an editor form from a parsed import row (both validated `options`
+ * shape and raw optionA..E columns are handled). */
+function formFromImportData(data: ImportRowData): QuestionFormState {
+  const opts: Record<string, string> = data.options && typeof data.options === 'object' ? data.options : {};
+  const answer = String(data.correctAnswer ?? '').toUpperCase();
+  return {
+    questionText: data.questionText || '',
+    questionType: data.questionType || 'sba',
+    subject: data.subject || '',
+    system: data.system || '',
+    topic: data.topic || '',
+    subtopic: data.subtopic || '',
+    universityTag: data.universityTag || '',
+    explanation: data.explanation || '',
+    whyCorrect: data.whyCorrect || '',
+    whyWrong: data.whyWrong || '',
+    examPearl: data.examPearl || '',
+    commonTrap: data.commonTrap || '',
+    assertion: data.assertion || '',
+    reason: data.reason || '',
+    correctAnswer: (['A', 'B', 'C', 'D', 'E'].includes(answer) ? answer as any : 'A'),
+    optionA: opts.A ?? data.optionA ?? '',
+    optionB: opts.B ?? data.optionB ?? '',
+    optionC: opts.C ?? data.optionC ?? '',
+    optionD: opts.D ?? data.optionD ?? '',
+    optionE: opts.E ?? data.optionE ?? '',
+    difficulty: data.difficulty || 'medium',
+    examType: data.examType || '',
+    tags: Array.isArray(data.tags) ? data.tags.join(', ') : (data.tags || ''),
+    isFree: Boolean(data.isFree),
+  };
+}
+
 export default function AdminImportPage() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [filter, setFilter] = useState<'all' | 'valid' | 'similar' | 'duplicate' | 'error'>('all');
   const [includeDuplicates, setIncludeDuplicates] = useState(false);
   const [createMissingTaxonomy, setCreateMissingTaxonomy] = useState(true);
+  const [templateType, setTemplateType] = useState('');
+  // Row editor (reuses the individual-question editor).
+  const [editingRow, setEditingRow] = useState<ImportRow | null>(null);
 
   const handleFileChange = (selected: File | null) => {
     if (!selected) return;
@@ -70,7 +114,7 @@ export default function AdminImportPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const response = await fetch('/api/admin/import/preview', { method: 'POST', body: formData });
+      const response = await apiFetch('/api/admin/import/preview', { method: 'POST', body: formData });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Preview failed');
       setPreview(data as ImportPreview);
@@ -81,11 +125,36 @@ export default function AdminImportPage() {
     }
   };
 
+  const downloadTemplate = async (type?: string) => {
+    setDownloading(true);
+    try {
+      const url = `/api/admin/import/template${type ? `?type=${encodeURIComponent(type)}` : ''}`;
+      const response = await apiFetch(url);
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Template download failed');
+      }
+      const blob = await response.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `medicology-import-template${type ? `-${type}` : ''}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+      toast({ title: 'Template ready', description: 'Open the .xlsx — the Template sheet has headers + example rows, the Guide sheet explains every column.' });
+    } catch (error) {
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Template download failed', variant: 'destructive' });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const runImport = async () => {
     if (!preview) return;
     setImporting(true);
     try {
-      const response = await fetch('/api/admin/import/execute', {
+      const response = await apiFetch('/api/admin/import/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -112,6 +181,29 @@ export default function AdminImportPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  /** Apply an edited row back into the preview (no server write yet — the
+   * admin reviews/polishes rows BEFORE they enter the QBank). */
+  const applyRowEdit = (payload: Record<string, any>) => {
+    if (!preview || !editingRow) return;
+    const updated = preview.rows.map((row) => {
+      if (row.rowNumber !== editingRow.rowNumber) return row;
+      const data = { ...row.data, ...payload };
+      const messages: string[] = [];
+      if (!data.questionText) messages.push('Missing question text');
+      return {
+        ...row,
+        data,
+        status: ('valid' as ImportRow['status']),
+        messages,
+        similarity: undefined,
+        existingId: undefined,
+      };
+    });
+    setPreview({ ...preview, rows: updated });
+    setEditingRow(null);
+    toast({ title: 'Row updated', description: `Row ${editingRow.rowNumber} will be imported with your edits.` });
+  };
+
   const importable = preview
     ? preview.rows.filter((row) => row.status === 'valid' || row.status === 'similar' || (includeDuplicates && row.status === 'duplicate')).length
     : 0;
@@ -130,8 +222,42 @@ export default function AdminImportPage() {
       <div>
         <h2 className="text-3xl font-bold">Bulk Import</h2>
         <p className="text-sm text-muted-foreground">
-          Upload an Excel/CSV question bank. The pipeline validates each row, detects duplicates, maps the taxonomy and assigns QIDs before you publish.
+          Download a template, fill it with questions, then validate, edit and review every row before it enters the QBank.
         </p>
+      </div>
+
+      {/* Templates */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h3 className="flex items-center gap-2 font-semibold"><FileDown size={18} className="text-primary" /> Templates for every question type</h3>
+            <p className="text-sm text-muted-foreground">
+              Each template has every column with an example row showing exactly where to put what — plus a Guide sheet with instructions.
+            </p>
+          </div>
+          <div className="flex items-end gap-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Template</label>
+              <select
+                value={templateType}
+                onChange={(e) => setTemplateType(e.target.value)}
+                className="w-56 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              >
+                {TEMPLATE_TYPES.map((t) => (
+                  <option key={t.value || 'all'} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={() => void downloadTemplate(templateType || undefined)}
+              disabled={downloading}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+            >
+              <Download size={15} />
+              {downloading ? 'Preparing…' : 'Download template'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Upload */}
@@ -148,7 +274,7 @@ export default function AdminImportPage() {
             <FileSpreadsheet size={40} className="text-muted-foreground" />
             <div>
               <p className="font-medium">Click to choose a spreadsheet</p>
-              <p className="text-sm text-muted-foreground">.xlsx, .xls, .csv or .tsv — headers like Question, Option A–E, Correct Answer, Subject, Topic…</p>
+              <p className="text-sm text-muted-foreground">.xlsx, .xls, .csv or .tsv — Question, Option A–E, Correct Answer, Subject, Topic…</p>
             </div>
           </button>
         ) : (
@@ -244,6 +370,7 @@ export default function AdminImportPage() {
                   <th className="px-4 py-2 font-medium">Question</th>
                   <th className="px-4 py-2 font-medium">Subject / Topic</th>
                   <th className="px-4 py-2 font-medium">Notes</th>
+                  <th className="px-4 py-2 font-medium"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -265,6 +392,11 @@ export default function AdminImportPage() {
                       <td className="px-4 py-2 font-mono text-xs text-primary">{row.qid ?? '—'}</td>
                       <td className="max-w-[320px] px-4 py-2">
                         <p className="line-clamp-2">{row.data.questionText || '—'}</p>
+                        {row.data.questionType && row.data.questionType !== 'sba' && (
+                          <span className="mt-1 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                            {QUESTION_TYPE_LABELS[row.data.questionType] || row.data.questionType}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">
                         {[row.data.subject, row.data.system, row.data.topic, row.data.subtopic].filter(Boolean).join(' → ') || '—'}
@@ -282,6 +414,15 @@ export default function AdminImportPage() {
                           <span className="text-emerald-600">OK</span>
                         )}
                       </td>
+                      <td className="px-4 py-2">
+                        <button
+                          onClick={() => setEditingRow(row)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:text-primary"
+                          title="Edit this row with the full question editor before importing"
+                        >
+                          <Pencil size={13} /> Edit
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -294,6 +435,7 @@ export default function AdminImportPage() {
             <p className="text-sm text-muted-foreground">
               {importable} question(s) ready to import
               {includeDuplicates ? ' (duplicates included)' : ''}
+              {' '}— edit any row first; imports land in the review queue, not straight into the QBank.
             </p>
             <button
               onClick={runImport}
@@ -322,7 +464,27 @@ export default function AdminImportPage() {
               ))}
             </ul>
           )}
+          {result.inserted > 0 && (
+            <a
+              href="/admin/review"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+            >
+              <ExternalLink size={14} /> Review imported questions in the Review Queue
+            </a>
+          )}
         </div>
+      )}
+
+      {/* Row editor — same editor used for individual questions. */}
+      {editingRow && (
+        <QuestionEditorModal
+          open
+          title={`Edit Row ${editingRow.rowNumber} (before import)`}
+          initial={formFromImportData(editingRow.data)}
+          onClose={() => setEditingRow(null)}
+          onSave={applyRowEdit}
+          submitLabel="Apply to Row"
+        />
       )}
     </div>
   );
