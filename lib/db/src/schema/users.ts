@@ -34,6 +34,8 @@ export const usersTable = pgTable("users", {
   studyAim: jsonb("study_aim").$type<StudyAim>().default({}),
   isAdmin: boolean("is_admin").notNull().default(false),
   role: text("role").notNull().default("user"),
+  // Account type slug (user_types) — e.g. "student" | "teacher" | "reviewer" | "institutional_admin"
+  userType: text("user_type").default("student"),
   customPermissions: jsonb("custom_permissions").$type<CustomPermissions>().default({}),
   rewardPoints: integer("reward_points").notNull().default(0),
   notificationPrefs: jsonb("notification_prefs").$type<NotificationPrefs>().default({}),

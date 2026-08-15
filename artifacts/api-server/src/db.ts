@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import * as schema from '@workspace/db/schema';
 import { SEED_QUESTIONS } from './mock-seed.js';
 import { SEED_QBANKS, buildQbankQuestionMapping } from './mock-qbank-seed.js';
+import { PERMISSION_REGISTRY } from './utils/permission-registry.js';
+import { SEED_ACCOUNT_TYPES, SEED_ROLES, SEED_ORGANIZATIONS, SEED_TEAMS } from './utils/rbac-seed.js';
 import {
   SEED_COUNTRIES,
   SEED_EXAM_SYSTEMS,
@@ -58,6 +60,33 @@ if (useSQLite) {
 
   const mockData: Record<string, any[]> = {
     users: [mockAdmin],
+    // RBAC seed — account types, permissions, roles, organizations, teams.
+    user_types: SEED_ACCOUNT_TYPES.map((t: any, i: number) => ({ ...t, status: t.status ?? 'active', id: i + 1, metadata: {}, createdAt: now, updatedAt: now })),
+    permissions: PERMISSION_REGISTRY.map((p: any, i: number) => ({ ...p, id: i + 1, createdAt: now })),
+    roles: SEED_ROLES.map((r: any, i: number) => ({ ...r, id: i + 1, status: 'active', createdBy: null, createdAt: now, updatedAt: now })),
+    role_permissions: (() => {
+      const out: any[] = [];
+      let id = 1;
+      for (const [i, r] of SEED_ROLES.entries()) {
+        const roleId = i + 1;
+        if (r.permissions.includes('*')) {
+          for (const p of PERMISSION_REGISTRY) {
+            out.push({ id: id++, roleId, permissionKey: p.key, grantedBy: null, createdAt: now });
+          }
+        } else {
+          for (const key of r.permissions) {
+            out.push({ id: id++, roleId, permissionKey: key, grantedBy: null, createdAt: now });
+          }
+        }
+      }
+      return out;
+    })(),
+    organizations: SEED_ORGANIZATIONS.map((o: any, i: number) => ({ ...o, id: i + 1, logo: null, status: 'active', parentOrganizationId: null, metadata: {}, createdAt: now, updatedAt: now })),
+    teams: SEED_TEAMS.map((t: any, i: number) => {
+      const org = SEED_ORGANIZATIONS.findIndex((o: any) => o.slug === t.organizationSlug) + 1;
+      return { id: i + 1, name: t.name, slug: t.slug, organizationId: org, description: t.description, metadata: {}, createdAt: now, updatedAt: now };
+    }),
+    user_roles: [{ id: 1, userId: 1, roleId: SEED_ROLES.findIndex((r: any) => r.slug === 'superadmin') + 1, grantedBy: null, createdAt: now }],
     // Seed sample questions so practice/exam/daily flows have content in dev.
     // Each seeded question gets a stable public QID.
     questions: SEED_QUESTIONS.map((q, i) => ({
@@ -126,6 +155,17 @@ if (useSQLite) {
 
   const nextId: Record<string, number> = {
     users: 2,
+    user_types: SEED_ACCOUNT_TYPES.length + 1,
+    permissions: PERMISSION_REGISTRY.length + 1,
+    roles: SEED_ROLES.length + 1,
+    role_permissions: mockData.role_permissions.length + 1,
+    user_roles: 2,
+    user_permissions: 1,
+    organizations: SEED_ORGANIZATIONS.length + 1,
+    teams: SEED_TEAMS.length + 1,
+    team_members: 1,
+    user_scopes: 1,
+    role_scopes: 1,
     questions: SEED_QUESTIONS.length + 1,
     countries: SEED_COUNTRIES.length + 1,
     exam_systems: SEED_EXAM_SYSTEMS.length + 1,

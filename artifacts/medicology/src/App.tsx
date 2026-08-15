@@ -27,6 +27,9 @@ const Analytics        = lazy(() => import("./pages/analytics"));
 const ReviewHub        = lazy(() => import("./pages/review"));
 const AdminDashboard   = lazy(() => import("./pages/admin-dashboard"));
 const AdminUsers       = lazy(() => import("./pages/admin-users"));
+const AdminRoles       = lazy(() => import("./pages/admin-roles"));
+const AdminUserTypes   = lazy(() => import("./pages/admin-user-types"));
+const AdminPermissions = lazy(() => import("./pages/admin-permissions"));
 const AdminQuestions   = lazy(() => import("./pages/admin-questions"));
 const AdminAnnouncements = lazy(() => import("./pages/admin-announcements"));
 const AdminFlags       = lazy(() => import("./pages/admin-flags"));
@@ -150,6 +153,15 @@ function Router() {
         </Route>
         <Route path="/admin/users">
           {() => <AdminRoute component={() => <AdminLayout><AdminUsers /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/roles">
+          {() => <AdminRoute component={() => <AdminLayout><AdminRoles /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/user-types">
+          {() => <AdminRoute component={() => <AdminLayout><AdminUserTypes /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/permissions">
+          {() => <AdminRoute component={() => <AdminLayout><AdminPermissions /></AdminLayout>} />}
         </Route>
         <Route path="/admin/questions">
           {() => <AdminRoute component={() => <AdminLayout><AdminQuestions /></AdminLayout>} />}

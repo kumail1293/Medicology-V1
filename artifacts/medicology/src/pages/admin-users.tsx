@@ -13,7 +13,13 @@ import {
   Shield,
   User,
   Lock,
+  KeyRound,
+  X,
+  Check,
+  Globe,
+  Layers,
 } from 'lucide-react';
+import UserAccessDrawer from '@/components/UserAccessDrawer';
 import { clsx } from 'clsx';
 import { useAuth } from '@/lib/auth';
 
@@ -42,6 +48,7 @@ function UserManagementPage() {
   const [total, setTotal] = useState(0);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [accessUser, setAccessUser] = useState<AdminUser | null>(null);
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('view');
   const [formData, setFormData] = useState({
     name: '',
@@ -376,6 +383,14 @@ function UserManagementPage() {
                       <td className="px-6 py-4 text-sm">
                         <div className="flex items-center gap-2">
                           <button
+                            onClick={() => setAccessUser(user)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-muted hover:text-foreground transition-colors text-muted-foreground"
+                            title="View & manage effective access"
+                          >
+                            <KeyRound size={13} />
+                            Access
+                          </button>
+                          <button
                             onClick={() => openViewModal(user)}
                             className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
                             title="View"
@@ -431,6 +446,14 @@ function UserManagementPage() {
           </>
         )}
       </div>
+
+      {/* Effective access drawer */}
+      {accessUser && (
+        <UserAccessDrawer
+          user={{ id: accessUser.id, name: accessUser.name, email: accessUser.email }}
+          onClose={() => setAccessUser(null)}
+        />
+      )}
 
       {/* User Modal */}
       {showModal && (

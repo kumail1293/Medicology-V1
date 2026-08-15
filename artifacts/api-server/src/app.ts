@@ -21,12 +21,14 @@ import { announcementsRouter } from './routes/announcements.js';
 import { storageRouter } from './routes/storage.js';
 import { flashcardsRouter } from './routes/flashcards.js';
 import { settingsRouter } from './routes/settings.js';
+import { rbacRouter } from './routes/rbac.js';
 import { taxonomyRouter } from './routes/taxonomy.js';
 import { importRouter } from './routes/import.js';
 import { paymentsRouter } from './routes/payments.js';
 import { comingSoonRouter, comingSoonAdminRouter } from './routes/coming-soon.js';
 import { emailRouter } from './routes/email.js';
 import { seedEmailTemplates } from './utils/seed-email-templates.js';
+import { seedRbac } from './utils/seed-rbac.js';
 import { startEntitlementSweeper } from './utils/entitlement-sweeper.js';
 import { testConnection } from './db.js';
 import { errorHandler } from './utils/errors.js';
@@ -147,6 +149,7 @@ app.use('/api/flashcards', flashcardsRouter);
 app.use('/api/coming-soon', comingSoonRouter);
 app.use('/api/admin/coming-soon', comingSoonAdminRouter);
 app.use('/api/admin/email', emailRouter);
+app.use('/api/admin/rbac', rbacRouter);
 app.use('/api', settingsRouter);
 
 // 404 handler
@@ -171,6 +174,12 @@ if (!process.env.VERCEL) {
       if (seeded > 0) console.log(`📧 Seeded ${seeded} default email templates`);
     } catch (err: any) {
       console.warn('Email template seeding skipped:', err.message);
+    }
+    try {
+      const rbacSeeded = await seedRbac();
+      if (rbacSeeded > 0) console.log('🔐 Seeded RBAC (permissions, account types, roles)');
+    } catch (err: any) {
+      console.warn('RBAC seeding skipped:', err.message);
     }
     startEntitlementSweeper();
     app.listen(PORT, () => {

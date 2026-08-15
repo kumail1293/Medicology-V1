@@ -61,7 +61,7 @@ tests) — see commit history for the audit trail:
 | Maintenance mode | `[COMPLETED]` | server-side 503 + admin bypass + premium page |
 | Announcements + templates | `[COMPLETED]` | types, scheduling, targeting, templates, animations |
 | Audit logging + viewer | `[COMPLETED]` | actor, action, entity, old/new diff, IP; secrets never logged; Admin → Audit Logs viewer with filters + diff |
-| Granular RBAC | `[COMPLETED]` | role → permission matrix, `requirePermission` on sensitive routes, permission-aware nav |
+| Granular RBAC | `[COMPLETED]` | **Administration 2.0**: DB-driven account types, roles, permission registry (52 keys / 11 groups), organizations & teams, access scopes, effective-authorization engine (`can()` — roles + account type + direct grants − explicit denials, server-enforced), Role Builder, Account Type manager, Permission Matrix, per-user Effective Access drawer |
 | Configuration registry (per-key metadata) | `[COMPLETED]` | per-key metadata (group/type/default/validation/scopes/public/audit) + `/admin/settings/registry` |
 | Email infrastructure + template builder | `[COMPLETED]` | SMTP/log mailer, secret-safe storage, DB templates with versions, visual block builder, device preview, test-send, send logs, **transactional sends** + 17 seeded templates; **medicology.net** branding + **@medicologyworld social icons** in every email |
 | Account configuration | `[COMPLETED]` | profile, password, sessions (track/revoke/revoke-all, middleware-enforced), login history, notification prefs, data export, deletion |
@@ -78,14 +78,18 @@ types + structured explanations · `0005` announcement templates ·
 `0009` email templates + logs · `0010` user sessions + notification
 prefs · `0011` entitlement `emailNotifiedAt` (transactional expiry emails) ·
 `0012` announcement user targeting (`targetUserIds`) · `0013` user profile
-bio/phone · `0014` user study aim (`studyAim` — AMBOSS-style goal).
+bio/phone · `0014` user study aim (`studyAim` — AMBOSS-style goal) ·
+`0015` RBAC (user_types, permissions, roles, role_permissions,
+user_roles, user_permissions, organizations, teams, team_members,
+user_scopes, role_scopes) + `users.userType`.
 
-Tests: 42 integration tests (settings precedence, overrides, imports,
-media, coming soon, RBAC, email templates/renderer/secret handling,
-sessions/revocation, export/import, audit gating, transactional sends,
-template seeding, forgot/reset password, announcement email, study aim +
-progress reset, announcement user targeting, purchases shape), backend +
-frontend typecheck, production build, 11-check browser QA — all green.
+Tests: 47 integration tests (settings precedence, overrides, imports,
+media, coming soon, RBAC + Administration 2.0, email templates/renderer/
+secret handling, sessions/revocation, export/import, audit gating,
+transactional sends, template seeding, forgot/reset password,
+announcement email, study aim + progress reset, announcement user
+targeting, purchases shape), backend + frontend typecheck, production
+build, 18-check browser QA (RBAC pages + access drawer) — all green.
 
 ------------------------------------------------------------------------
 
@@ -199,6 +203,33 @@ Configuration registry `[IN PROGRESS]` (Phase 1):
     safety keys (maintenance mode, MFA, payment provider) can never be
     overridden.
 -   Admin UI: scoped override editor with provenance badges + Inherit.
+
+## Administration 2.0 — Unified Access & Configuration `[IN PROGRESS]`
+
+Database-driven, layered authorization replacing the flat role-string model:
+
+-   **Account types ≠ roles ≠ permissions ≠ scopes** — `user_types` (registration
+    policy, default role, admin access) · `roles` (system + custom templates) ·
+    `permissions` registry (52 namespaced keys / 11 groups) · `access_scopes`
+    (country → exam → program → year → subject → system → topic → qbank).
+-   **Effective authorization engine** (`utils/authorization.ts`) — resolved per
+    request with deterministic precedence:
+    `explicit denials > direct grants > role permissions > account-type default role > legacy/superadmin`.
+    A denial always wins; `requireCan()` enforces every admin mutation server-side.
+    `hasScope()` supports global/country/…/qbank scoping (taxonomy-parent traversal = follow-up).
+-   **Organizations & teams** — `organizations` (university / exam_authority /
+    institution / content_team / publisher / partner) + `teams` + `team_members`
+    (user → team → role → scope), seeded with UHS / KMU / CPSP / PMDC.
+-   **Admin UI** — `/admin/roles` Role Builder (permission matrix, enable-all,
+    duplicate, archive, system-role protection) · `/admin/user-types` Account
+    Type manager · `/admin/permissions` Permission Matrix viewer · upgraded
+    `/admin/users` with an **Effective Access** drawer (account type, role
+    assignment, direct grants/denials, scope builder, resolved permissions with
+    provenance). All mutations audited.
+-   Seeded identically in mock DB and PostgreSQL (`utils/seed-rbac.ts`, idempotent).
+-   **Remaining (next phases):** taxonomy-parent scope traversal, team-scoped
+    assignment UI, permission preview for arbitrary role combos, 2FA readiness,
+    configuration snapshots/import-export polish, system health page.
 
 ## P0.14 Branding `[PARTIAL]`
 

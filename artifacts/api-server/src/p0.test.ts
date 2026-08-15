@@ -39,8 +39,8 @@ async function registerUser(email: string) {
   return { token: data.token as string, user: data.user as { id: number } };
 }
 
-const json = (headers: Record<string, string>, body?: unknown): RequestInit => ({
-  method: body === undefined ? 'GET' : 'POST',
+const json = (headers: Record<string, string>, body?: unknown, method?: string): RequestInit => ({
+  method: method ?? (body === undefined ? 'GET' : 'POST'),
   headers: { 'Content-Type': 'application/json', ...headers },
   body: body === undefined ? undefined : JSON.stringify(body),
 });
@@ -1698,40 +1698,40 @@ test('PUT /me/aim sets an aim and resets progress when changed', async () => {
     name: 'Aim Tester', email: `aim${Date.now()}@medicology.net`, password: 'AimPass123',
     college: 'Test', year: 'Year 1',
   }));
-  const { token } = await reg.json();
+  const { token } = (await reg.json()) as any;
 
   const set = async (body: any) =>
     fetch(`${BASE}/auth/me/aim`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
 
   const r1 = await set({ targetExam: 'UHS MBBS 1st Year', dailyQuestions: 40 });
-  const d1 = await r1.json();
+  const d1 = (await r1.json()) as any;
   assert.equal(r1.status, 200);
   assert.equal(d1.aim.targetExam, 'UHS MBBS 1st Year');
   assert.equal(d1.progressReset, false, 'first aim set should not reset');
 
   const r2 = await set({ targetExam: 'FCPS Part 1', dailyQuestions: 60 });
-  const d2 = await r2.json();
+  const d2 = (await r2.json()) as any;
   assert.equal(d2.progressReset, true, 'changing aim resets progress');
 
   const r3 = await set({ targetExam: 'FCPS Part 1', dailyQuestions: 60 });
-  const d3 = await r3.json();
+  const d3 = (await r3.json()) as any;
   assert.equal(d3.progressReset, false, 'unchanged aim should not reset');
 
   const get = await fetch(`${BASE}/auth/me/aim`, { headers: { Authorization: `Bearer ${token}` } });
-  const dg = await get.json();
+  const dg = (await get.json()) as any;
   assert.equal(dg.aim.targetExam, 'FCPS Part 1');
   assert.equal(dg.aim.dailyQuestions, 60);
 });
 
 test('announcements support user-specific targeting in /active', async () => {
   const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
-  const adminToken = (await adminLogin.json()).token;
+  const adminToken = ((await adminLogin.json()) as any).token;
 
   const reg = await fetch(`${BASE}/auth/register`, json({}, {
     name: 'Target User', email: `target${Date.now()}@medicology.net`, password: 'Target123',
     college: 'Test', year: 'Year 2',
   }));
-  const { token, user } = await reg.json();
+  const { token, user } = (await reg.json()) as any;
 
   // Create a user-specific announcement aimed at the new user.
   const create = await fetch(`${BASE}/announcements`, json({ Authorization: `Bearer ${adminToken}` }, {
@@ -1739,11 +1739,11 @@ test('announcements support user-specific targeting in /active', async () => {
     targetUserIds: [user.id], isActive: true,
   }));
   assert.equal(create.status, 201);
-  const ann = await create.json();
+  const ann = (await create.json()) as any;
 
   // The targeted user sees it.
   const mine = await fetch(`${BASE}/announcements/active`, { headers: { Authorization: `Bearer ${token}` } });
-  const mineData = await mine.json();
+  const mineData = (await mine.json()) as any;
   assert.ok(mineData.announcements.some((a: any) => a.id === ann.id), 'targeted user should see the announcement');
 
   // Another user does not.
@@ -1751,9 +1751,9 @@ test('announcements support user-specific targeting in /active', async () => {
     name: 'Other User', email: `other${Date.now()}@medicology.net`, password: 'Other123',
     college: 'Test', year: 'Year 3',
   }));
-  const token2 = (await reg2.json()).token;
+  const token2 = ((await reg2.json()) as any).token;
   const other = await fetch(`${BASE}/announcements/active`, { headers: { Authorization: `Bearer ${token2}` } });
-  const otherData = await other.json();
+  const otherData = (await other.json()) as any;
   assert.ok(!otherData.announcements.some((a: any) => a.id === ann.id), 'other users should NOT see it');
 });
 
@@ -1762,17 +1762,137 @@ test('/api/qbanks/my returns purchases with catalogueIds for the create-test wiz
     name: 'Buyer', email: `buyer${Date.now()}@medicology.net`, password: 'Buyer123',
     college: 'Test', year: 'Year 4',
   }));
-  const { token, user } = await reg.json();
+  const { token, user } = (await reg.json()) as any;
 
   // Grant an entitlement directly for UHS MBBS 1st Year (qbank id 1).
   const { grantEntitlement } = await import('./utils/entitlements.js');
   await grantEntitlement({ userId: user.id, qbankId: 1, source: 'complimentary', durationDays: 30, orderRef: 'ORD-AIM-1' });
 
   const res = await fetch(`${BASE}/qbanks/my`, { headers: { Authorization: `Bearer ${token}` } });
-  const data = await res.json();
+  const data = (await res.json()) as any;
   assert.ok(Array.isArray(data.purchases), 'purchases array present');
   const purchased = data.purchases.find((p: any) => p.qbankId === 1);
   assert.ok(purchased, 'has the granted qbank');
   assert.equal(purchased.catalogueId, 'uhs_mbbs_1st_year');
   assert.equal(purchased.qbankType, 'uhs-mbbs-1st-year');
+});
+
+// ---------------------------------------------------------------------------
+// Administration 2.0 — RBAC, account types, roles, scopes, effective access
+// ---------------------------------------------------------------------------
+
+test('RBAC: seeded account types, roles and permissions exist', async () => {
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const { token } = (await login.json()) as any;
+
+  const types = await (await fetch(`${BASE}/admin/rbac/user-types`, { headers: { Authorization: `Bearer ${token}` } })).json() as any;
+  assert.ok(types.userTypes.length >= 10, 'at least 10 account types seeded');
+  assert.ok(types.userTypes.some((t: any) => t.slug === 'student'));
+  assert.ok(types.userTypes.some((t: any) => t.slug === 'superadmin'));
+
+  const roles = await (await fetch(`${BASE}/admin/rbac/roles`, { headers: { Authorization: `Bearer ${token}` } })).json() as any;
+  assert.ok(roles.roles.some((r: any) => r.slug === 'superadmin' && r.permissions.length > 40), 'superadmin holds all permissions');
+  assert.ok(roles.roles.some((r: any) => r.slug === 'qbank_manager' && r.permissions.includes('qbanks.publish')));
+
+  const perms = await (await fetch(`${BASE}/admin/rbac/permissions`, { headers: { Authorization: `Bearer ${token}` } })).json() as any;
+  assert.ok(perms.permissions.some((p: any) => p.key === 'questions.publish'));
+  assert.ok(perms.groups.includes('Questions'));
+});
+
+test('RBAC: student cannot access admin RBAC; superadmin can create a role', async () => {
+  const reg = await fetch(`${BASE}/auth/register`, json({}, {
+    name: 'Plain Student', email: `plain${Date.now()}@medicology.net`, password: 'Plain123',
+    college: 'Test', year: 'Year 1',
+  }));
+  const { token } = (await reg.json()) as any;
+  const denied = await fetch(`${BASE}/admin/rbac/roles`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(denied.status, 403, 'student blocked from admin RBAC');
+
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const create = await fetch(`${BASE}/admin/rbac/roles`, json({ Authorization: `Bearer ${adminToken}` }, {
+    name: 'QA Temp Role', slug: `qa_temp_${Date.now()}`,
+    description: 'created by test', permissions: ['questions.view', 'media.view'],
+  }));
+  assert.equal(create.status, 201);
+  const { role } = (await create.json()) as any;
+  assert.ok(role.permissions.includes('questions.view'));
+});
+
+test('RBAC: role assignment + effective permissions on a user', async () => {
+  const reg = await fetch(`${BASE}/auth/register`, json({}, {
+    name: 'Scoped Reviewer', email: `scoped${Date.now()}@medicology.net`, password: 'Scoped123',
+    college: 'Test', year: 'Year 4',
+  }));
+  const { user } = (await reg.json()) as any;
+
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+
+  // Find the question_reviewer role id and assign it.
+  const roles = await (await fetch(`${BASE}/admin/rbac/roles`, { headers: { Authorization: `Bearer ${adminToken}` } })).json() as any;
+  const reviewer = roles.roles.find((r: any) => r.slug === 'question_reviewer');
+  assert.ok(reviewer, 'question_reviewer role exists');
+
+  const assign = await fetch(`${BASE}/admin/rbac/users/${user.id}/roles`, json({ Authorization: `Bearer ${adminToken}` }, { roleIds: [reviewer.id] }, 'PUT'));
+  assert.equal(assign.status, 200);
+
+  // The user's effective access should now include questions.review + publish.
+  const access = await (await fetch(`${BASE}/admin/rbac/users/${user.id}/access`, { headers: { Authorization: `Bearer ${adminToken}` } })).json() as any;
+  assert.ok(access.effective.roles.includes('question_reviewer'), 'role attached');
+  assert.ok(access.effective.grantedPermissions.includes('questions.review'));
+  assert.ok(access.effective.grantedPermissions.includes('questions.publish'));
+  assert.ok(!access.effective.grantedPermissions.includes('users.manage'), 'no admin perms leaked');
+});
+
+test('RBAC: explicit denial beats role grant; scopes attach', async () => {
+  const reg = await fetch(`${BASE}/auth/register`, json({}, {
+    name: 'Denied User', email: `denied${Date.now()}@medicology.net`, password: 'Denied123',
+    college: 'Test', year: 'Year 3',
+  }));
+  const { user } = (await reg.json()) as any;
+
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+
+  const roles = await (await fetch(`${BASE}/admin/rbac/roles`, { headers: { Authorization: `Bearer ${adminToken}` } })).json() as any;
+  const manager = roles.roles.find((r: any) => r.slug === 'qbank_manager');
+  await fetch(`${BASE}/admin/rbac/users/${user.id}/roles`, json({ Authorization: `Bearer ${adminToken}` }, { roleIds: [manager.id] }, 'PUT'));
+
+  // Deny qbanks.publish explicitly.
+  await fetch(`${BASE}/admin/rbac/users/${user.id}/permissions`, json({ Authorization: `Bearer ${adminToken}` }, {
+    permissions: [{ permissionKey: 'qbanks.publish', allowed: false }],
+  }, 'PUT'));
+
+  // Add a scope (country 1 = Pakistan).
+  await fetch(`${BASE}/admin/rbac/users/${user.id}/scopes`, json({ Authorization: `Bearer ${adminToken}` }, {
+    scopes: [{ scopeType: 'country', scopeId: 1, label: 'Pakistan' }],
+  }, 'PUT'));
+
+  const access = await (await fetch(`${BASE}/admin/rbac/users/${user.id}/access`, { headers: { Authorization: `Bearer ${adminToken}` } })).json() as any;
+  assert.ok(access.effective.deniedPermissions.includes('qbanks.publish'), 'explicit denial recorded');
+  assert.ok(!access.effective.grantedPermissions.includes('qbanks.publish'), 'denial wins over role grant');
+  assert.ok(access.effective.grantedPermissions.includes('qbanks.view'), 'role grant still present');
+  assert.equal(access.effective.scopes.length, 1);
+  assert.equal(access.effective.scopes[0].type, 'country');
+  assert.equal(access.effective.scopes[0].id, 1);
+});
+
+test('RBAC: account type creation + organization + team', async () => {
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const slug = `qa_type_${Date.now()}`;
+
+  const create = await fetch(`${BASE}/admin/rbac/user-types`, json({ Authorization: `Bearer ${adminToken}` }, {
+    name: 'QA Type', slug, description: 'test type', registrationAllowed: true, defaultRole: 'student',
+  }));
+  assert.equal(create.status, 201);
+
+  const org = await fetch(`${BASE}/admin/rbac/organizations`, json({ Authorization: `Bearer ${adminToken}` }, {
+    name: 'QA Org', slug: `qa_org_${Date.now()}`, organizationType: 'content_team',
+  }));
+  assert.equal(org.status, 201);
+
+  const orgs = await (await fetch(`${BASE}/admin/rbac/organizations`, { headers: { Authorization: `Bearer ${adminToken}` } })).json() as any;
+  assert.ok(orgs.organizations.some((o: any) => o.slug === 'uhs'), 'seeded UHS org present');
 });

@@ -27,6 +27,8 @@ import {
   ScrollText,
   Command,
   ArrowRight,
+  UserCog,
+  KeyRound,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -83,6 +85,24 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       icon: <Users size={18} />,
       path: '/admin/users',
       permission: 'users.view',
+    },
+    {
+      label: 'Roles & Permissions',
+      icon: <KeyRound size={18} />,
+      path: '/admin/roles',
+      permission: 'users.manage_roles',
+    },
+    {
+      label: 'Account Types',
+      icon: <UserCog size={18} />,
+      path: '/admin/user-types',
+      permission: 'users.manage_types',
+    },
+    {
+      label: 'Permission Matrix',
+      icon: <Shield size={18} />,
+      path: '/admin/permissions',
+      permission: 'users.manage_roles',
     },
     {
       label: 'Questions',

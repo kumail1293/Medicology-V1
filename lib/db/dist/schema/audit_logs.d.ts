@@ -232,6 +232,9 @@ export declare const auditLogsTable: import("drizzle-orm/pg-core").PgTableWithCo
     dialect: "pg";
 }>;
 export declare const insertAuditLogSchema: z.ZodObject<{
+    summary: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    oldValues: z.ZodOptional<z.ZodNullable<z.ZodType<Record<string, any>, Record<string, any>, z.core.$ZodTypeInternals<Record<string, any>, Record<string, any>>>>>;
+    newValues: z.ZodOptional<z.ZodNullable<z.ZodType<Record<string, any>, Record<string, any>, z.core.$ZodTypeInternals<Record<string, any>, Record<string, any>>>>>;
     actorId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     actorName: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     actorEmail: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -239,9 +242,6 @@ export declare const insertAuditLogSchema: z.ZodObject<{
     entityType: z.ZodString;
     entityId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     entityLabel: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    summary: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    oldValues: z.ZodOptional<z.ZodNullable<z.ZodType<Record<string, any>, Record<string, any>, z.core.$ZodTypeInternals<Record<string, any>, Record<string, any>>>>>;
-    newValues: z.ZodOptional<z.ZodNullable<z.ZodType<Record<string, any>, Record<string, any>, z.core.$ZodTypeInternals<Record<string, any>, Record<string, any>>>>>;
     ipAddress: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }, {
     out: {};

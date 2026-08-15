@@ -52,7 +52,7 @@ authRouter.post('/register', async (req, res: any) => {
       role: 'user',
     }).returning();
     console.log('User created:', user);
-    const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role });
+    const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role, userType: (user as any).userType ?? 'student' });
     await createSession({ userId: user.id, token, userAgent: req.headers['user-agent'], ip: req.ip });
 
     // Welcome email (transactional, best-effort) + verification email when
@@ -108,7 +108,7 @@ authRouter.post('/login', async (req, res: any) => {
     if (!valid) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-    const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role });
+    const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role, userType: (user as any).userType ?? 'student' });
     await createSession({ userId: user.id, token, userAgent: req.headers['user-agent'], ip: req.ip });
     return res.json({ token, user: { ...user, passwordHash: undefined } });
   } catch (err: any) {
@@ -148,7 +148,7 @@ authRouter.put('/me', authenticate, async (req: AuthRequest, res: any) => {
       })
       .where(eq(usersTable.id, req.user!.id))
       .returning();
-    const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role });
+    const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role, userType: (user as any).userType ?? 'student' });
     return res.json({ token, user: { ...user, passwordHash: undefined } });
   } catch (err: any) {
     console.error('Error in update profile:', err);

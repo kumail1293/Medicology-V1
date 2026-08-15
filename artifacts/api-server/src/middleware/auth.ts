@@ -11,7 +11,9 @@ export interface AuthRequest extends Request {
     email: string;
     isAdmin: boolean;
     role: string;
+    userType?: string | null;
   };
+  access?: any; // effective access bundle from utils/authorization.ts
   body: any;
   params: any;
   query: any;
@@ -20,7 +22,7 @@ export interface AuthRequest extends Request {
 
 import { randomUUID } from 'node:crypto';
 
-export function generateToken(user: { id: number; email: string; isAdmin: boolean; role: string }) {
+export function generateToken(user: { id: number; email: string; isAdmin: boolean; role: string; userType?: string | null }) {
   // Unique jti: jsonwebtoken's iat is second-granularity, so two logins in the
   // same second would otherwise produce byte-identical tokens (breaking the
   // per-session revocation registry).
@@ -43,6 +45,7 @@ function resolveUserFromToken(token: string | undefined): any {
             email: payload.email,
             isAdmin: payload.isAdmin || false,
             role: payload.role || 'user',
+            userType: payload.userType || 'student',
           };
         }
       }
@@ -77,6 +80,15 @@ export async function authenticate(req: any, res: any, next: any): Promise<void>
     return;
   }
   req.user = user;
+  // Attach the effective access bundle (roles + account type + direct grants −
+  // denials + scopes) for permission checks downstream. Best-effort: when the
+  // RBAC tables are unavailable the user still authenticates.
+  try {
+    const { resolveUserAccess } = await import('../utils/authorization.js');
+    req.access = await resolveUserAccess(user);
+  } catch (err) {
+    req.access = null;
+  }
   next();
 }
 

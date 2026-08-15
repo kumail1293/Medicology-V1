@@ -273,19 +273,19 @@ export declare const questionVersionsTable: import("drizzle-orm/pg-core").PgTabl
     dialect: "pg";
 }>;
 export declare const insertQuestionVersionSchema: z.ZodObject<{
+    qid: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    questionId: z.ZodInt;
+    reviewedAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
+    versionNumber: z.ZodOptional<z.ZodInt>;
+    changeType: z.ZodOptional<z.ZodString>;
     summary: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     oldValues: z.ZodOptional<z.ZodNullable<z.ZodType<Record<string, any>, Record<string, any>, z.core.$ZodTypeInternals<Record<string, any>, Record<string, any>>>>>;
     newValues: z.ZodOptional<z.ZodNullable<z.ZodType<Record<string, any>, Record<string, any>, z.core.$ZodTypeInternals<Record<string, any>, Record<string, any>>>>>;
-    qid: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    questionId: z.ZodInt;
-    versionNumber: z.ZodOptional<z.ZodInt>;
-    changeType: z.ZodOptional<z.ZodString>;
     changedBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     changedByName: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     reviewerId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     reviewerName: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     reviewStatus: z.ZodOptional<z.ZodString>;
-    reviewedAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
 }, {
     out: {};
     in: {};

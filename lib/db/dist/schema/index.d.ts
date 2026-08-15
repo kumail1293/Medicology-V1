@@ -29,4 +29,5 @@ export * from "./settings_overrides.js";
 export * from "./coming_soon.js";
 export * from "./email_templates.js";
 export * from "./user_sessions.js";
+export * from "./rbac.js";
 //# sourceMappingURL=index.d.ts.map

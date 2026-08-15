@@ -224,6 +224,23 @@ export declare const usersTable: import("drizzle-orm/pg-core").PgTableWithColumn
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        userType: import("drizzle-orm/pg-core").PgColumn<{
+            name: "user_type";
+            tableName: "users";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         customPermissions: import("drizzle-orm/pg-core").PgColumn<{
             name: "custom_permissions";
             tableName: "users";
@@ -354,6 +371,7 @@ export declare const insertUserSchema: z.ZodObject<{
     studyAim: z.ZodOptional<z.ZodNullable<z.ZodType<StudyAim, StudyAim, z.core.$ZodTypeInternals<StudyAim, StudyAim>>>>;
     isAdmin: z.ZodOptional<z.ZodBoolean>;
     role: z.ZodOptional<z.ZodString>;
+    userType: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     customPermissions: z.ZodOptional<z.ZodNullable<z.ZodType<CustomPermissions, CustomPermissions, z.core.$ZodTypeInternals<CustomPermissions, CustomPermissions>>>>;
     rewardPoints: z.ZodOptional<z.ZodInt>;
     notificationPrefs: z.ZodOptional<z.ZodNullable<z.ZodType<NotificationPrefs, NotificationPrefs, z.core.$ZodTypeInternals<NotificationPrefs, NotificationPrefs>>>>;
