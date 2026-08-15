@@ -431,6 +431,20 @@ export const integrationSettingsSchema = z.object({
   customHeadCode: z.string().max(10000),
 });
 
+export const featureFlagsSettingsSchema = z.object({
+  flashcards: z.boolean(),
+  richContent: z.boolean(),
+  pastPapers: z.boolean(),
+  aiTutor: z.boolean(),
+  aiQuestionReview: z.boolean(),
+  spacedRepetition: z.boolean(),
+  studyBuddies: z.boolean(),
+  dailyChallenge: z.boolean(),
+  payments: z.boolean(),
+  waitlist: z.boolean(),
+  newExamEngine: z.boolean(),
+});
+
 export const updateSettingsSchema = z.object({
   general: generalSettingsSchema.partial().optional(),
   branding: brandingSettingsSchema.partial().optional(),
@@ -441,6 +455,21 @@ export const updateSettingsSchema = z.object({
   payments: paymentSettingsSchema.partial().optional(),
   storage: storageSettingsSchema.partial().optional(),
   integrations: integrationSettingsSchema.partial().optional(),
+  featureFlags: featureFlagsSettingsSchema.partial().optional(),
 });
 
 export type UpdateSettings = z.infer<typeof updateSettingsSchema>;
+
+// Per-section partial schemas for PATCH /api/admin/settings/:section.
+export const UPDATE_SETTINGS_SHAPE = {
+  general: generalSettingsSchema.partial(),
+  branding: brandingSettingsSchema.partial(),
+  content: contentSettingsSchema.partial(),
+  registration: registrationSettingsSchema.partial(),
+  notifications: notificationSettingsSchema.partial(),
+  security: securitySettingsSchema.partial(),
+  payments: paymentSettingsSchema.partial(),
+  storage: storageSettingsSchema.partial(),
+  integrations: integrationSettingsSchema.partial(),
+  featureFlags: featureFlagsSettingsSchema.partial(),
+} as const;

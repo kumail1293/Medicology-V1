@@ -13,6 +13,7 @@ import { AdminLayout } from "./components/AdminLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PageSkeleton } from "./components/PageSkeleton";
 import { AnnouncementDisplay } from "./components/AnnouncementDisplay";
+import MaintenanceGate from "./components/MaintenanceGate";
 
 import Login from "./pages/login";
 import Register from "./pages/register";
@@ -192,8 +193,10 @@ function App() {
             <BrandingApplier />
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <AuthProvider>
-                <Router />
-                <AnnouncementDisplay />
+                <MaintenanceGate>
+                  <Router />
+                  <AnnouncementDisplay />
+                </MaintenanceGate>
               </AuthProvider>
             </WouterRouter>
             <Toaster />

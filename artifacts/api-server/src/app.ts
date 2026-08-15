@@ -3,6 +3,7 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { maintenanceMode } from './middleware/maintenance.js';
 import { authRouter } from './routes/auth.js';
 import { questionsRouter } from './routes/questions.js';
 import { progressRouter } from './routes/progress.js';
@@ -106,6 +107,11 @@ startRateLimitCleanup();
 app.get('/api/healthz', (req: any, res: any) => {
 res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Server-side maintenance mode — 503 for non-exempt routes when enabled.
+// Exempt: health, auth (login must work), settings (frontend needs branding +
+// maintenance status) and admin (admin bypass). Fail-closed on read errors.
+app.use('/api', maintenanceMode());
 
 // Routes
 app.use('/api/auth', authRouter);

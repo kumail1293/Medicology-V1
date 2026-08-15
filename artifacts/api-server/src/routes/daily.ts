@@ -3,8 +3,11 @@ import { db } from '../db.js';
 import { dailyChallengeTable, questionsTable } from '@workspace/db';
 import { eq, sql, and } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { requireFeature } from '../utils/feature-flags.js';
 
 export const dailyRouter = Router();
+
+dailyRouter.use(requireFeature('dailyChallenge'));
 
 dailyRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
   try {

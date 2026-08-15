@@ -76,6 +76,22 @@ export interface IntegrationSettings {
   customHeadCode: string;
 }
 
+// Feature flags — every protected capability must be enforced server-side
+// (see utils/feature-flags.ts requireFeature), never by the client alone.
+export interface FeatureFlagsSettings {
+  flashcards: boolean; // FLASHCARDS
+  richContent: boolean; // RICH_CONTENT
+  pastPapers: boolean; // PAST_PAPERS
+  aiTutor: boolean; // AI_TUTOR
+  aiQuestionReview: boolean; // AI_QUESTION_REVIEW
+  spacedRepetition: boolean; // SPACED_REPETITION
+  studyBuddies: boolean; // STUDY_BUDDIES
+  dailyChallenge: boolean; // DAILY_CHALLENGE
+  payments: boolean; // PAYMENTS
+  waitlist: boolean; // WAITLIST
+  newExamEngine: boolean; // NEW_EXAM_ENGINE
+}
+
 export interface PlatformSettings {
   general: GeneralSettings;
   branding: BrandingSettings;
@@ -86,6 +102,7 @@ export interface PlatformSettings {
   payments: PaymentSettings;
   storage: StorageSettings;
   integrations: IntegrationSettings;
+  featureFlags: FeatureFlagsSettings;
 }
 
 export const DEFAULT_SETTINGS: PlatformSettings = {
@@ -151,12 +168,27 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     metaDescription: "",
     customHeadCode: "",
   },
+  featureFlags: {
+    flashcards: true,
+    richContent: true,
+    pastPapers: true,
+    aiTutor: true,
+    aiQuestionReview: true,
+    spacedRepetition: true,
+    studyBuddies: true,
+    dailyChallenge: true,
+    payments: true,
+    waitlist: true,
+    newExamEngine: true,
+  },
 };
 
-// Groups that the public (unauthenticated) API may expose — branding and
-// general info only. Never include credentials, emails or security toggles.
+// Groups that the public (unauthenticated) API may expose — branding, general
+// info, feature flags and the maintenance status. Never include credentials,
+// emails, payment config or security toggles.
 export const PUBLIC_SETTINGS_GROUPS: (keyof PlatformSettings)[] = [
   "general",
+  "featureFlags",
   "branding",
 ];
 

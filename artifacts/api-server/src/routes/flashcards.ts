@@ -20,8 +20,12 @@ import type {
   BulkFlashcards,
 } from './schemas.js';
 import { recordAudit } from '../utils/audit.js';
+import { requireFeature } from '../utils/feature-flags.js';
 
 export const flashcardsRouter = Router();
+
+// Flashcards are a protected capability — enforced server-side.
+flashcardsRouter.use(requireFeature('flashcards'));
 
 const actorOf = (req: any) => ({ id: req.user?.id, name: req.user?.name, email: req.user?.email });
 

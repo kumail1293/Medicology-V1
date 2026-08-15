@@ -74,6 +74,20 @@ export interface IntegrationSettings {
   customHeadCode: string;
 }
 
+export interface FeatureFlagsSettings {
+  flashcards: boolean;
+  richContent: boolean;
+  pastPapers: boolean;
+  aiTutor: boolean;
+  aiQuestionReview: boolean;
+  spacedRepetition: boolean;
+  studyBuddies: boolean;
+  dailyChallenge: boolean;
+  payments: boolean;
+  waitlist: boolean;
+  newExamEngine: boolean;
+}
+
 export interface PlatformSettings {
   general: GeneralSettings;
   branding: BrandingSettings;
@@ -84,6 +98,7 @@ export interface PlatformSettings {
   payments: PaymentSettings;
   storage: StorageSettings;
   integrations: IntegrationSettings;
+  featureFlags: FeatureFlagsSettings;
 }
 
 export const DEFAULT_SETTINGS: PlatformSettings = {
@@ -150,6 +165,19 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     metaDescription: "",
     customHeadCode: "",
   },
+  featureFlags: {
+    flashcards: true,
+    richContent: true,
+    pastPapers: true,
+    aiTutor: true,
+    aiQuestionReview: true,
+    spacedRepetition: true,
+    studyBuddies: true,
+    dailyChallenge: true,
+    payments: true,
+    waitlist: true,
+    newExamEngine: true,
+  },
 };
 
 export type SettingsGroup = keyof PlatformSettings;
@@ -190,11 +218,46 @@ export async function resetSettingsGroup(group?: SettingsGroup): Promise<Platfor
 export interface PublicSettings {
   general: GeneralSettings;
   branding: BrandingSettings;
+  featureFlags: FeatureFlagsSettings;
 }
 
-export async function fetchPublicSettings(): Promise<PublicSettings> {
+export async function fetchPublicSettings(): Promise<{
+  settings: PublicSettings;
+  maintenance: { enabled: boolean };
+}> {
   const res = await fetch("/api/settings/public");
   if (!res.ok) throw new Error("Failed to load public settings");
   const data = await res.json();
-  return data.settings as PublicSettings;
+  return {
+    settings: data.settings as PublicSettings,
+    maintenance: data.maintenance ?? { enabled: false },
+  };
+}
+
+export interface SettingsHistoryEntry {
+  id: number;
+  action: string;
+  summary: string;
+  actorName: string | null;
+  actorEmail: string | null;
+  oldValues: Record<string, any>;
+  newValues: Record<string, any>;
+  createdAt: string;
+}
+
+export async function fetchSettingsHistory(limit = 50): Promise<{ logs: SettingsHistoryEntry[]; total: number }> {
+  const res = await apiFetch(`/api/admin/settings/history?limit=${limit}`);
+  if (!res.ok) throw new Error("Failed to load settings history");
+  return res.json();
+}
+
+export async function restoreSettings(id: number): Promise<PlatformSettings> {
+  const res = await apiFetch("/api/admin/settings/restore", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to restore settings");
+  return data.settings;
 }

@@ -341,6 +341,36 @@ sync into their local spaced-repetition system:
 
 ------------------------------------------------------------------------
 
+## P0.5.7 ✅ Admin settings deep-dive (shipped)
+
+Applied `MEDICOLOGY_ADMIN_SETTINGS_PLAN`/`SKILL` (WordPress/Elementor-style
+platform config). Reused the existing `app_settings` table + audit trail —
+no duplicate systems.
+
+-   **Feature flags** — `featureFlags` group (flashcards, rich content,
+    past papers, AI tutor/review, spaced repetition, study buddies, daily
+    challenge, payments, waitlist, exam engine) exposed via
+    `/api/settings/public` and **enforced server-side** (`requireFeature`
+    middleware → 503 on payments/flashcards/daily/buddies/waitlist when
+    disabled). Frontend toggles in Admin → Settings → Feature Flags.
+-   **Maintenance mode** — now **enforced server-side**: 503 for
+    non-exempt routes when enabled, with `/api/health`, `/api/auth`,
+    `/api/settings` and `/api/admin` exempt (admin bypass). Frontend shows
+    a friendly maintenance screen for non-admins.
+-   **History & restore** — settings PUT/PATCH/reset now snapshot
+    `oldValues`; `GET /api/admin/settings/history` reads the audit trail and
+    `POST /api/admin/settings/restore` re-applies a snapshot. Admin UI
+    "Activity & History" tab with one-click Restore.
+-   **Section-scoped API** — `GET`/`PATCH /api/admin/settings/:section`
+    with per-section zod validation.
+-   Cache invalidation for flags + maintenance after every settings write.
+
+Deferred (documented in the settings plan): announcement templates,
+animation controls (reduced-motion aware), media library, coming-soon
+catalogue, scoped QBank/exam overrides, granular admin roles.
+
+------------------------------------------------------------------------
+
 ------------------------------------------------------------------------
 
 # Phase P1 --- Examination Engine

@@ -27,7 +27,7 @@ export function hexToHslTriplet(hex: string): string {
   return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-export function applyBranding(s: PublicSettings) {
+export function applyBranding(s: Pick<PublicSettings, "general" | "branding">) {
   const root = document.documentElement;
   const { branding, general } = s;
 
@@ -70,7 +70,7 @@ export default function BrandingApplier() {
   useEffect(() => {
     let cancelled = false;
     fetchPublicSettings()
-      .then((s) => { if (!cancelled) applyBranding(s); })
+      .then(({ settings }) => { if (!cancelled) applyBranding(settings); })
       .catch(() => { /* non-fatal: keep defaults */ });
     return () => { cancelled = true; };
   }, []);

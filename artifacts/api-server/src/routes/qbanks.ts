@@ -14,6 +14,7 @@ import {
 } from '@workspace/db';
 import { eq, and } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { requireFeature } from '../utils/feature-flags.js';
 import {
   getEntitlementsForUser,
   hasActiveEntitlement,
@@ -268,7 +269,7 @@ qbanksRouter.get('/:slug/questions', authenticate, async (req: AuthRequest, res:
 });
 
 // Coming Soon / Notify Me — idempotent waitlist registration.
-qbanksRouter.post('/:slug/notify', authenticate, async (req: AuthRequest, res: any) => {
+qbanksRouter.post('/:slug/notify', authenticate, requireFeature('waitlist'), async (req: AuthRequest, res: any) => {
   try {
     const qbank = await findQbankBySlug(req.params.slug);
     if (!qbank) return res.status(404).json({ error: 'QBank not found' });

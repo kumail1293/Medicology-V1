@@ -3,8 +3,11 @@ import { db } from '../db.js';
 import { studyBuddiesTable, usersTable } from '@workspace/db';
 import { eq, or, and, ilike } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { requireFeature } from '../utils/feature-flags.js';
 
 export const buddiesRouter = Router();
+
+buddiesRouter.use(requireFeature('studyBuddies'));
 
 // Get my buddies
 buddiesRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {

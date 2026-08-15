@@ -3,12 +3,13 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Settings, Palette, BookOpen, UserPlus, Bell, Shield, CreditCard,
   Database, Plug, Save, RotateCcw, Loader2, ChevronRight, Globe, LayoutDashboard,
-  FileText, Type, Ruler,
+  FileText, Type, Ruler, Flag, History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_SETTINGS, PlatformSettings, SettingsGroup,
   fetchAdminSettings, saveAdminSettings, resetSettingsGroup,
+  fetchSettingsHistory, restoreSettings,
 } from "@/lib/adminSettings";
 import { applyBranding } from "@/components/BrandingApplier";
 import { hexToHslTriplet } from "@/components/BrandingApplier";
@@ -97,7 +98,8 @@ function Card({ title, description, children }: { title: string; description?: s
 
 /* ── Group definitions (WordPress-style settings sections) ─────────────── */
 
-const GROUPS: { id: SettingsGroup; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; blurb: string }[] = [
+// "history" is a read-only pseudo-group (audit trail), not a settings key.
+const GROUPS: { id: SettingsGroup | "history"; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; blurb: string }[] = [
   { id: "general", label: "General", icon: Settings, blurb: "Site identity, homepage and regional defaults." },
   { id: "branding", label: "Branding & Design", icon: Palette, blurb: "Elementor-style design tokens — colors, fonts, radius, logo." },
   { id: "content", label: "Content & QBanks", icon: BookOpen, blurb: "Default statuses and content workflow rules." },
@@ -107,7 +109,134 @@ const GROUPS: { id: SettingsGroup; label: string; icon: React.ComponentType<{ si
   { id: "payments", label: "Payments", icon: CreditCard, blurb: "Currency, provider and pricing policy." },
   { id: "storage", label: "Storage & Uploads", icon: Database, blurb: "Upload limits and allowed file types." },
   { id: "integrations", label: "Integrations", icon: Plug, blurb: "Analytics, SEO meta and custom head code." },
+  { id: "featureFlags", label: "Feature Flags", icon: Flag, blurb: "Toggle protected capabilities platform-wide (enforced server-side)." },
+  { id: "history", label: "Activity & History", icon: History, blurb: "Audit trail of settings changes with one-click restore." },
 ];
+
+/* ── Feature Flags ─────────────────────────────────────────────────────── */
+
+const FEATURE_FLAG_LABELS: Record<string, { label: string; desc: string }> = {
+  flashcards: { label: "Flashcards", desc: "Spaced-repetition flashcards + admin decks." },
+  richContent: { label: "Rich Content Editing", desc: "TipTap WYSIWYG editing (tables, images, flowcharts)." },
+  pastPapers: { label: "Past Papers", desc: "Past-paper question sets." },
+  aiTutor: { label: "AI Tutor", desc: "AI-powered tutor assistance." },
+  aiQuestionReview: { label: "AI Question Review", desc: "AI-assisted review of submitted questions." },
+  spacedRepetition: { label: "Spaced Repetition", desc: "Mastery + spaced repetition engine." },
+  studyBuddies: { label: "Study Buddies", desc: "Friend/study-group features." },
+  dailyChallenge: { label: "Daily Challenge", desc: "Daily question challenge." },
+  payments: { label: "Payments", desc: "Purchases and entitlements." },
+  waitlist: { label: "Waitlist / Coming Soon", desc: "Notify-me for unavailable QBanks." },
+  newExamEngine: { label: "New Exam Engine", desc: "P1 exam simulator features." },
+};
+
+function FeatureFlagsSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["featureFlags"]>) => void }) {
+  const flags = draft.featureFlags;
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Disabling a flag hides it in the UI <em>and</em> blocks the matching API routes server-side (503). Protected
+        capabilities are never gated by the frontend alone.
+      </p>
+      {Object.entries(flags).map(([key, value]) => (
+        <div key={key} className="flex items-center justify-between gap-4 rounded-xl border border-border bg-background p-4">
+          <div>
+            <div className="text-sm font-semibold">{FEATURE_FLAG_LABELS[key]?.label ?? key}</div>
+            <div className="text-xs text-muted-foreground">{FEATURE_FLAG_LABELS[key]?.desc}</div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={value}
+            onClick={() => set({ [key]: !value } as any)}
+            className={cn(
+              "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+              value ? "bg-primary" : "bg-muted-foreground/30"
+            )}
+          >
+            <span className={cn(
+              "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+              value ? "translate-x-5" : "translate-x-0.5"
+            )} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Activity & History (restore from audit trail) ────────────────────── */
+
+function HistorySection() {
+  const { toast } = useToast();
+  const [logs, setLogs] = useState<{ id: number; action: string; summary: string; actorName: string | null; actorEmail: string | null; createdAt: string; oldValues: Record<string, any> }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [restoring, setRestoring] = useState<number | null>(null);
+
+  const load = async () => {
+    try {
+      const data = await fetchSettingsHistory(50);
+      setLogs(data.logs);
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to load history", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const restore = async (id: number) => {
+    if (!window.confirm("Restore the settings snapshot from this entry? Current values will be replaced.")) return;
+    setRestoring(id);
+    try {
+      await restoreSettings(id);
+      toast({ title: "Restored", description: "Settings restored from history." });
+      void load();
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to restore", variant: "destructive" });
+    } finally {
+      setRestoring(null);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-8 text-center text-sm text-muted-foreground">Loading history…</div>;
+  }
+  if (logs.length === 0) {
+    return <div className="p-8 text-center text-sm text-muted-foreground">No settings changes recorded yet.</div>;
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Every settings change is audit-logged with the pre-change snapshot, so any saved configuration can be restored.
+      </p>
+      {logs.map((log) => (
+        <div key={log.id} className="flex flex-col gap-2 rounded-xl border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">{log.summary}</div>
+            <div className="text-xs text-muted-foreground">
+              {log.action} · {log.actorName || log.actorEmail || "admin"} · {new Date(log.createdAt).toLocaleString()}
+            </div>
+            {log.oldValues && Object.keys(log.oldValues).length > 0 && (
+              <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                before: {JSON.stringify(log.oldValues).slice(0, 120)}
+              </div>
+            )}
+          </div>
+          {log.action !== "settings.restore" && log.oldValues && Object.keys(log.oldValues).length > 0 && (
+            <button
+              onClick={() => void restore(log.id)}
+              disabled={restoring === log.id}
+              className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:border-primary/40 hover:text-primary disabled:opacity-50"
+            >
+              {restoring === log.id ? <Loader2 className="animate-spin" size={13} /> : <RotateCcw size={13} className="mr-1 inline" />}
+              Restore
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /* ── Branding & Design (Elementor-like) with live preview ─────────────── */
 
@@ -394,7 +523,7 @@ export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<PlatformSettings>(DEFAULT_SETTINGS);
   const [defaults, setDefaults] = useState<PlatformSettings>(DEFAULT_SETTINGS);
   const [draft, setDraft] = useState<PlatformSettings>(DEFAULT_SETTINGS);
-  const [active, setActive] = useState<SettingsGroup>("general");
+  const [active, setActive] = useState<string>("general");
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -412,15 +541,15 @@ export default function AdminSettingsPage() {
   };
   useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dirty = useMemo(() => JSON.stringify(draft[active]) !== JSON.stringify(settings[active]), [draft, settings, active]);
+  const dirty = useMemo(() => JSON.stringify((draft as any)[active]) !== JSON.stringify((settings as any)[active]), [draft, settings, active]);
 
   const setGroup = (patch: Partial<PlatformSettings[SettingsGroup]>) =>
-    setDraft((prev) => ({ ...prev, [active]: { ...prev[active], ...patch } }));
+    setDraft((prev) => ({ ...prev, [active as SettingsGroup]: { ...(prev as any)[active], ...patch } }));
 
   const save = async () => {
     setSaving(true);
     try {
-      const updated = await saveAdminSettings({ [active]: draft[active] } as any);
+      const updated = await saveAdminSettings({ [active as SettingsGroup]: (draft as any)[active] } as any);
       setSettings(updated);
       setDraft(updated);
       // Apply branding immediately (not just on next page load).
@@ -439,7 +568,7 @@ export default function AdminSettingsPage() {
     if (!window.confirm(`Reset "${GROUPS.find((g) => g.id === active)?.label}" settings to defaults?`)) return;
     setResetting(true);
     try {
-      const updated = await resetSettingsGroup(active);
+      const updated = await resetSettingsGroup(active as SettingsGroup);
       setSettings(updated);
       setDraft(updated);
       if (active === "branding" || active === "general") applyBranding({ general: updated.general, branding: updated.branding });
@@ -462,6 +591,8 @@ export default function AdminSettingsPage() {
       case "payments": return <PaymentsSection draft={draft} set={setGroup as any} />;
       case "storage": return <StorageSection draft={draft} set={setGroup as any} />;
       case "integrations": return <IntegrationsSection draft={draft} set={setGroup as any} />;
+      case "featureFlags": return <FeatureFlagsSection draft={draft} set={setGroup as any} />;
+      case "history": return <HistorySection />;
       default: return null;
     }
   };
@@ -517,14 +648,18 @@ export default function AdminSettingsPage() {
               <p className="text-sm text-muted-foreground">{GROUPS.find((g) => g.id === active)?.blurb}</p>
             </div>
             <div className="flex shrink-0 gap-2">
-              <button onClick={() => void reset()} disabled={resetting}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 disabled:opacity-50">
-                <RotateCcw size={14} /> {resetting ? "Resetting…" : "Reset"}
-              </button>
-              <button onClick={() => void save()} disabled={!dirty || saving}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50">
-                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save Changes
-              </button>
+              {active !== "history" && (
+                <button onClick={() => void reset()} disabled={resetting}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 disabled:opacity-50">
+                  <RotateCcw size={14} /> {resetting ? "Resetting…" : "Reset"}
+                </button>
+              )}
+              {active !== "history" && (
+                <button onClick={() => void save()} disabled={!dirty || saving}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50">
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save Changes
+                </button>
+              )}
             </div>
           </div>
 

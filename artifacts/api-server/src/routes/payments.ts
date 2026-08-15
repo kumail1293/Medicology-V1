@@ -7,8 +7,13 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { findQbankBySlug, grantEntitlement } from '../utils/entitlements.js';
 import { getPaymentProvider } from '../lib/payment-providers.js';
 import { recordAudit } from '../utils/audit.js';
+import { requireFeature } from '../utils/feature-flags.js';
 
 export const paymentsRouter = Router();
+
+// Payments are a protected capability — enforced server-side, not just hidden
+// in the UI.
+paymentsRouter.use(requireFeature('payments'));
 
 const isPayableStatus = (status: string) => status === 'available' || status === 'beta';
 

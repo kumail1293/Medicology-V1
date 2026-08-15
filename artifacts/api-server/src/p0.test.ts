@@ -498,3 +498,122 @@ test('role management: admin assigns editor/teacher, guards enforce role boundar
   assert.ok(roleChanges.length >= 2, 'role changes are audited');
   assert.match(roleChanges[0].summary, /user → editor/, 'audit records the old and new role');
 });
+
+test('feature flags: public exposure, server-side enforcement, cache invalidation', async () => {
+  const putJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminBody: any = await adminLogin.json();
+  const auth = { Authorization: `Bearer ${adminBody.token}` };
+
+  // 1. Public endpoint exposes flags (safe, not secret).
+  const pub: any = await (await fetch(`${BASE}/settings/public`)).json();
+  assert.equal(pub.settings.featureFlags.flashcards, true, 'flags exposed publicly');
+  assert.equal(pub.settings.featureFlags.payments, true);
+
+  // 2. Disable flashcards → the flashcards API is blocked server-side (503).
+  const off = await fetch(`${BASE}/admin/settings`, putJson(auth, { featureFlags: { flashcards: false } }));
+  assert.equal(off.status, 200);
+  const decks: any = await (await fetch(`${BASE}/flashcards/decks`)).json();
+  assert.equal(decks.error, 'FEATURE_DISABLED', 'flashcards route enforces the flag');
+
+  // 3. Public endpoint reflects the change.
+  const pub2: any = await (await fetch(`${BASE}/settings/public`)).json();
+  assert.equal(pub2.settings.featureFlags.flashcards, false);
+
+  // 4. Re-enable → route works again (cache invalidated on write).
+  const on = await fetch(`${BASE}/admin/settings`, putJson(auth, { featureFlags: { flashcards: true } }));
+  assert.equal(on.status, 200);
+  const decks2 = await fetch(`${BASE}/flashcards/decks`);
+  assert.ok(decks2.status !== 503, 'flashcards route restored after re-enable');
+
+  // 5. Non-admin cannot flip flags.
+  const { token: userToken } = await registerUser('flag-user@test.com');
+  const forbidden = await fetch(`${BASE}/admin/settings`, putJson({ Authorization: `Bearer ${userToken}` }, { featureFlags: { payments: false } }));
+  assert.equal(forbidden.status, 403);
+});
+
+test('maintenance mode: enforced server-side with admin bypass and auth/settings exempt', async () => {
+  const putJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminBody: any = await adminLogin.json();
+  const auth = { Authorization: `Bearer ${adminBody.token}` };
+
+  // Enable maintenance.
+  const on = await fetch(`${BASE}/admin/settings`, putJson(auth, { security: { maintenanceMode: true } }));
+  assert.equal(on.status, 200);
+
+  // 1. Public routes (non-exempt) → 503.
+  const qs = await fetch(`${BASE}/questions?limit=1`);
+  assert.equal(qs.status, 503, 'normal API is blocked during maintenance');
+
+  // 2. Auth still works (login required to reach admin).
+  const loginAgain = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  assert.equal(loginAgain.status, 200, 'auth is exempt during maintenance');
+
+  // 3. Public settings endpoint still reachable (frontend needs maintenance status).
+  const pub = await fetch(`${BASE}/settings/public`);
+  assert.equal(pub.status, 200, 'settings/public stays up during maintenance');
+  const pubBody: any = await pub.json();
+  assert.equal(pubBody.maintenance.enabled, true, 'public endpoint reports maintenance status');
+
+  // 4. Admin bypass: admin endpoints keep working.
+  const adminGet = await fetch(`${BASE}/admin/settings`, { headers: auth });
+  assert.equal(adminGet.status, 200, 'admin bypass during maintenance');
+
+  // 5. Disable maintenance → routes restored.
+  const off = await fetch(`${BASE}/admin/settings`, putJson(auth, { security: { maintenanceMode: false } }));
+  assert.equal(off.status, 200);
+  const qs2 = await fetch(`${BASE}/questions?limit=1`);
+  assert.ok(qs2.status !== 503, 'normal API restored after maintenance off');
+});
+
+test('settings history: audit snapshots + restore roundtrip', async () => {
+  const putJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+  const postJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminBody: any = await adminLogin.json();
+  const auth = { Authorization: `Bearer ${adminBody.token}` };
+
+  // 1. Change branding to a known value.
+  await fetch(`${BASE}/admin/settings`, putJson(auth, { branding: { primaryColor: '#123456', borderRadius: 6 } }));
+
+  // 2. History shows the entry with a restorable old snapshot.
+  const history: any = await (await fetch(`${BASE}/admin/settings/history`, { headers: auth })).json();
+  assert.ok(history.logs.length > 0, 'history has entries');
+  const updateEntry = history.logs.find(
+    (l: any) => l.action === 'settings.update' && l.newValues?.branding?.primaryColor === '#123456'
+  );
+  assert.ok(updateEntry, 'update entry for our change is present');
+  assert.ok(updateEntry.oldValues?.branding, 'entry carries the pre-change snapshot');
+
+  // 3. Restore → branding returns to the pre-change value.
+  const restoreRes = await fetch(`${BASE}/admin/settings/restore`, postJson(auth, { id: updateEntry.id }));
+  assert.equal(restoreRes.status, 200);
+  const restored: any = await restoreRes.json();
+  assert.notEqual(restored.settings.branding.primaryColor, '#123456', 'restore reverted the change');
+  assert.equal(typeof restored.settings.branding.primaryColor, 'string');
+
+  // 4. Restore is audit-logged itself and non-admins cannot restore.
+  const { token: userToken } = await registerUser('hist-user@test.com');
+  const forbidden = await fetch(`${BASE}/admin/settings/restore`, postJson({ Authorization: `Bearer ${userToken}` }, { id: updateEntry.id }));
+  assert.equal(forbidden.status, 403);
+});
