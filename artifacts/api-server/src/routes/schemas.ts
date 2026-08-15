@@ -1,25 +1,36 @@
 import { z } from 'zod';
 
-const optionMapSchema = z
-  .object({
-    A: z.string(),
-    B: z.string(),
-    C: z.string(),
-    D: z.string(),
-    E: z.string().optional(),
-  })
-  .refine((options) => Object.values(options).filter(Boolean).length >= 4, {
-    message: 'At least 4 options required',
-  });
+const optionMapSchema = z.object({
+  A: z.string(),
+  B: z.string(),
+  C: z.string().optional(),
+  D: z.string().optional(),
+  E: z.string().optional(),
+});
+
+// Standard question types need at least 4 distinct options; True/False only
+// needs its two, and Assertion/Reason options are auto-rendered by the client.
+function requireOptionCountForType(questionType: string | undefined, options: any): boolean {
+  if (questionType === 'true_false') return Object.values(options ?? {}).filter(Boolean).length >= 2;
+  // Assertion/Reason options are auto-rendered by the client from the standard
+  // five-choice layout, so no stored options are required.
+  if (questionType === 'assertion_reason') return true;
+  return Object.values(options ?? {}).filter(Boolean).length >= 4;
+}
 
 export const createQuestionSchema = z
   .object({
     questionText: z.string().min(1, 'Question text is required'),
+    questionType: z.enum(['sba', 'best_of_five', 'true_false', 'assertion_reason', 'emq', 'image_based', 'clinical_vignette', 'case_based']).default('sba'),
     options: optionMapSchema,
     correctAnswer: z.string().min(1, 'Correct answer is required'),
     explanation: z.string().optional(),
     imageUrl: z.string().optional(),
     explanationImageUrl: z.string().optional(),
+    whyCorrect: z.string().optional(),
+    whyWrong: z.string().optional(),
+    examPearl: z.string().optional(),
+    commonTrap: z.string().optional(),
     wrongAnswerExplanations: z.string().optional(),
     references: z.string().optional(),
     subject: z.string().optional(),
@@ -43,9 +54,21 @@ export const createQuestionSchema = z
     // Content lifecycle
     status: z.enum(['draft', 'pending_review', 'under_medical_review', 'approved', 'published', 'flagged', 'errata', 'archived']).optional(),
   })
+  .superRefine((data, ctx) => {
+    if (!requireOptionCountForType(data.questionType, data.options)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['options'],
+        message: data.questionType === 'true_false'
+          ? 'True/False questions need True and False options'
+          : 'At least 4 options required for this question type',
+      });
+    }
+  })
   .transform((data) => {
     const result: Record<string, any> = {
       questionText: data.questionText,
+      questionType: data.questionType,
       options: data.options,
       correctAnswer: data.correctAnswer,
       difficulty: data.difficulty,
@@ -55,6 +78,10 @@ export const createQuestionSchema = z
       'explanation',
       'imageUrl',
       'explanationImageUrl',
+      'whyCorrect',
+      'whyWrong',
+      'examPearl',
+      'commonTrap',
       'wrongAnswerExplanations',
       'references',
       'subject',
@@ -85,11 +112,16 @@ export const createQuestionSchema = z
 export const updateQuestionSchema = z
   .object({
     questionText: z.string().min(1, 'Question text is required').optional(),
+    questionType: z.enum(['sba', 'best_of_five', 'true_false', 'assertion_reason', 'emq', 'image_based', 'clinical_vignette', 'case_based']).optional(),
     options: optionMapSchema.optional(),
     correctAnswer: z.string().min(1, 'Correct answer is required').optional(),
     explanation: z.string().optional(),
     imageUrl: z.string().optional(),
     explanationImageUrl: z.string().optional(),
+    whyCorrect: z.string().optional(),
+    whyWrong: z.string().optional(),
+    examPearl: z.string().optional(),
+    commonTrap: z.string().optional(),
     wrongAnswerExplanations: z.string().optional(),
     references: z.string().optional(),
     subject: z.string().optional(),
@@ -113,16 +145,32 @@ export const updateQuestionSchema = z
     // Content lifecycle
     status: z.enum(['draft', 'pending_review', 'under_medical_review', 'approved', 'published', 'flagged', 'errata', 'archived']).optional(),
   })
+  .superRefine((data, ctx) => {
+    if (data.options && !requireOptionCountForType(data.questionType, data.options)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['options'],
+        message: data.questionType === 'true_false'
+          ? 'True/False questions need True and False options'
+          : 'At least 4 options required for this question type',
+      });
+    }
+  })
   .transform((data) => {
     const result: Record<string, any> = {};
 
     const passthrough: Array<keyof typeof data> = [
       'questionText',
+      'questionType',
       'options',
       'correctAnswer',
       'explanation',
       'imageUrl',
       'explanationImageUrl',
+      'whyCorrect',
+      'whyWrong',
+      'examPearl',
+      'commonTrap',
       'wrongAnswerExplanations',
       'references',
       'subject',

@@ -25,14 +25,30 @@ interface TaxonomyTree {
   subjects: TaxonomyNode[];
 }
 
+const QUESTION_TYPE_LABELS: Record<string, string> = {
+  sba: 'Single Best Answer (SBA)',
+  best_of_five: 'Best of Five (MCQ)',
+  true_false: 'True / False',
+  assertion_reason: 'Assertion / Reason',
+  emq: 'Extended Matching (EMQ)',
+  image_based: 'Image-based (ECG, X-ray, CT…)',
+  clinical_vignette: 'Clinical Vignette',
+  case_based: 'Case-based',
+};
+
 interface QuestionFormState {
   questionText: string;
+  questionType: string;
   subject: string;
   system?: string;
   topic: string;
   subtopic?: string;
   universityTag?: string;
   explanation: string;
+  whyCorrect: string;
+  whyWrong: string;
+  examPearl: string;
+  commonTrap: string;
   correctAnswer: 'A' | 'B' | 'C' | 'D' | 'E';
   optionA: string;
   optionB: string;
@@ -56,9 +72,14 @@ interface QuestionFormState {
 
 const emptyForm = (): QuestionFormState => ({
   questionText: '',
+  questionType: 'sba',
   subject: '',
   topic: '',
   explanation: '',
+  whyCorrect: '',
+  whyWrong: '',
+  examPearl: '',
+  commonTrap: '',
   correctAnswer: 'A',
   optionA: '',
   optionB: '',
@@ -90,9 +111,14 @@ function buildPayload(form: QuestionFormState) {
 
   return {
     questionText: form.questionText,
+    questionType: form.questionType || 'sba',
     options,
     correctAnswer: form.correctAnswer,
     explanation: form.explanation,
+    whyCorrect: form.whyCorrect || undefined,
+    whyWrong: form.whyWrong || undefined,
+    examPearl: form.examPearl || undefined,
+    commonTrap: form.commonTrap || undefined,
     subject: form.subject,
     system: form.system || undefined,
     topic: form.topic,
@@ -182,6 +208,11 @@ export default function AdminQuestionsPage() {
       subtopic: (question as any).subtopic || '',
       universityTag: (question as any).universityTag || '',
       explanation: question.explanation || '',
+      questionType: (question as any).questionType || 'sba',
+      whyCorrect: (question as any).whyCorrect || '',
+      whyWrong: (question as any).whyWrong || '',
+      examPearl: (question as any).examPearl || '',
+      commonTrap: (question as any).commonTrap || '',
       correctAnswer: (question.correctAnswer as QuestionFormState['correctAnswer']) || 'A',
       optionA: question.options?.A || '',
       optionB: question.options?.B || '',
@@ -294,6 +325,9 @@ export default function AdminQuestionsPage() {
                     <span className="rounded-full bg-muted px-2 py-1">{question.subject}</span>
                     <span className="rounded-full bg-muted px-2 py-1">{question.topic}</span>
                     <span className="rounded-full bg-muted px-2 py-1">{question.difficulty}</span>
+                    {(question as any).questionType && (question as any).questionType !== 'sba' && (
+                      <span className="rounded-full bg-primary/10 px-2 py-1 text-primary">{(QUESTION_TYPE_LABELS[(question as any).questionType] || (question as any).questionType)}</span>
+                    )}
                     {(question as any).status && (question as any).status !== 'published' && (
                       <span className="rounded-full bg-amber-500/15 px-2 py-1 text-amber-600">{(question as any).status}</span>
                     )}
@@ -339,6 +373,19 @@ export default function AdminQuestionsPage() {
                   onChange={(html) => setForm({ ...form, questionText: html })}
                   placeholder="Stem — supports tables, images, flowcharts, formatting…"
                 />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">Question Type</label>
+                <select
+                  value={form.questionType}
+                  onChange={(event) => setForm({ ...form, questionType: event.target.value })}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                >
+                  {Object.entries(QUESTION_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -412,6 +459,43 @@ export default function AdminQuestionsPage() {
                   onChange={(html) => setForm({ ...form, explanation: html })}
                   placeholder="Explanation — tables, images, exam pearls…"
                 />
+              </div>
+
+              {/* Structured explanations (P1 exam engine) */}
+              <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
+                <div className="text-sm font-semibold">Structured Explanation (optional)</div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-green-600">Why this answer is correct</label>
+                  <RichTextEditor
+                    value={form.whyCorrect}
+                    onChange={(html) => setForm({ ...form, whyCorrect: html })}
+                    placeholder="The mechanism/reason the correct answer works…"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-red-500">Why wrong answers are wrong</label>
+                  <RichTextEditor
+                    value={form.whyWrong}
+                    onChange={(html) => setForm({ ...form, whyWrong: html })}
+                    placeholder="Why the distractors fail…"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-amber-600">Exam Pearl</label>
+                  <RichTextEditor
+                    value={form.examPearl}
+                    onChange={(html) => setForm({ ...form, examPearl: html })}
+                    placeholder="High-yield one-liner for the exam…"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-purple-600">Common Trap</label>
+                  <RichTextEditor
+                    value={form.commonTrap}
+                    onChange={(html) => setForm({ ...form, commonTrap: html })}
+                    placeholder="The classic mistake students make…"
+                  />
+                </div>
               </div>
 
               <div>

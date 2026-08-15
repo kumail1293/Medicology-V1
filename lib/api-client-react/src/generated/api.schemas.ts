@@ -83,11 +83,16 @@ export interface Question {
   /** Immutable public identifier (e.g. QID-MED-000001245) */
   qid?: string;
   questionText: string;
+  questionType?: string;
   imageUrl?: string;
   options: QuestionOption;
   correctAnswer: string;
   explanation: string;
   explanationImageUrl?: string;
+  whyCorrect?: string;
+  whyWrong?: string;
+  examPearl?: string;
+  commonTrap?: string;
   wrongAnswerExplanations?: string;
   references?: string;
   subject: string;
@@ -344,11 +349,16 @@ export const CreateQuestionRequestStatus = {
 
 export interface CreateQuestionRequest {
   questionText: string;
+  questionType?: string;
   options: QuestionOption;
   correctAnswer: string;
   imageUrl?: string;
   explanation: string;
   explanationImageUrl?: string;
+  whyCorrect?: string;
+  whyWrong?: string;
+  examPearl?: string;
+  commonTrap?: string;
   wrongAnswerExplanations?: string;
   references?: string;
   subject: string;

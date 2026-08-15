@@ -29,6 +29,13 @@
       "when": 1786744053220,
       "tag": "0003_app_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786778154712,
+      "tag": "0004_p1_question_types_structured_explanations",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,6 @@
 import { z } from "zod/v4";
+export type QuestionType = "sba" | "best_of_five" | "true_false" | "assertion_reason" | "emq" | "image_based" | "clinical_vignette" | "case_based";
+export declare const QUESTION_TYPES: QuestionType[];
 export type QuestionStatus = "draft" | "pending_review" | "under_medical_review" | "approved" | "published" | "flagged" | "errata" | "archived";
 export declare const QUESTION_STATUSES: QuestionStatus[];
 export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithColumns<{
@@ -56,6 +58,25 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        questionType: import("drizzle-orm/pg-core").PgColumn<{
+            name: "question_type";
+            tableName: "questions";
+            dataType: "string";
+            columnType: "PgText";
+            data: QuestionType;
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: QuestionType;
+        }>;
         imageUrl: import("drizzle-orm/pg-core").PgColumn<{
             name: "image_url";
             tableName: "questions";
@@ -126,6 +147,74 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
         }, {}, {}>;
         explanationImageUrl: import("drizzle-orm/pg-core").PgColumn<{
             name: "explanation_image_url";
+            tableName: "questions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        whyCorrect: import("drizzle-orm/pg-core").PgColumn<{
+            name: "why_correct";
+            tableName: "questions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        whyWrong: import("drizzle-orm/pg-core").PgColumn<{
+            name: "why_wrong";
+            tableName: "questions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        examPearl: import("drizzle-orm/pg-core").PgColumn<{
+            name: "exam_pearl";
+            tableName: "questions";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        commonTrap: import("drizzle-orm/pg-core").PgColumn<{
+            name: "common_trap";
             tableName: "questions";
             dataType: "string";
             columnType: "PgText";
@@ -559,11 +648,16 @@ export declare const questionsTable: import("drizzle-orm/pg-core").PgTableWithCo
 export declare const insertQuestionSchema: z.ZodObject<{
     qid: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     questionText: z.ZodString;
+    questionType: z.ZodOptional<z.ZodString>;
     imageUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     options: z.ZodType<import("drizzle-zod").Json, unknown, z.core.$ZodTypeInternals<import("drizzle-zod").Json, unknown>>;
     correctAnswer: z.ZodString;
     explanation: z.ZodString;
     explanationImageUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    whyCorrect: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    whyWrong: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    examPearl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    commonTrap: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     wrongAnswerExplanations: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     references: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     subject: z.ZodString;

@@ -6,7 +6,8 @@ import {
   ChevronLeft, ChevronRight, Flag, Timer, Grid3X3, X, CheckCircle, XCircle,
   Pause, PauseCircle, Eye, BookmarkPlus, Bookmark, Brain, RotateCcw, Trophy,
   Calculator, Layers, BookOpen, Plus, ChevronDown, ChevronUp,
-  Save, FolderPlus, Copy, Trash2, PenLine, AlertCircle, Send
+  Save, FolderPlus, Copy, Trash2, PenLine, AlertCircle, Send,
+  Sparkles, AlertTriangle, Gauge
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import RichText from '@/components/RichText';
@@ -98,14 +99,29 @@ function MiniCalculator() {
 interface Question {
   id: number;
   questionText: string;
+  questionType?: string;
   options: Record<string, string>;
   correctAnswer: string;
   explanation: string;
   wrongAnswerExplanations?: string;
+  whyCorrect?: string;
+  whyWrong?: string;
+  examPearl?: string;
+  commonTrap?: string;
+  references?: string;
   subject: string;
   topic: string;
   difficulty: string;
 }
+
+type ConfidenceLevel = 'guess' | 'unsure' | 'fairly' | 'very';
+
+const CONFIDENCE_OPTIONS: { key: ConfidenceLevel; label: string; hint: string }[] = [
+  { key: 'guess', label: 'Guess', hint: 'Pure guess' },
+  { key: 'unsure', label: 'Unsure', hint: 'Eliminated some options' },
+  { key: 'fairly', label: 'Fairly Confident', hint: 'Knew most of it' },
+  { key: 'very', label: 'Very Confident', hint: 'Certain of the answer' },
+];
 
 interface SessionData {
   id: number;
@@ -113,7 +129,7 @@ interface SessionData {
   mode: string;
   status: string;
   questionIds: number[];
-  answers: Record<string, { selected: string; timeSpent: number; isCorrect?: boolean }>;
+  answers: Record<string, { selected: string; timeSpent: number; isCorrect?: boolean; confidence?: ConfidenceLevel }>;
   flaggedQuestions: number[];
   currentIndex: number;
   totalCorrect: number | null;
@@ -140,6 +156,37 @@ function formatSeconds(secs: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+// Standard True/False option set (graded as A = True, B = False).
+const TRUE_FALSE_OPTIONS: Record<string, string> = {
+  A: 'True',
+  B: 'False',
+};
+
+// Standard Assertion/Reason five-option layout (per conventional exam marking).
+const ASSERTION_REASON_OPTIONS: Record<string, string> = {
+  A: 'Both the assertion (A) and reason (R) are true, and R is the correct explanation of A',
+  B: 'Both A and R are true, but R is NOT the correct explanation of A',
+  C: 'A is true, but R is false',
+  D: 'A is false, but R is true',
+  E: 'Both A and R are false',
+};
+
+/**
+ * Present the options for a question, honouring the formal question type.
+ * True/False and Assertion/Reason questions render their standard option sets
+ * regardless of what is stored in `options`, so authors can't misconfigure them.
+ */
+function normalizedOptions(q: Question): Record<string, string> {
+  switch (q.questionType) {
+    case 'true_false':
+      return TRUE_FALSE_OPTIONS;
+    case 'assertion_reason':
+      return ASSERTION_REASON_OPTIONS;
+    default:
+      return q.options || {};
+  }
+}
+
 export default function SessionV2() {
   const { id } = useParams<{ id: string }>();
   const search = useSearch();
@@ -152,7 +199,7 @@ export default function SessionV2() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, { selected: string; timeSpent: number; isCorrect?: boolean }>>({});
+  const [answers, setAnswers] = useState<Record<string, { selected: string; timeSpent: number; isCorrect?: boolean; confidence?: ConfidenceLevel }>>({});
   const [flagged, setFlagged] = useState<number[]>([]);
   const [bookmarked, setBookmarked] = useState<number[]>([]);
   const [showGrid, setShowGrid] = useState(false);
@@ -412,6 +459,21 @@ export default function SessionV2() {
     } else {
       await saveToServer(newAnswers, currentIndex, flagged);
     }
+  };
+
+  // Confidence tracking — recorded per answered question and persisted with the session.
+  const handleConfidence = async (level: ConfidenceLevel) => {
+    if (!session || !questions[currentIndex]) return;
+    const q = questions[currentIndex];
+    const qIdStr = String(q.id);
+    const existing = answers[qIdStr];
+    if (!existing) return;
+    const newAnswers = {
+      ...answers,
+      [qIdStr]: { ...existing, confidence: level },
+    };
+    setAnswers(newAnswers);
+    await saveToServer(newAnswers, currentIndex, flagged);
   };
 
   const handleNext = async () => {
@@ -841,7 +903,7 @@ export default function SessionV2() {
 
               {/* Options */}
               <div className="space-y-2">
-                {currentQ.options && Object.entries(currentQ.options as Record<string, string>).map(([key, value]) => {
+                {Object.entries(normalizedOptions(currentQ)).map(([key, value]) => {
                   const isSubmitted = answers[currentQIdStr]?.selected === key;
                   const isCorrect = key === currentQ.correctAnswer;
                   const showState = hasAnswered;
@@ -931,6 +993,36 @@ export default function SessionV2() {
                       )}
                     </div>
 
+                    {/* Structured explanation: why wrong (if separate from option-level) */}
+                    {currentQ.whyWrong && (
+                      <div className="space-y-1.5 border-t border-border pt-3">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-red-500">
+                          <XCircle size={13} /> Why the other options are wrong
+                        </div>
+                        <RichText html={currentQ.whyWrong} className="text-sm leading-relaxed text-foreground pl-5" />
+                      </div>
+                    )}
+
+                    {/* Structured explanation: exam pearl */}
+                    {currentQ.examPearl && (
+                      <div className="space-y-1.5 border-t border-border pt-3">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                          <Sparkles size={13} /> Exam Pearl
+                        </div>
+                        <RichText html={currentQ.examPearl} className="text-sm leading-relaxed text-foreground pl-5" />
+                      </div>
+                    )}
+
+                    {/* Structured explanation: common trap */}
+                    {currentQ.commonTrap && (
+                      <div className="space-y-1.5 border-t border-border pt-3">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                          <AlertTriangle size={13} /> Common Trap
+                        </div>
+                        <RichText html={currentQ.commonTrap} className="text-sm leading-relaxed text-foreground pl-5" />
+                      </div>
+                    )}
+
                     {/* Why each incorrect option is wrong */}
                     {currentQ.wrongAnswerExplanations && (() => {
                       let parsed: Record<string,string> | null = null;
@@ -954,6 +1046,33 @@ export default function SessionV2() {
                         <p className="text-xs text-muted-foreground leading-relaxed border-t border-border pt-3 pl-1">{currentQ.wrongAnswerExplanations}</p>
                       );
                     })()}
+
+                    {/* Confidence tracking */}
+                    <div className="border-t border-border pt-3">
+                      <div className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                        <Gauge size={13} /> How confident were you?
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {CONFIDENCE_OPTIONS.map(({ key, label, hint }) => {
+                          const selected = answers[currentQIdStr]?.confidence === key;
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => void handleConfidence(key)}
+                              title={hint}
+                              className={clsx(
+                                "text-xs font-semibold px-3 py-1.5 rounded-full border transition-all",
+                                selected
+                                  ? "border-primary bg-primary/10 text-primary"
+                                  : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                              )}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
 
                     {/* Textbook references */}
                     {(currentQ as any).references && (

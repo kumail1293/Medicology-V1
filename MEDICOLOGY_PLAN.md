@@ -334,21 +334,39 @@ sync into their local spaced-repetition system:
 
 # Phase P1 --- Examination Engine
 
-After P0:
+## P1.1 ✅ Question types + structured explanations (shipped)
 
--   formal question types: SBA, MCQ, EMQ, True/False, Assertion/Reason,
-    Image-based, Clinical Vignette, Case-based, Best-of-five
--   image questions: ECG, X-ray, CT, MRI, histopathology, anatomy,
-    ophthalmology, dentistry
--   structured explanations: correct answer, why, why-not, exam pearl,
-    common trap, references
--   full exam simulator with timer, palette, autosave, flags, sections,
-    marking scheme
--   database-driven Custom Test Builder
--   confidence tracking: Guess / Unsure / Fairly Confident / Very
-    Confident
--   mastery engine by question/subtopic/topic/system/subject/QBank/exam
--   spaced repetition
+-   Migration `0004_p1_question_types_structured_explanations.sql`
+    (additive): `questions.question_type` (default `sba`) +
+    `why_correct`, `why_wrong`, `exam_pearl`, `common_trap` columns
+-   Formal types supported: SBA, Best-of-five, True/False,
+    Assertion/Reason, EMQ, Image-based, Clinical Vignette, Case-based
+    (`QUESTION_TYPES` const in `lib/db/src/schema/questions.ts`)
+-   Admin question editor: type picker + structured-explanation rich
+    text sections (why-correct / why-wrong / exam pearl / common trap)
+-   Session (`session-v2`) + `QuestionView` render True/False and
+    Assertion/Reason with their standard option sets, and show the
+    structured explanation sections in feedback
+-   Imported questions default to `sba` (DB default)
+
+## P1.2 ✅ Confidence tracking (shipped)
+
+-   Guess / Unsure / Fairly Confident / Very Confident picker after
+    each answered question; persisted per answer in
+    `test_sessions.answers[].confidence` (JSONB, no migration needed)
+-   Powers future mastery/analytics work
+
+## P1.3 In progress / next
+
+-   Image question specialty metadata (ECG, X-ray, CT, MRI, histopath,
+    anatomy, ophthalmology, dentistry)
+-   Exam simulator polish: marking scheme, section-level config
+    (timer/palette/autosave/flags already exist in `session-v2`)
+-   Database-driven Custom Test Builder (currently client-side in
+    `create-test.tsx`)
+-   Mastery engine (per question/subtopic/topic/system/subject/QBank/
+    exam) and spaced repetition for questions
+-   Confidence → analytics dashboards (P2)
 
 ------------------------------------------------------------------------
 

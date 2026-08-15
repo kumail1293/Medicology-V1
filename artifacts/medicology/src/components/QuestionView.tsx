@@ -92,7 +92,36 @@ export function QuestionView({
     onPrev?.();
   };
 
-  const optionKeys = Object.keys(question.options) as Array<keyof typeof question.options>;
+  const QUESTION_TYPE_LABELS: Record<string, string> = {
+  sba: 'SBA',
+  best_of_five: 'MCQ',
+  true_false: 'True/False',
+  assertion_reason: 'A/R',
+  emq: 'EMQ',
+  image_based: 'Image',
+  clinical_vignette: 'Vignette',
+  case_based: 'Case',
+};
+
+// Standard True/False and Assertion/Reason option sets (mirrors session-v2).
+const TRUE_FALSE_OPTIONS: Record<string, string> = { A: 'True', B: 'False' };
+const ASSERTION_REASON_OPTIONS: Record<string, string> = {
+  A: 'Both the assertion (A) and reason (R) are true, and R is the correct explanation of A',
+  B: 'Both A and R are true, but R is NOT the correct explanation of A',
+  C: 'A is true, but R is false',
+  D: 'A is false, but R is true',
+  E: 'Both A and R are false',
+};
+
+type OptionMap = Record<string, string>;
+
+function viewOptions(question: Question): OptionMap {
+  if (question.questionType === 'true_false') return TRUE_FALSE_OPTIONS;
+  if (question.questionType === 'assertion_reason') return ASSERTION_REASON_OPTIONS;
+  return question.options as unknown as OptionMap;
+}
+
+const optionKeys = Object.keys(viewOptions(question));
 
   return (
     <div className="space-y-4">
@@ -101,6 +130,9 @@ export function QuestionView({
           <div className="flex items-start justify-between gap-2 mb-3">
             <div className="flex flex-wrap gap-1.5">
               <Badge variant="secondary" className="text-xs">{question.subject}</Badge>
+              {question.questionType && (
+                <Badge variant="secondary" className="text-xs text-primary">{QUESTION_TYPE_LABELS[question.questionType] ?? question.questionType}</Badge>
+              )}
               {question.system && <Badge variant="outline" className="text-xs">{question.system}</Badge>}
               <Badge
                 variant="outline"
@@ -170,7 +202,7 @@ export function QuestionView({
                 )}>
                   {key}
                 </span>
-                <span className="text-sm leading-relaxed pt-0.5">{question.options[key]}</span>
+                <span className="text-sm leading-relaxed pt-0.5">{viewOptions(question)[key]}</span>
               </div>
             </button>
           );
@@ -203,10 +235,28 @@ export function QuestionView({
                   </button>
                 )}
               </div>
-              {question.wrongAnswerExplanations && (
+              {question.whyWrong && (
+                <div>
+                  <p className="font-medium text-red-600 dark:text-red-400 mb-1">✗ Why others are incorrect:</p>
+                  <RichText html={question.whyWrong} className="text-muted-foreground" />
+                </div>
+              )}
+              {question.wrongAnswerExplanations && !question.whyWrong && (
                 <div>
                   <p className="font-medium text-red-600 dark:text-red-400 mb-1">✗ Why others are incorrect:</p>
                   <p className="text-muted-foreground">{question.wrongAnswerExplanations}</p>
+                </div>
+              )}
+              {question.examPearl && (
+                <div>
+                  <p className="font-medium text-amber-600 dark:text-amber-400 mb-1">💎 Exam Pearl:</p>
+                  <RichText html={question.examPearl} className="text-muted-foreground" />
+                </div>
+              )}
+              {question.commonTrap && (
+                <div>
+                  <p className="font-medium text-purple-600 dark:text-purple-400 mb-1">⚠️ Common Trap:</p>
+                  <RichText html={question.commonTrap} className="text-muted-foreground" />
                 </div>
               )}
               {question.references && (

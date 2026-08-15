@@ -2,6 +2,27 @@ import { pgTable, serial, text, jsonb, timestamp, boolean, integer, index } from
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+export type QuestionType =
+  | "sba"
+  | "best_of_five"
+  | "true_false"
+  | "assertion_reason"
+  | "emq"
+  | "image_based"
+  | "clinical_vignette"
+  | "case_based";
+
+export const QUESTION_TYPES: QuestionType[] = [
+  "sba",
+  "best_of_five",
+  "true_false",
+  "assertion_reason",
+  "emq",
+  "image_based",
+  "clinical_vignette",
+  "case_based",
+];
+
 export type QuestionStatus =
   | "draft"
   | "pending_review"
@@ -31,11 +52,17 @@ export const questionsTable = pgTable(
     // even if the question moves between topics or QBanks.
     qid: text("qid").unique(),
     questionText: text("question_text").notNull(),
+    questionType: text("question_type").$type<QuestionType>().notNull().default("sba"),
     imageUrl: text("image_url"),
     options: jsonb("options").notNull(),
     correctAnswer: text("correct_answer").notNull(),
     explanation: text("explanation").notNull(),
     explanationImageUrl: text("explanation_image_url"),
+    // --- Structured explanations (P1 exam engine) ---
+    whyCorrect: text("why_correct"),
+    whyWrong: text("why_wrong"),
+    examPearl: text("exam_pearl"),
+    commonTrap: text("common_trap"),
     wrongAnswerExplanations: text("wrong_answer_explanations"),
     references: text("references"),
     // --- Legacy free-text taxonomy (kept in sync with relational IDs below) ---
