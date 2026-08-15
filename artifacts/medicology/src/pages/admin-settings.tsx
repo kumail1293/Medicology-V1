@@ -3,7 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Settings, Palette, BookOpen, UserPlus, Bell, Shield, CreditCard,
   Database, Plug, Save, RotateCcw, Loader2, ChevronRight, Globe, LayoutDashboard,
-  FileText, Type, Ruler, Flag, History,
+  FileText, Type, Ruler, Flag, History, Sparkles, Play, Pause,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -109,6 +109,7 @@ const GROUPS: { id: SettingsGroup | "history"; label: string; icon: React.Compon
   { id: "payments", label: "Payments", icon: CreditCard, blurb: "Currency, provider and pricing policy." },
   { id: "storage", label: "Storage & Uploads", icon: Database, blurb: "Upload limits and allowed file types." },
   { id: "integrations", label: "Integrations", icon: Plug, blurb: "Analytics, SEO meta and custom head code." },
+  { id: "animations", label: "Animations", icon: Sparkles, blurb: "Platform-wide motion — always respects prefers-reduced-motion." },
   { id: "featureFlags", label: "Feature Flags", icon: Flag, blurb: "Toggle protected capabilities platform-wide (enforced server-side)." },
   { id: "history", label: "Activity & History", icon: History, blurb: "Audit trail of settings changes with one-click restore." },
 ];
@@ -160,6 +161,129 @@ function FeatureFlagsSection({ draft, set }: { draft: PlatformSettings; set: (pa
           </button>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ── Animations (platform motion controls, reduced-motion aware) ──────── */
+
+const ANIMATION_EFFECTS = [
+  { value: 'none', label: 'None' },
+  { value: 'fade', label: 'Fade' },
+  { value: 'slide', label: 'Slide' },
+  { value: 'scale', label: 'Scale' },
+  { value: 'zoom', label: 'Zoom' },
+  { value: 'bounce', label: 'Bounce' },
+  { value: 'shimmer', label: 'Shimmer' },
+  { value: 'pulse', label: 'Pulse' },
+  { value: 'marquee', label: 'Marquee' },
+  { value: 'typewriter', label: 'Typewriter' },
+];
+
+function AnimationsSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["animations"]>) => void }) {
+  const a = draft.animations;
+  const [previewKey, setPreviewKey] = useState(0);
+  const [playing, setPlaying] = useState(true);
+
+  // Replay the preview whenever a control changes.
+  useEffect(() => { setPreviewKey((k) => k + 1); }, [a.defaultEffect, a.durationMs, a.delayMs, a.repeat, a.enabled]);
+
+  const previewStyle = {
+    animation: `${a.defaultEffect === 'none' || !a.enabled ? 'anim-none' : 'anim-' + a.defaultEffect} ${a.durationMs}ms ${a.delayMs}ms ${a.repeat === 'infinite' ? 'infinite' : a.repeat === 'once' ? '1' : '0'} ease-out both`,
+  } as React.CSSProperties;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between rounded-xl border border-border bg-background p-4">
+        <div>
+          <div className="text-sm font-semibold">Platform animations</div>
+          <div className="text-xs text-muted-foreground">
+            Applies to opt-in elements (page transitions, cards). Users with{' '}
+            <span className="font-medium">prefers-reduced-motion</span> never see animations —
+            this switch only affects everyone else.
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={a.enabled}
+          onClick={() => set({ enabled: !a.enabled })}
+          className={cn("relative h-6 w-11 shrink-0 rounded-full transition-colors", a.enabled ? "bg-primary" : "bg-muted-foreground/30")}
+        >
+          <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", a.enabled ? "translate-x-5" : "translate-x-0.5")} />
+        </button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-sm font-medium">Default effect</label>
+          <select
+            value={a.defaultEffect}
+            onChange={(event) => set({ defaultEffect: event.target.value as PlatformSettings["animations"]["defaultEffect"] })}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2"
+          >
+            {ANIMATION_EFFECTS.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">Repeat</label>
+          <select
+            value={a.repeat}
+            onChange={(event) => set({ repeat: event.target.value as PlatformSettings["animations"]["repeat"] })}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2"
+          >
+            <option value="once">Once</option>
+            <option value="infinite">Infinite (loops)</option>
+            <option value="none">None</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">Duration — {a.durationMs}ms</label>
+          <input
+            type="range" min={0} max={3000} step={50} value={a.durationMs}
+            onChange={(event) => set({ durationMs: Number(event.target.value) })}
+            className="w-full accent-[hsl(var(--primary))]"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">Delay — {a.delayMs}ms</label>
+          <input
+            type="range" min={0} max={2000} step={50} value={a.delayMs}
+            onChange={(event) => set({ delayMs: Number(event.target.value) })}
+            className="w-full accent-[hsl(var(--primary))]"
+          />
+        </div>
+      </div>
+
+      {/* Live preview */}
+      <div className="rounded-xl border border-border bg-background p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm font-medium">Live preview</span>
+          <button
+            type="button"
+            onClick={() => { setPlaying((p) => !p); if (!playing) setPreviewKey((k) => k + 1); }}
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-medium hover:border-primary/40"
+          >
+            {playing ? <Pause size={12} /> : <Play size={12} />} {playing ? 'Pause' : 'Replay'}
+          </button>
+        </div>
+        <div key={playing ? previewKey : 'paused'} style={playing ? previewStyle : undefined}
+          className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <Sparkles size={18} />
+          </div>
+          <div>
+            <div className="text-sm font-semibold">{a.defaultEffect === 'none' ? 'No animation' : a.defaultEffect}</div>
+            <div className="text-xs text-muted-foreground">
+              {a.durationMs}ms · delay {a.delayMs}ms · {a.repeat}
+            </div>
+          </div>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Reduced-motion users (OS setting) will always see a static version — this preview simulates the
+          non-reduced-motion experience.
+        </p>
+      </div>
     </div>
   );
 }
@@ -591,6 +715,7 @@ export default function AdminSettingsPage() {
       case "payments": return <PaymentsSection draft={draft} set={setGroup as any} />;
       case "storage": return <StorageSection draft={draft} set={setGroup as any} />;
       case "integrations": return <IntegrationsSection draft={draft} set={setGroup as any} />;
+      case "animations": return <AnimationsSection draft={draft} set={setGroup as any} />;
       case "featureFlags": return <FeatureFlagsSection draft={draft} set={setGroup as any} />;
       case "history": return <HistorySection />;
       default: return null;

@@ -431,6 +431,15 @@ export const integrationSettingsSchema = z.object({
   customHeadCode: z.string().max(10000),
 });
 
+export const animationsSettingsSchema = z.object({
+  enabled: z.boolean(),
+  defaultEffect: z.enum(['none', 'fade', 'slide', 'scale', 'zoom', 'bounce', 'shimmer', 'pulse', 'marquee', 'typewriter']),
+  durationMs: z.number().int().min(0).max(3000),
+  delayMs: z.number().int().min(0).max(2000),
+  repeat: z.enum(['none', 'once', 'infinite']),
+  trigger: z.enum(['on_load', 'on_view', 'always']),
+});
+
 export const featureFlagsSettingsSchema = z.object({
   flashcards: z.boolean(),
   richContent: z.boolean(),
@@ -455,6 +464,7 @@ export const updateSettingsSchema = z.object({
   payments: paymentSettingsSchema.partial().optional(),
   storage: storageSettingsSchema.partial().optional(),
   integrations: integrationSettingsSchema.partial().optional(),
+  animations: animationsSettingsSchema.partial().optional(),
   featureFlags: featureFlagsSettingsSchema.partial().optional(),
 });
 
@@ -471,5 +481,6 @@ export const UPDATE_SETTINGS_SHAPE = {
   payments: paymentSettingsSchema.partial(),
   storage: storageSettingsSchema.partial(),
   integrations: integrationSettingsSchema.partial(),
+  animations: animationsSettingsSchema.partial(),
   featureFlags: featureFlagsSettingsSchema.partial(),
 } as const;

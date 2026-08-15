@@ -76,6 +76,22 @@ export interface IntegrationSettings {
   customHeadCode: string;
 }
 
+// Animation controls (plan item 15). These are presentation preferences for
+// users who do NOT request reduced motion — prefers-reduced-motion is always
+// respected client-side and wins over any of these values.
+export type AnimationEffect =
+  | 'none' | 'fade' | 'slide' | 'scale' | 'zoom' | 'bounce'
+  | 'shimmer' | 'pulse' | 'marquee' | 'typewriter';
+
+export interface AnimationsSettings {
+  enabled: boolean; // master switch — off disables all CSS-driven animations
+  defaultEffect: AnimationEffect;
+  durationMs: number; // 0–3000
+  delayMs: number; // 0–2000
+  repeat: 'none' | 'once' | 'infinite';
+  trigger: 'on_load' | 'on_view' | 'always';
+}
+
 // Feature flags — every protected capability must be enforced server-side
 // (see utils/feature-flags.ts requireFeature), never by the client alone.
 export interface FeatureFlagsSettings {
@@ -102,6 +118,7 @@ export interface PlatformSettings {
   payments: PaymentSettings;
   storage: StorageSettings;
   integrations: IntegrationSettings;
+  animations: AnimationsSettings;
   featureFlags: FeatureFlagsSettings;
 }
 
@@ -181,14 +198,23 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     waitlist: true,
     newExamEngine: true,
   },
+  animations: {
+    enabled: true,
+    defaultEffect: 'fade',
+    durationMs: 400,
+    delayMs: 0,
+    repeat: 'once',
+    trigger: 'on_load',
+  },
 };
 
 // Groups that the public (unauthenticated) API may expose — branding, general
-// info, feature flags and the maintenance status. Never include credentials,
-// emails, payment config or security toggles.
+// info, feature flags, animation prefs and the maintenance status. Never
+// include credentials, emails, payment config or security toggles.
 export const PUBLIC_SETTINGS_GROUPS: (keyof PlatformSettings)[] = [
   "general",
   "featureFlags",
+  "animations",
   "branding",
 ];
 

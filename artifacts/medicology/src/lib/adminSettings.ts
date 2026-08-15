@@ -74,6 +74,19 @@ export interface IntegrationSettings {
   customHeadCode: string;
 }
 
+export type AnimationEffect =
+  | 'none' | 'fade' | 'slide' | 'scale' | 'zoom' | 'bounce'
+  | 'shimmer' | 'pulse' | 'marquee' | 'typewriter';
+
+export interface AnimationsSettings {
+  enabled: boolean;
+  defaultEffect: AnimationEffect;
+  durationMs: number;
+  delayMs: number;
+  repeat: 'none' | 'once' | 'infinite';
+  trigger: 'on_load' | 'on_view' | 'always';
+}
+
 export interface FeatureFlagsSettings {
   flashcards: boolean;
   richContent: boolean;
@@ -98,6 +111,7 @@ export interface PlatformSettings {
   payments: PaymentSettings;
   storage: StorageSettings;
   integrations: IntegrationSettings;
+  animations: AnimationsSettings;
   featureFlags: FeatureFlagsSettings;
 }
 
@@ -178,6 +192,14 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     waitlist: true,
     newExamEngine: true,
   },
+  animations: {
+    enabled: true,
+    defaultEffect: "fade",
+    durationMs: 400,
+    delayMs: 0,
+    repeat: "once",
+    trigger: "on_load",
+  },
 };
 
 export type SettingsGroup = keyof PlatformSettings;
@@ -218,6 +240,7 @@ export async function resetSettingsGroup(group?: SettingsGroup): Promise<Platfor
 export interface PublicSettings {
   general: GeneralSettings;
   branding: BrandingSettings;
+  animations: AnimationsSettings;
   featureFlags: FeatureFlagsSettings;
 }
 

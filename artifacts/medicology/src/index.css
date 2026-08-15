@@ -588,3 +588,119 @@
 .rounded-lg { border-radius: calc(var(--brand-radius) * 0.75); }
 .rounded-md { border-radius: calc(var(--brand-radius) * 0.6); }
 .rounded-2xl { border-radius: calc(var(--brand-radius) * 1.25); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PLATFORM ANIMATION CONTROLS (admin settings plan item 15)
+   Driven by AnimationProvider → CSS vars on <html> (--anim-duration etc.)
+   and classes anim-on/anim-off + anim-effect-<name>.
+   prefers-reduced-motion ALWAYS wins: animations are killed outright.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --anim-duration: 400ms;
+  --anim-delay: 0ms;
+  --anim-iterations: 1;
+}
+
+/* Keyframes for every configurable effect. */
+@keyframes anim-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes anim-slide {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes anim-scale {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes anim-zoom {
+  from { opacity: 0; transform: scale(1.15); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes anim-bounce {
+  0% { opacity: 0; transform: translateY(-14px); }
+  55% { opacity: 1; transform: translateY(4px); }
+  75% { transform: translateY(-2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes anim-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes anim-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@keyframes anim-marquee {
+  from { transform: translateX(100%); }
+  to { transform: translateX(-100%); }
+}
+@keyframes anim-typewriter {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes anim-none {
+  /* no-op — used when effect is none to keep the animation property sane */
+  from { opacity: 1; }
+  to { opacity: 1; }
+}
+
+/* The opt-in utility: add class="anim" to animate on mount with the
+   platform-configured effect. */
+.anim {
+  animation: var(--anim-name, anim-fade) var(--anim-duration) var(--anim-delay) var(--anim-iterations) ease-out both;
+}
+
+html.anim-on .anim {
+  --anim-name: anim-fade; /* default; overridden per-effect below */
+}
+html.anim-effect-fade.anim-on .anim { --anim-name: anim-fade; }
+html.anim-effect-slide.anim-on .anim { --anim-name: anim-slide; }
+html.anim-effect-scale.anim-on .anim { --anim-name: anim-scale; }
+html.anim-effect-zoom.anim-on .anim { --anim-name: anim-zoom; }
+html.anim-effect-bounce.anim-on .anim { --anim-name: anim-bounce; }
+html.anim-effect-shimmer.anim-on .anim {
+  --anim-name: anim-shimmer;
+  background-image: linear-gradient(90deg, transparent, rgba(128, 128, 128, 0.18), transparent);
+  background-size: 200% 100%;
+}
+html.anim-effect-pulse.anim-on .anim { --anim-name: anim-pulse; }
+html.anim-effect-marquee.anim-on .anim {
+  --anim-name: anim-marquee;
+  white-space: nowrap;
+  display: inline-block;
+}
+html.anim-effect-typewriter.anim-on .anim {
+  --anim-name: anim-typewriter;
+  overflow: hidden;
+}
+html.anim-effect-none.anim-on .anim { --anim-name: anim-none; }
+
+/* Master switch off → no CSS-driven animation at all. */
+html.anim-off .anim {
+  animation: none !important;
+}
+
+/* The hard guarantee — reduced motion always wins, regardless of settings. */
+@media (prefers-reduced-motion: reduce) {
+  html.anim-on .anim,
+  .anim,
+  .pulse-soft,
+  .bounce-in,
+  .slide-in-up,
+  .slide-in-down,
+  .fade-in-scale,
+  .shimmer,
+  .ticker-scroll {
+    animation: none !important;
+    transition-duration: 0s !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+  }
+}

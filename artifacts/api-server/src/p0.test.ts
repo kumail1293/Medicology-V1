@@ -687,3 +687,50 @@ test('announcements: scheduling window, themes/priorities, and reusable template
   const tplForbidden = await fetch(`${BASE}/announcements/templates`, { headers: userAuth });
   assert.equal(tplForbidden.status, 403);
 });
+
+test('animation settings: validated roundtrip, public exposure, reduced-motion defaults', async () => {
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminBody: any = await adminLogin.json();
+  const auth = { Authorization: `Bearer ${adminBody.token}` };
+  const putJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+
+  // 1. Public endpoint exposes animation prefs (safe, not secret) with defaults.
+  const pub: any = await (await fetch(`${BASE}/settings/public`)).json();
+  assert.equal(pub.settings.animations.enabled, true, 'animations exposed publicly');
+  assert.equal(pub.settings.animations.defaultEffect, 'fade');
+
+  // 2. Update effect + duration; round-trips through the admin API.
+  const put = await fetch(`${BASE}/admin/settings`, putJson(auth, {
+    animations: { defaultEffect: 'bounce', durationMs: 900, repeat: 'infinite' },
+  }));
+  assert.equal(put.status, 200);
+  const body: any = await put.json();
+  assert.equal(body.settings.animations.defaultEffect, 'bounce');
+  assert.equal(body.settings.animations.durationMs, 900);
+
+  // 3. Public endpoint reflects the change.
+  const pub2: any = await (await fetch(`${BASE}/settings/public`)).json();
+  assert.equal(pub2.settings.animations.defaultEffect, 'bounce');
+
+  // 4. Unknown effects and out-of-range values are rejected.
+  const bad1 = await fetch(`${BASE}/admin/settings`, putJson(auth, { animations: { defaultEffect: 'spin' } }));
+  assert.equal(bad1.status, 400);
+  const bad2 = await fetch(`${BASE}/admin/settings`, putJson(auth, { animations: { durationMs: 99999 } }));
+  assert.equal(bad2.status, 400);
+
+  // 5. Non-admin cannot change animation settings.
+  const { token: userToken } = await registerUser('anim-user@test.com');
+  const forbidden = await fetch(`${BASE}/admin/settings`, putJson({ Authorization: `Bearer ${userToken}` }, { animations: { enabled: false } }));
+  assert.equal(forbidden.status, 403);
+
+  // 6. Restore defaults so the suite stays deterministic.
+  await fetch(`${BASE}/admin/settings/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...auth },
+    body: JSON.stringify({ group: 'animations' }),
+  });
+});

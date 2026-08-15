@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, ProtectedRoute, AdminRoute } from "./lib/auth";
 import { SettingsProvider } from "./lib/settings";
 import BrandingApplier from "./components/BrandingApplier";
+import AnimationProvider from "./components/AnimationProvider";
 import { AppLayout } from "./components/layout";
 import { AdminLayout } from "./components/AdminLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -191,6 +192,7 @@ function App() {
         <TooltipProvider>
           <SettingsProvider>
             <BrandingApplier />
+            <AnimationProvider>
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <AuthProvider>
                 <MaintenanceGate>
@@ -199,6 +201,7 @@ function App() {
                 </MaintenanceGate>
               </AuthProvider>
             </WouterRouter>
+            </AnimationProvider>
             <Toaster />
           </SettingsProvider>
         </TooltipProvider>

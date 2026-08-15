@@ -377,9 +377,18 @@ no duplicate systems.
 -   Active feed enforces the schedule window, role targeting, and sorts
     by priority; display honours themes, modal/toast/exam-alert/promotion
     types, dismissibility frequency, and route targeting.
--   Deferred next: animation controls (reduced-motion aware), media
-    library, coming-soon catalogue, scoped QBank/exam overrides, granular
-    admin roles.
+## P0.5.9 ✅ Animation controls (shipped)
+
+-   New `animations` settings group (master switch, effect, duration,
+    delay, repeat) exposed via `/api/settings/public` and applied by an
+    `AnimationProvider` as CSS variables + an `.anim` utility class.
+-   Effects: none, fade, slide, scale, zoom, bounce, shimmer, pulse,
+    marquee, typewriter — all with keyframes in `index.css`.
+-   **`prefers-reduced-motion` always wins** (CSS hard rule + runtime
+    matchMedia listener); admin toggles only affect other users.
+-   Admin → Settings → Animations includes a live preview.
+-   Deferred next: media library, coming-soon catalogue, scoped
+    QBank/exam overrides, granular admin roles.
 
 ------------------------------------------------------------------------
 
