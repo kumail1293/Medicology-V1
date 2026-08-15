@@ -32,7 +32,7 @@ import { seedRbac } from './utils/seed-rbac.js';
 import { startEntitlementSweeper } from './utils/entitlement-sweeper.js';
 import { testConnection } from './db.js';
 import { errorHandler } from './utils/errors.js';
-import { rateLimit, startRateLimitCleanup } from './middleware/rateLimit.js';
+import { rateLimit } from './middleware/rateLimit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -114,7 +114,6 @@ app.use((req: any, res: any, next: any) => {
   if (req.path === '/api/settings/public') return publicSettingsLimiter(req, res, next);
   return strictLimiter(req, res, next);
 });
-startRateLimitCleanup();
 
 // Health check
 app.get('/api/healthz', (req: any, res: any) => {

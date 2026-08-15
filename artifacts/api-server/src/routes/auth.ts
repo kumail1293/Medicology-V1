@@ -234,18 +234,19 @@ async function resetPassword(req: any, res: any) {
   if (String(newPassword).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   const [row] = await db.select().from(passwordResetTokensTable).where(eq(passwordResetTokensTable.token, token));
   if (!row) return res.status(400).json({ error: 'Invalid or expired reset token' });
-  if ((row as any).used) return res.status(400).json({ error: 'This reset link has already been used' });
-  if (new Date((row as any).expiresAt).getTime() < Date.now()) {
+  const rt = row as typeof passwordResetTokensTable.$inferSelect;
+  if (rt.used) return res.status(400).json({ error: 'This reset link has already been used' });
+  if (new Date(rt.expiresAt).getTime() < Date.now()) {
     return res.status(400).json({ error: 'This reset link has expired — please request a new one' });
   }
   const passwordHash = await bcrypt.hash(String(newPassword), 10);
-  await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, (row as any).userId));
-  await db.update(passwordResetTokensTable).set({ used: true }).where(eq(passwordResetTokensTable.id, row.id));
+  await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, rt.userId));
+  await db.update(passwordResetTokensTable).set({ used: true }).where(eq(passwordResetTokensTable.id, rt.id));
   // Revoke every session so old tokens die.
   const { revokeAllSessions: revokeAll } = await import('../utils/sessions.js');
-  await revokeAll((row as any).userId);
+  await revokeAll(rt.userId);
   try {
-    await db.insert(securityEventsTable).values({ userId: (row as any).userId, type: 'password_reset', userAgent: req.headers['user-agent'] ?? null, metadata: { ip: req.ip ?? null } });
+    await db.insert(securityEventsTable).values({ userId: rt.userId, type: 'password_reset', userAgent: req.headers['user-agent'] ?? null, metadata: { ip: req.ip ?? null } });
   } catch { /* best-effort */ }
   res.json({ success: true });
 }

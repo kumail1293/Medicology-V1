@@ -1,6 +1,16 @@
 export function rateLimit(maxRequests: number, windowMs: number) {
   const store: Record<string, { count: number; resetTime: number }> = {};
 
+  // Prune expired entries on an interval so the in-memory store doesn't grow
+  // unbounded. Interval is capped at 60s even when windowMs is larger.
+  const cleanupInterval = Math.min(windowMs, 60000);
+  setInterval(() => {
+    const now = Date.now();
+    for (const key of Object.keys(store)) {
+      if (now > store[key].resetTime) delete store[key];
+    }
+  }, cleanupInterval);
+
   return (req: any, res: any, next: any) => {
     const key = `${req.ip || req.socket?.remoteAddress}:${req.path}`;
     const now = Date.now();
@@ -35,15 +45,3 @@ export function rateLimit(maxRequests: number, windowMs: number) {
     return next();
   };
 }
-
-export function startRateLimitCleanup(intervalMs = 60000) {
-  const store: Record<string, { resetTime: number }> = {};
-  setInterval(() => {
-    const now = Date.now();
-    Object.keys(store).forEach(key => {
-      if (now > store[key].resetTime) delete store[key];
-    });
-  }, intervalMs);
-}
-
-export function resetRateLimit() {}
