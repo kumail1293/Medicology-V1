@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { errataTable } from '@workspace/db';
 import { eq } from '../utils/drizzle.js';
-import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requirePermission, AuthRequest } from '../middleware/auth.js';
 
 export const errataRouter = Router();
 
@@ -45,7 +45,7 @@ errataRouter.get('/admin', authenticate, requireAdmin, async (req, res: any) => 
 });
 
 // Review errata (admin)
-errataRouter.put('/admin/:id', authenticate, requireAdmin, async (req, res: any) => {
+errataRouter.put('/admin/:id', authenticate, requireAdmin, requirePermission('errata.manage'), async (req, res: any) => {
   try {
     const { status, adminNotes, rewardPoints } = req.body;
     const [errata] = await db.update(errataTable)

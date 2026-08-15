@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { User, useGetCurrentUser } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { isTokenExpired } from "./tokenUtils";
+import { ADMIN_ROLES, roleHasPermission } from "./permissions";
 
 // --- MONKEY PATCH FETCH TO INJECT JWT TOKEN GLOBALLY ---
 // NOTE: { ...headersObj } doesn't work for Headers instances — it returns {}.
@@ -59,6 +60,7 @@ interface AuthContextType {
   isAdmin: boolean;
   customPermissions: CustomPermissions;
   hasPermission: (key: keyof CustomPermissions) => boolean;
+  can: (permission: string) => boolean;
   login: (token: string, user: User, remember?: boolean) => void;
   logout: () => void;
   refreshUser: () => void;
@@ -73,6 +75,7 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: true,
   customPermissions: {},
   hasPermission: () => true,
+  can: () => true,
   login: () => {},
   logout: () => {},
   refreshUser: () => {},
@@ -130,13 +133,20 @@ useEffect(() => {
   const activeUser = (user ?? currentUser) ?? null;
   const role = ((activeUser as any)?.role ?? "user") as UserRole;
   const isSuperAdmin = role === "superadmin";
-  const isAdmin = isSuperAdmin || role === "admin" || !!activeUser?.isAdmin;
+  const isAdmin = isSuperAdmin || role === "admin" || ADMIN_ROLES.includes(role) || !!activeUser?.isAdmin;
   const customPermissions: CustomPermissions = ((activeUser as any)?.customPermissions ?? {}) as CustomPermissions;
 
   const hasPermission = (key: string): boolean => {
     if (isSuperAdmin) return true;
     if (isAdmin && key !== "canManageRoles") return true;
     return customPermissions[key] === true;
+  };
+
+  // Role-matrix permission check (mirror of the server's requirePermission).
+  const can = (permission: string): boolean => {
+    if (isSuperAdmin) return true;
+    if (roleHasPermission(role, permission)) return true;
+    return customPermissions[permission] === true;
   };
 
   // Only block on loading while we have a token but no user yet. Once `login()`
@@ -154,6 +164,7 @@ useEffect(() => {
       isAdmin,
       customPermissions,
       hasPermission,
+      can,
       login,
       logout,
       refreshUser,

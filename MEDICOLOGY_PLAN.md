@@ -465,7 +465,54 @@ no duplicate systems.
     admin page. Also fixed a column misalignment in the template's example
     rows (6 of 8 rows had their Correct Answer one slot off, which broke
     validation for those question types).
--   Deferred next: coming-soon catalogue, granular admin roles.
+-   Deferred next: (none — all settings-plan items shipped).
+
+------------------------------------------------------------------------
+
+## P0.5.13 ✅ Coming Soon catalogue (shipped)
+
+-   Migration `0008_coming_soon.sql` (additive): `coming_soon` table (name,
+    description, category exam/qbank/feature/program/resource, icon, image
+    URL, expected release, status planned/in_progress/launching, notify-me
+    flag, audience, CTA label/URL, sort order, active, creator) +
+    `coming_soon_interests` for Notify Me demand tracking.
+-   Admin → **Coming Soon** page: card grid with interest counts, create /
+    edit / delete (all audit-logged), toggle public visibility, per-item
+    CTA — the `FCPS → Coming Soon → Notify Me` flow from the plan.
+-   Public **Coming Soon section** on the dashboard shows active items with
+    Notify Me buttons; authenticated users are keyed by account, anonymous
+    visitors by email, and registrations are deduplicated (one per entry).
+    Admin sees demand counts to decide what to build next.
+-   `GET /api/coming-soon` (public) + `POST /api/coming-soon/:id/notify`
+    (optional auth) + admin CRUD behind requireAdmin.
+
+## P0.5.14 ✅ Granular admin roles (shipped)
+
+-   Role → permission matrix (`utils/permissions.ts`): Super Admin, Admin,
+    Platform Admin, Content Admin, Exam Admin, Finance Admin, Marketing
+    Admin, Support Admin, plus editor/teacher/reviewer. Each role maps to
+    explicit permission keys (`users.manage`, `settings.manage`,
+    `media.manage`, `import.run`, `questions.manage`, `taxonomy.manage`,
+    `flashcards.manage`, `review.manage`, `announcements.manage`,
+    `coming_soon.manage`, `payments.manage`, `entitlements.manage`,
+    `flags.manage`, `errata.manage`, `overrides.manage`, `qbanks.manage`,
+    `audit.view`).
+-   `requirePermission(...)` middleware enforces scopes server-side on the
+    sensitive routes: settings + reset/restore + scoped overrides, user
+    create/update/delete/password, question create/update/delete, review
+    approval, QBank CRUD, media edit/delete, import (template/preview/
+    execute), coming-soon CRUD, announcements + templates, taxonomy
+    mutations, flashcards, flags, errata. Granular admins pass `requireAdmin`
+    but are blocked from operations outside their role.
+-   Admin → **Users** page: role dropdown now lists every assignable role
+    with friendly labels; only a superadmin may grant/revoke admin-level
+    roles (unchanged guard).
+-   Frontend mirrors the matrix (`lib/permissions.ts`); `useAuth().can()`
+    drives the Admin sidebar, which now hides sections the signed-in role
+    cannot use (e.g. a Content Admin sees Questions/Taxonomy/Import but
+    not Users/Settings).
+-   Fixed along the way: the admin dashboard stats endpoint 500'd on the
+    mock DB (raw `sql` count) — now uses the aggregate helper.
 
 ------------------------------------------------------------------------
 

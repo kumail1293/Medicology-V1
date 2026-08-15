@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { announcementsTable, announcementTemplatesTable } from '@workspace/db';
 import { eq, desc } from '../utils/drizzle.js';
-import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requirePermission, AuthRequest } from '../middleware/auth.js';
 import { recordAudit } from '../utils/audit.js';
 
 export const announcementsRouter = Router();
@@ -106,7 +106,7 @@ announcementsRouter.get('/templates', authenticate, requireAdmin, async (_req, r
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-announcementsRouter.post('/templates', authenticate, requireAdmin, async (req, res: any) => {
+announcementsRouter.post('/templates', authenticate, requireAdmin, requirePermission('announcements.manage'), async (req, res: any) => {
   try {
     const body = req.body ?? {};
     if (!body.name || !body.title || !body.content) {
@@ -145,7 +145,7 @@ announcementsRouter.post('/templates', authenticate, requireAdmin, async (req, r
   } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 
-announcementsRouter.put('/templates/:id', authenticate, requireAdmin, async (req, res: any) => {
+announcementsRouter.put('/templates/:id', authenticate, requireAdmin, requirePermission('announcements.manage'), async (req, res: any) => {
   try {
     const body = req.body ?? {};
     const invalid = validateEnums(body);
@@ -189,7 +189,7 @@ announcementsRouter.put('/templates/:id', authenticate, requireAdmin, async (req
   } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 
-announcementsRouter.delete('/templates/:id', authenticate, requireAdmin, async (req, res: any) => {
+announcementsRouter.delete('/templates/:id', authenticate, requireAdmin, requirePermission('announcements.manage'), async (req, res: any) => {
   try {
     const [existing] = await db.select().from(announcementTemplatesTable).where(eq(announcementTemplatesTable.id, Number(req.params.id)));
     await db.delete(announcementTemplatesTable).where(eq(announcementTemplatesTable.id, Number(req.params.id)));
@@ -210,7 +210,7 @@ announcementsRouter.delete('/templates/:id', authenticate, requireAdmin, async (
 });
 
 // Admin: create announcement
-announcementsRouter.post('/', authenticate, requireAdmin, async (req, res: any) => {
+announcementsRouter.post('/', authenticate, requireAdmin, requirePermission('announcements.manage'), async (req, res: any) => {
   try {
     const body = toRow(req.body);
     if (!body.title || !body.content) {
@@ -252,7 +252,7 @@ announcementsRouter.post('/', authenticate, requireAdmin, async (req, res: any) 
 });
 
 // Admin: update announcement
-announcementsRouter.put('/:id', authenticate, requireAdmin, async (req, res: any) => {
+announcementsRouter.put('/:id', authenticate, requireAdmin, requirePermission('announcements.manage'), async (req, res: any) => {
   try {
     const body = toRow(req.body);
     const invalid = validateEnums(body);
@@ -283,7 +283,7 @@ announcementsRouter.put('/:id', authenticate, requireAdmin, async (req, res: any
 });
 
 // Admin: delete announcement
-announcementsRouter.delete('/:id', authenticate, requireAdmin, async (req, res: any) => {
+announcementsRouter.delete('/:id', authenticate, requireAdmin, requirePermission('announcements.manage'), async (req, res: any) => {
   try {
     const [existing] = await db.select().from(announcementsTable).where(eq(announcementsTable.id, Number(req.params.id)));
     await db.delete(announcementsTable).where(eq(announcementsTable.id, Number(req.params.id)));

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { flashcardDecksTable, flashcardsTable } from '@workspace/db';
 import { eq, and, sql } from '../utils/drizzle.js';
-import { authenticate, requireContentEditor } from '../middleware/auth.js';
+import { authenticate, requirePermission } from '../middleware/auth.js';
 import { validateBody, validateParams } from '../middleware/validation.js';
 import {
   questionIdParamSchema,
@@ -34,7 +34,7 @@ const actorOf = (req: any) => ({ id: req.user?.id, name: req.user?.name, email: 
 // ---------------------------------------------------------------------------
 
 // List decks with live card counts (all statuses for editors).
-flashcardsRouter.get('/admin/decks', authenticate, requireContentEditor, async (req: any, res: any) => {
+flashcardsRouter.get('/admin/decks', authenticate, requirePermission('flashcards.manage'), async (req: any, res: any) => {
   try {
     const [decks, counts] = await Promise.all([
       db.select().from(flashcardDecksTable),
@@ -53,7 +53,7 @@ flashcardsRouter.get('/admin/decks', authenticate, requireContentEditor, async (
 });
 
 // Create a deck.
-flashcardsRouter.post('/admin/decks', authenticate, requireContentEditor, validateBody(createFlashcardDeckSchema), async (req: any, res: any) => {
+flashcardsRouter.post('/admin/decks', authenticate, requirePermission('flashcards.manage'), validateBody(createFlashcardDeckSchema), async (req: any, res: any) => {
   try {
     const data = req.validatedBody as CreateFlashcardDeck;
     const existing = await db.select().from(flashcardDecksTable).where(eq(flashcardDecksTable.slug, data.slug));
@@ -82,7 +82,7 @@ flashcardsRouter.post('/admin/decks', authenticate, requireContentEditor, valida
 });
 
 // Update a deck.
-flashcardsRouter.put('/admin/decks/:id', authenticate, requireContentEditor, validateParams(questionIdParamSchema), validateBody(updateFlashcardDeckSchema), async (req: any, res: any) => {
+flashcardsRouter.put('/admin/decks/:id', authenticate, requirePermission('flashcards.manage'), validateParams(questionIdParamSchema), validateBody(updateFlashcardDeckSchema), async (req: any, res: any) => {
   try {
     const { id } = req.validatedParams as { id: number };
     const data = req.validatedBody as UpdateFlashcardDeck;
@@ -118,7 +118,7 @@ flashcardsRouter.put('/admin/decks/:id', authenticate, requireContentEditor, val
 });
 
 // Archive a deck (soft delete — keeps card history).
-flashcardsRouter.delete('/admin/decks/:id', authenticate, requireContentEditor, validateParams(questionIdParamSchema), async (req: any, res: any) => {
+flashcardsRouter.delete('/admin/decks/:id', authenticate, requirePermission('flashcards.manage'), validateParams(questionIdParamSchema), async (req: any, res: any) => {
   try {
     const { id } = req.validatedParams as { id: number };
     const [existing] = await db.select().from(flashcardDecksTable).where(eq(flashcardDecksTable.id, id));
@@ -150,7 +150,7 @@ flashcardsRouter.delete('/admin/decks/:id', authenticate, requireContentEditor, 
 // Cards within a deck.
 // ---------------------------------------------------------------------------
 
-flashcardsRouter.get('/admin/decks/:id/cards', authenticate, requireContentEditor, validateParams(questionIdParamSchema), async (req: any, res: any) => {
+flashcardsRouter.get('/admin/decks/:id/cards', authenticate, requirePermission('flashcards.manage'), validateParams(questionIdParamSchema), async (req: any, res: any) => {
   try {
     const { id } = req.validatedParams as { id: number };
     const cards = await db
@@ -165,7 +165,7 @@ flashcardsRouter.get('/admin/decks/:id/cards', authenticate, requireContentEdito
 });
 
 // Create a card (rich HTML front/back).
-flashcardsRouter.post('/admin/decks/:id/cards', authenticate, requireContentEditor, validateParams(questionIdParamSchema), validateBody(createFlashcardSchema), async (req: any, res: any) => {
+flashcardsRouter.post('/admin/decks/:id/cards', authenticate, requirePermission('flashcards.manage'), validateParams(questionIdParamSchema), validateBody(createFlashcardSchema), async (req: any, res: any) => {
   try {
     const { id } = req.validatedParams as { id: number };
     const data = req.validatedBody as CreateFlashcard;
@@ -207,7 +207,7 @@ flashcardsRouter.post('/admin/decks/:id/cards', authenticate, requireContentEdit
 });
 
 // Bulk-add a whole deck of cards in one call.
-flashcardsRouter.post('/admin/decks/:id/cards/bulk', authenticate, requireContentEditor, validateParams(questionIdParamSchema), validateBody(bulkFlashcardsSchema), async (req: any, res: any) => {
+flashcardsRouter.post('/admin/decks/:id/cards/bulk', authenticate, requirePermission('flashcards.manage'), validateParams(questionIdParamSchema), validateBody(bulkFlashcardsSchema), async (req: any, res: any) => {
   try {
     const { id } = req.validatedParams as { id: number };
     const { cards } = req.validatedBody as BulkFlashcards;
@@ -251,7 +251,7 @@ flashcardsRouter.post('/admin/decks/:id/cards/bulk', authenticate, requireConten
 });
 
 // Update a card.
-flashcardsRouter.put('/admin/cards/:id', authenticate, requireContentEditor, validateParams(questionIdParamSchema), validateBody(updateFlashcardSchema), async (req: any, res: any) => {
+flashcardsRouter.put('/admin/cards/:id', authenticate, requirePermission('flashcards.manage'), validateParams(questionIdParamSchema), validateBody(updateFlashcardSchema), async (req: any, res: any) => {
   try {
     const { id } = req.validatedParams as { id: number };
     const data = req.validatedBody as UpdateFlashcard;
@@ -281,7 +281,7 @@ flashcardsRouter.put('/admin/cards/:id', authenticate, requireContentEditor, val
 });
 
 // Delete a card.
-flashcardsRouter.delete('/admin/cards/:id', authenticate, requireContentEditor, validateParams(questionIdParamSchema), async (req: any, res: any) => {
+flashcardsRouter.delete('/admin/cards/:id', authenticate, requirePermission('flashcards.manage'), validateParams(questionIdParamSchema), async (req: any, res: any) => {
   try {
     const { id } = req.validatedParams as { id: number };
     const [existing] = await db.select().from(flashcardsTable).where(eq(flashcardsTable.id, id));

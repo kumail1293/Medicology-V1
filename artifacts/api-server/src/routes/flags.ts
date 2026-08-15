@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { questionFlagsTable, questionsTable } from '@workspace/db';
 import { eq } from '../utils/drizzle.js';
-import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requirePermission, AuthRequest } from '../middleware/auth.js';
 
 export const flagsRouter = Router();
 
@@ -31,7 +31,7 @@ flagsRouter.get('/', authenticate, requireAdmin, async (req, res: any) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-flagsRouter.delete('/:id', authenticate, requireAdmin, async (req, res: any) => {
+flagsRouter.delete('/:id', authenticate, requireAdmin, requirePermission('flags.manage'), async (req, res: any) => {
   try {
     await db.delete(questionFlagsTable).where(eq(questionFlagsTable.id, Number(req.params.id)));
     res.json({ success: true });

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { appSettingsTable, settingsOverridesTable, SETTING_SCOPES, type SettingScope } from '@workspace/db';
 import { and, eq } from '../utils/drizzle.js';
-import { authenticate, requireAdmin } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requirePermission } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validation.js';
 import { updateSettingsSchema, UPDATE_SETTINGS_SHAPE, settingsOverrideUpsertSchema, examSettingsSchema } from './schemas.js';
 import type { UpdateSettings } from './schemas.js';
@@ -48,7 +48,7 @@ settingsRouter.get('/admin/settings', authenticate, requireAdmin, async (req: an
 });
 
 // PUT /api/admin/settings — partial update of one or more groups.
-settingsRouter.put('/admin/settings', authenticate, requireAdmin, validateBody(updateSettingsSchema), async (req: any, res: any) => {
+settingsRouter.put('/admin/settings', authenticate, requireAdmin, requirePermission('settings.manage'), validateBody(updateSettingsSchema), async (req: any, res: any) => {
   try {
     const body = req.validatedBody as UpdateSettings;
     const stored = await loadStored();
@@ -107,7 +107,7 @@ settingsRouter.put('/admin/settings', authenticate, requireAdmin, validateBody(u
 });
 
 // POST /api/admin/settings/reset — restore a group (or everything) to defaults.
-settingsRouter.post('/admin/settings/reset', authenticate, requireAdmin, async (req: any, res: any) => {
+settingsRouter.post('/admin/settings/reset', authenticate, requireAdmin, requirePermission('settings.manage'), async (req: any, res: any) => {
   try {
     const { group } = req.body ?? {};
     const groups = group && typeof group === 'string'
@@ -160,7 +160,7 @@ settingsRouter.get('/admin/settings/history', authenticate, requireAdmin, async 
 
 // POST /api/admin/settings/restore — re-apply the pre-change snapshot from an
 // audit entry (oldValues), so any saved configuration can be restored.
-settingsRouter.post('/admin/settings/restore', authenticate, requireAdmin, async (req: any, res: any) => {
+settingsRouter.post('/admin/settings/restore', authenticate, requireAdmin, requirePermission('settings.manage'), async (req: any, res: any) => {
   try {
     const { id } = req.body ?? {};
     if (!id) return res.status(400).json({ error: 'Audit log id is required' });
@@ -242,7 +242,7 @@ settingsRouter.get('/admin/settings/overrides', authenticate, requireAdmin, asyn
 // PUT /api/admin/settings/overrides — upsert one override. Validates the key
 // is a real examSettings key and the value matches its schema; rejects safety
 // keys; audits the change.
-settingsRouter.put('/admin/settings/overrides', authenticate, requireAdmin, validateBody(settingsOverrideUpsertSchema), async (req: any, res: any) => {
+settingsRouter.put('/admin/settings/overrides', authenticate, requireAdmin, requirePermission('overrides.manage'), validateBody(settingsOverrideUpsertSchema), async (req: any, res: any) => {
   try {
     const { scope, scopeId, group, key, value } = req.validatedBody;
     if (SAFETY_KEYS.includes(`${group}.${key}`)) {
@@ -299,7 +299,7 @@ settingsRouter.put('/admin/settings/overrides', authenticate, requireAdmin, vali
 });
 
 // DELETE /api/admin/settings/overrides?scope=exam&scopeId=3&key=questionCount
-settingsRouter.delete('/admin/settings/overrides', authenticate, requireAdmin, async (req: any, res: any) => {
+settingsRouter.delete('/admin/settings/overrides', authenticate, requireAdmin, requirePermission('overrides.manage'), async (req: any, res: any) => {
   try {
     const { scope, scopeId, key, group } = req.query;
     if (!SETTING_SCOPES.includes(scope)) return res.status(400).json({ error: 'Invalid scope' });
@@ -388,7 +388,7 @@ settingsRouter.get('/admin/settings/:section', authenticate, requireAdmin, async
 });
 
 // PATCH /api/admin/settings/:section — validated partial update of one group.
-settingsRouter.patch('/admin/settings/:section', authenticate, requireAdmin, async (req: any, res: any) => {
+settingsRouter.patch('/admin/settings/:section', authenticate, requireAdmin, requirePermission('settings.manage'), async (req: any, res: any) => {
   try {
     const { section } = req.params as { section: string };
     if (!(section in DEFAULT_SETTINGS)) {

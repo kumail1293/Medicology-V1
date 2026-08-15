@@ -14,7 +14,7 @@ import {
   examSystemsTable,
 } from '@workspace/db';
 import { eq, ilike, and, or, sql, inArray } from '../utils/drizzle.js';
-import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requirePermission, AuthRequest, ASSIGNABLE_ROLES as ALLOWED_ROLES, ADMIN_ROLES } from '../middleware/auth.js';
 import {
   validateBody,
   validateQuery,
@@ -57,18 +57,20 @@ adminRouter.use(authenticate, requireAdmin);
 // Get stats
 adminRouter.get('/stats', async (req: AuthRequest, res: any) => {
   try {
-    const [{ totalQuestions }] = await db
-      .select({ totalQuestions: sql<number>`count(*)` })
+    // Counts via the aggregate helper (mock-DB compatible; raw `sql` count
+    // templates are not evaluable against the in-memory store).
+    const [{ count: totalQuestions }] = await db
+      .select({ count: sql<number>`count(*)` })
       .from(questionsTable);
-    const [{ totalUsers }] = await db
-      .select({ totalUsers: sql<number>`count(*)` })
+    const [{ count: totalUsers }] = await db
+      .select({ count: sql<number>`count(*)` })
       .from(usersTable);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [{ answersToday }] = await db
-      .select({ answersToday: sql<number>`count(*)` })
+    const [{ count: answersToday }] = await db
+      .select({ count: sql<number>`count(*)` })
       .from(userProgressTable)
       .where(sql`created_at >= ${today}`);
 
@@ -144,6 +146,7 @@ adminRouter.get(
 // enter the review pipeline as drafts rather than publishing immediately.
 adminRouter.post(
   '/questions',
+  requirePermission('questions.manage'),
   validateBody(createQuestionSchema),
   async (req: any, res: any) => {
     try {
@@ -193,6 +196,7 @@ adminRouter.post(
 // Update question — the QID is immutable and never changes on edits.
 adminRouter.put(
   '/questions/:id',
+  requirePermission('questions.manage'),
   validateParams(questionIdParamSchema),
   validateBody(updateQuestionSchema),
   async (req: any, res: any) => {
@@ -265,6 +269,7 @@ adminRouter.put(
 // Delete question
 adminRouter.delete(
   '/questions/:id',
+  requirePermission('questions.manage'),
   validateParams(questionIdParamSchema),
   async (req: any, res: any) => {
     try {
@@ -364,7 +369,7 @@ adminRouter.get('/qbanks', async (req: any, res: any) => {
 });
 
 // Create QBank
-adminRouter.post('/qbanks', validateBody(createQbankSchema), async (req: any, res: any) => {
+adminRouter.post('/qbanks', requirePermission('qbanks.manage'), validateBody(createQbankSchema), async (req: any, res: any) => {
   try {
     const data = req.validatedBody as CreateQbank;
     const existing = await db.select().from(qbanksTable).where(eq(qbanksTable.slug, data.slug));
@@ -391,7 +396,7 @@ adminRouter.post('/qbanks', validateBody(createQbankSchema), async (req: any, re
 });
 
 // Update QBank
-adminRouter.put('/qbanks/:id', validateParams(questionIdParamSchema), validateBody(updateQbankSchema), async (req: any, res: any) => {
+adminRouter.put('/qbanks/:id', requirePermission('qbanks.manage'), validateParams(questionIdParamSchema), validateBody(updateQbankSchema), async (req: any, res: any) => {
   try {
     const { id } = req.validatedParams as { id: number };
     const data = req.validatedBody as UpdateQbank;
@@ -433,7 +438,7 @@ adminRouter.put('/qbanks/:id', validateParams(questionIdParamSchema), validateBo
 });
 
 // Archive QBank (soft delete — keeps entitlement/reference integrity).
-adminRouter.delete('/qbanks/:id', validateParams(questionIdParamSchema), async (req: any, res: any) => {
+adminRouter.delete('/qbanks/:id', requirePermission('qbanks.manage'), validateParams(questionIdParamSchema), async (req: any, res: any) => {
   try {
     const { id } = req.validatedParams as { id: number };
     const [existing] = await db.select().from(qbanksTable).where(eq(qbanksTable.id, id));
@@ -490,7 +495,7 @@ adminRouter.get('/qbanks/:id/questions', validateParams(questionIdParamSchema), 
 });
 
 // Replace the question↔qbank mapping (adds + removes to match the target set).
-adminRouter.post('/qbanks/:id/questions', validateParams(questionIdParamSchema), validateBody(qbankMappingSchema), async (req: any, res: any) => {
+adminRouter.post('/qbanks/:id/questions', requirePermission('qbanks.manage'), validateParams(questionIdParamSchema), validateBody(qbankMappingSchema), async (req: any, res: any) => {
   try {
     const { id } = req.validatedParams as { id: number };
     const { questionIds } = req.validatedBody as QbankMapping;
@@ -621,6 +626,7 @@ const REVIEW_TRANSITIONS: Record<
 
 adminRouter.post(
   '/questions/:id/review',
+  requirePermission('review.manage'),
   validateParams(questionIdParamSchema),
   validateBody(reviewQuestionSchema),
   async (req: any, res: any) => {
@@ -767,6 +773,7 @@ adminRouter.get('/questions/duplicates', async (req: AuthRequest, res: any) => {
 // Delete user
 adminRouter.delete(
   '/users/:id',
+  requirePermission('users.manage'),
   validateParams(questionIdParamSchema),
   async (req: any, res: any) => {
     try {
@@ -783,6 +790,7 @@ adminRouter.delete(
 // Reset user password
 adminRouter.post(
   '/users/:id/reset-password',
+  requirePermission('users.manage'),
   validateParams(questionIdParamSchema),
   async (req: any, res: any) => {
     try {
@@ -867,11 +875,9 @@ adminRouter.get(
   }
 );
 
-// Assignable roles. Only a superadmin may grant/revoke admin or superadmin;
-// admins manage user/editor/teacher.
-const ALLOWED_ROLES = ['user', 'editor', 'teacher', 'admin', 'superadmin'];
-const ADMIN_ROLES = ['admin', 'superadmin'];
-
+// Assignable roles (settings plan item 20 — granular admin roles). Only a
+// superadmin may grant/revoke admin-level roles; admins manage
+// user/editor/teacher/reviewer.
 function normalizeRole(role: unknown): string | null {
   if (role === undefined || role === null || role === '') return 'user';
   const r = String(role);
@@ -879,7 +885,7 @@ function normalizeRole(role: unknown): string | null {
 }
 
 // Create user
-adminRouter.post('/users', async (req: any, res: any) => {
+adminRouter.post('/users', requirePermission('users.manage'), async (req: any, res: any) => {
   try {
     const bcrypt = await import('bcryptjs');
     const { name, email, password, college, university, year, role } = req.body;
@@ -929,6 +935,7 @@ adminRouter.post('/users', async (req: any, res: any) => {
 // Update user
 adminRouter.put(
   '/users/:id',
+  requirePermission('users.manage'),
   validateParams(questionIdParamSchema),
   async (req: any, res: any) => {
     try {

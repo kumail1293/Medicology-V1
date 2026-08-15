@@ -22,6 +22,7 @@ import {
   ClipboardCheck,
   Database,
   Layers,
+  Rocket,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -30,10 +31,11 @@ interface NavItem {
   icon: React.ReactNode;
   path: string;
   badge?: number;
+  permission?: string;
 }
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { logout, user } = useAuth();
+  const { logout, user, can } = useAuth();
   const [, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [location] = useLocation();
@@ -76,59 +78,78 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       label: 'Users',
       icon: <Users size={18} />,
       path: '/admin/users',
+      permission: 'users.view',
     },
     {
       label: 'Questions',
       icon: <BookOpen size={18} />,
       path: '/admin/questions',
+      permission: 'questions.manage',
     },
     {
       label: 'Taxonomy',
       icon: <Network size={18} />,
       path: '/admin/taxonomy',
+      permission: 'taxonomy.manage',
     },
     {
       label: 'Bulk Import',
       icon: <UploadCloud size={18} />,
       path: '/admin/import',
+      permission: 'import.run',
     },
     {
       label: 'Review Queue',
       icon: <ClipboardCheck size={18} />,
       path: '/admin/review',
       badge: reviewBadge,
+      permission: 'review.manage',
     },
     {
       label: 'QBanks',
       icon: <Database size={18} />,
       path: '/admin/qbanks',
+      permission: 'qbanks.manage',
     },
     {
       label: 'Flashcards',
       icon: <Layers size={18} />,
       path: '/admin/flashcards',
+      permission: 'flashcards.manage',
     },
     {
       label: 'Announcements',
       icon: <Megaphone size={18} />,
       path: '/admin/announcements',
+      permission: 'announcements.manage',
     },
     {
       label: 'Flags & Reports',
       icon: <AlertCircle size={18} />,
       path: '/admin/flags',
+      permission: 'flags.manage',
     },
     {
       label: 'Media Library',
       icon: <Images size={18} />,
       path: '/admin/media',
+      permission: 'media.manage',
+    },
+    {
+      label: 'Coming Soon',
+      icon: <Rocket size={18} />,
+      path: '/admin/coming-soon',
+      permission: 'coming_soon.manage',
     },
     {
       label: 'Settings',
       icon: <Settings size={18} />,
       path: '/admin/settings',
+      permission: 'settings.manage',
     },
   ];
+
+  const visibleNav = navItems.filter((item) => !item.permission || can(item.permission));
 
   const isActive = (path: string) => location === path;
 
@@ -164,7 +185,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {navItems.map((item) => (
+          {visibleNav.map((item) => (
             <button
               key={item.path}
               onClick={() => setLocation(item.path)}

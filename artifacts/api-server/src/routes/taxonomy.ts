@@ -13,7 +13,7 @@ import {
   questionsTable,
 } from '@workspace/db';
 import { eq } from '../utils/drizzle.js';
-import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requirePermission, AuthRequest } from '../middleware/auth.js';
 import { recordAudit } from '../utils/audit.js';
 
 const actorOf = (req: any) => ({ id: req.user?.id, name: req.user?.name, email: req.user?.email });
@@ -278,7 +278,7 @@ taxonomyRouter.get('/:entity', authenticate, requireAdmin, async (req: any, res:
 });
 
 // Create a row in an entity
-taxonomyRouter.post('/:entity', authenticate, requireAdmin, async (req: any, res: any) => {
+taxonomyRouter.post('/:entity', authenticate, requireAdmin, requirePermission('taxonomy.manage'), async (req: any, res: any) => {
   try {
     const entity = req.params.entity;
     const table = ENTITY_TABLES[entity];
@@ -312,7 +312,7 @@ taxonomyRouter.post('/:entity', authenticate, requireAdmin, async (req: any, res
 });
 
 // Update a row in an entity
-taxonomyRouter.put('/:entity/:id', authenticate, requireAdmin, async (req: any, res: any) => {
+taxonomyRouter.put('/:entity/:id', authenticate, requireAdmin, requirePermission('taxonomy.manage'), async (req: any, res: any) => {
   try {
     const entity = req.params.entity;
     const table = ENTITY_TABLES[entity];
@@ -353,7 +353,7 @@ taxonomyRouter.put('/:entity/:id', authenticate, requireAdmin, async (req: any, 
 });
 
 // Delete a row from an entity
-taxonomyRouter.delete('/:entity/:id', authenticate, requireAdmin, async (req: any, res: any) => {
+taxonomyRouter.delete('/:entity/:id', authenticate, requireAdmin, requirePermission('taxonomy.manage'), async (req: any, res: any) => {
   try {
     const entity = req.params.entity;
     const table = ENTITY_TABLES[entity];

@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { Request } from 'express';
+import { ADMIN_ROLES, requirePermission } from '../utils/permissions.js';
 
 // JWT_SECRET is now validated in app.ts startup
 const JWT_SECRET = process.env.JWT_SECRET!;
@@ -21,14 +22,9 @@ export function generateToken(user: { id: number; email: string; isAdmin: boolea
   return jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
 }
 
-export function authenticate(req: any, res: any, next: any): void {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-  const token = header.split(' ')[1];
-  
+/** Resolve a bearer token to a user, or null when absent/invalid. */
+function resolveUserFromToken(token: string | undefined): any {
+  if (!token) return null;
   // In development, accept mock tokens (JWT format: header.payload.signature)
   if (process.env.NODE_ENV !== 'production') {
     try {
@@ -37,38 +33,64 @@ export function authenticate(req: any, res: any, next: any): void {
         const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
         // Check if it has the expected user properties
         if (payload.id && payload.email) {
-          req.user = {
+          return {
             id: payload.id,
             email: payload.email,
             isAdmin: payload.isAdmin || false,
             role: payload.role || 'user',
           };
-          next();
-          return;
         }
       }
     } catch {
       // Fall through to jwt.verify
     }
   }
-  
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    req.user = decoded;
-    next();
+    return jwt.verify(token, JWT_SECRET) as any;
   } catch {
-    res.status(401).json({ error: 'Invalid token' });
-    return;
+    return null;
   }
 }
 
+export function authenticate(req: any, res: any, next: any): void {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const user = resolveUserFromToken(header.split(' ')[1]);
+  if (!user) {
+    res.status(401).json({ error: 'Invalid token' });
+    return;
+  }
+  req.user = user;
+  next();
+}
+
+/**
+ * Optional auth: attaches the user when a valid bearer token is present, but
+ * never rejects — for public endpoints that behave differently for logged-in
+ * visitors (e.g. Coming Soon Notify Me).
+ */
+export function softAuthenticate(req: any, _res: any, next: any): void {
+  const header = req.headers.authorization;
+  if (header && header.startsWith('Bearer ')) {
+    const user = resolveUserFromToken(header.split(' ')[1]);
+    if (user) req.user = user;
+  }
+  next();
+}
+
 export function requireAdmin(req: any, res: any, next: any): void {
-  if (!req.user?.isAdmin && req.user?.role !== 'admin' && req.user?.role !== 'superadmin') {
+  if (!req.user?.isAdmin && !ADMIN_ROLES.includes(req.user?.role)) {
     res.status(403).json({ error: 'Forbidden' });
     return;
   }
   next();
 }
+
+export { requirePermission };
+export { roleHasPermission, ROLE_PERMISSIONS, ROLE_LABELS, ADMIN_ROLES, ASSIGNABLE_ROLES } from '../utils/permissions.js';
 
 // Content editors — admin, superadmin, editor and teacher roles — may create
 // and edit educational content (questions, explanations, flashcards,

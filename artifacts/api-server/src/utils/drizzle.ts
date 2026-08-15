@@ -1,5 +1,6 @@
 import {
   and as drizzleAnd,
+  count as drizzleCount,
   desc as drizzleDesc,
   eq as drizzleEq,
   ilike as drizzleIlike,
@@ -17,3 +18,4 @@ export const ilike: (left: any, right: any) => any = drizzleIlike as any;
 export const inArray: (left: any, values: any[]) => any = drizzleInArray as any;
 export const desc: (value: any) => any = drizzleDesc as any;
 export const sql: any = drizzleSql;
+export const count: any = drizzleCount as any;

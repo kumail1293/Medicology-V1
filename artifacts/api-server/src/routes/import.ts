@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { authenticate, requireAdmin } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requirePermission } from '../middleware/auth.js';
 import { buildImportPreview, executeImport, loadBulkImportSettings } from '../utils/importer.js';
 import type { ImportRowResult } from '../utils/importer.js';
 import { buildImportTemplateWorkbook } from '../utils/import-templates.js';
@@ -10,7 +10,7 @@ export const importRouter = Router();
 
 // GET /api/admin/import/template?type=sba — downloadable .xlsx template with
 // headers, one example row per question type, and a Guide sheet.
-importRouter.get('/template', authenticate, requireAdmin, async (req: any, res: any) => {
+importRouter.get('/template', authenticate, requireAdmin, requirePermission('import.run'), async (req: any, res: any) => {
   try {
     const type = String(req.query.type ?? '');
     const buffer = buildImportTemplateWorkbook(type || undefined);
@@ -44,6 +44,7 @@ importRouter.post(
   '/preview',
   authenticate,
   requireAdmin,
+  requirePermission('import.run'),
   async (req: any, res: any) => {
     try {
       const upload = await makeUploader();
@@ -64,7 +65,7 @@ importRouter.post(
 );
 
 // Step 2: import the rows the admin chose (from the preview response)
-importRouter.post('/execute', authenticate, requireAdmin, async (req: any, res: any) => {
+importRouter.post('/execute', authenticate, requireAdmin, requirePermission('import.run'), async (req: any, res: any) => {
   try {
     const { rows, includeDuplicates, createMissingTaxonomy } = req.body ?? {};
     if (!Array.isArray(rows) || rows.length === 0) {

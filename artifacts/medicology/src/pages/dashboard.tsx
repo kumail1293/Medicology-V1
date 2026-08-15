@@ -8,6 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { format, parseISO } from 'date-fns';
 import { clsx } from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
+import { ComingSoonSection } from '@/components/ComingSoonSection';
 
 interface Analytics {
   totalAttempted: number;
@@ -164,6 +165,8 @@ export default function Dashboard() {
       </motion.div>
 
       <GoalProgressCard />
+
+      <ComingSoonSection />
 
       {/* Streak banner with animation */}
       <AnimatePresence>

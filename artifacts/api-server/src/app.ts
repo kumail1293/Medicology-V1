@@ -24,6 +24,7 @@ import { settingsRouter } from './routes/settings.js';
 import { taxonomyRouter } from './routes/taxonomy.js';
 import { importRouter } from './routes/import.js';
 import { paymentsRouter } from './routes/payments.js';
+import { comingSoonRouter, comingSoonAdminRouter } from './routes/coming-soon.js';
 import { testConnection } from './db.js';
 import { errorHandler } from './utils/errors.js';
 import { rateLimit, startRateLimitCleanup } from './middleware/rateLimit.js';
@@ -133,6 +134,8 @@ app.use('/api/taxonomy', taxonomyRouter);
 app.use('/api/admin/import', importRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/flashcards', flashcardsRouter);
+app.use('/api/coming-soon', comingSoonRouter);
+app.use('/api/admin/coming-soon', comingSoonAdminRouter);
 app.use('/api', settingsRouter);
 
 // 404 handler

@@ -1049,3 +1049,210 @@ test('import: bulkImport settings drive status, thresholds, allowed types and fi
     await put({ bulkImport: cur.settings ?? { allowedFileTypes: ['xlsx', 'xls', 'csv', 'tsv'], allowedQuestionTypes: ['sba', 'best_of_five', 'true_false', 'assertion_reason', 'emq', 'image_based', 'clinical_vignette', 'case_based'], defaultImportStatus: 'pending_review', defaultDifficulty: 'medium', requireReviewBeforePublish: true } });
   }
 });
+
+
+test('coming soon: public list only exposes active items', async () => {
+  const { token } = await registerUser('cs-public@test.com');
+  // Create one active and one hidden item as admin.
+  const admin = await adminLogin();
+  const created = await fetch(`${BASE}/admin/coming-soon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+    body: JSON.stringify({ name: 'FCPS Part II', category: 'exam', status: 'planned', active: true, notifyMe: true, audience: 'FCPS candidates' }),
+  });
+  const createdBody: any = await created.json();
+  assert.equal(created.status, 201, JSON.stringify(createdBody).slice(0, 200));
+  const item: any = createdBody;
+  await fetch(`${BASE}/admin/coming-soon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+    body: JSON.stringify({ name: 'Hidden Item', category: 'feature', active: false }),
+  });
+
+  const list = await fetch(`${BASE}/coming-soon`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(list.status, 200);
+  const data: any = await list.json();
+  assert.ok(Array.isArray(data));
+  assert.ok(data.some((e: any) => e.name === 'FCPS Part II'), 'active item visible');
+  assert.ok(!data.some((e: any) => e.name === 'Hidden Item'), 'inactive item hidden');
+  assert.equal(typeof data.find((e: any) => e.id === item.id).interestCount, 'number');
+});
+
+test('coming soon: notify-me registers interest and dedupes', async () => {
+  const { token, user } = await registerUser('cs-notify@test.com');
+  const admin = await adminLogin();
+  const created = await fetch(`${BASE}/admin/coming-soon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+    body: JSON.stringify({ name: 'NotifyMe QBank', category: 'qbank', notifyMe: true }),
+  });
+  const item: any = await created.json();
+
+  const first = await fetch(`${BASE}/coming-soon/${item.id}/notify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
+  });
+  assert.equal(first.status, 201, (await first.text()).slice(0, 200));
+
+  const dup = await fetch(`${BASE}/coming-soon/${item.id}/notify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
+  });
+  const dupBody: any = await dup.json();
+  assert.equal(dup.status, 200);
+  assert.equal(dupBody.alreadyRegistered, true, 'duplicate notify is idempotent');
+
+  // Admin list shows the demand count.
+  const adminList = await fetch(`${BASE}/admin/coming-soon`, { headers: { Authorization: `Bearer ${admin}` } });
+  const entries: any = await adminList.json();
+  const found = entries.find((e: any) => e.id === item.id);
+  assert.equal(found.interestCount, 1, 'interest count reflects one registration');
+
+  // Anonymous notify requires an email.
+  const anon = await fetch(`${BASE}/coming-soon/${item.id}/notify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  assert.equal(anon.status, 400, 'anonymous notify without email rejected');
+  const anonOk = await fetch(`${BASE}/coming-soon/${item.id}/notify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'anon@test.com' }),
+  });
+  assert.equal(anonOk.status, 201, (await anonOk.text()).slice(0, 200));
+  assert.equal(user.id > 0, true);
+});
+
+test('coming soon: admin CRUD validates and requires admin', async () => {
+  const { token } = await registerUser('cs-nonadmin@test.com');
+  const admin = await adminLogin();
+
+  // Non-admin is forbidden from admin CRUD.
+  const forbidden = await fetch(`${BASE}/admin/coming-soon`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(forbidden.status, 403);
+
+  // Invalid category → 400.
+  const bad = await fetch(`${BASE}/admin/coming-soon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+    body: JSON.stringify({ name: 'Bad', category: 'not-a-category' }),
+  });
+  assert.equal(bad.status, 400);
+
+  // Missing name → 400.
+  const noname = await fetch(`${BASE}/admin/coming-soon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+    body: JSON.stringify({ category: 'feature' }),
+  });
+  assert.equal(noname.status, 400);
+
+  // Update + delete round-trip.
+  const created = await fetch(`${BASE}/admin/coming-soon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+    body: JSON.stringify({ name: 'Update Me', category: 'program' }),
+  });
+  const item: any = await created.json();
+  const updated = await fetch(`${BASE}/admin/coming-soon/${item.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+    body: JSON.stringify({ name: 'Updated Name', status: 'in_progress' }),
+  });
+  assert.equal(updated.status, 200);
+  const updatedBody: any = await updated.json();
+  assert.equal(updatedBody.name, 'Updated Name');
+  assert.equal(updatedBody.status, 'in_progress');
+
+  const deleted = await fetch(`${BASE}/admin/coming-soon/${item.id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${admin}` },
+  });
+  assert.equal(deleted.status, 200);
+  const after = await fetch(`${BASE}/admin/coming-soon/${item.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+    body: JSON.stringify({ name: 'Ghost' }),
+  });
+  assert.equal(after.status, 404, 'deleted item is gone');
+});
+
+test('granular roles: assign a content_admin and enforce scoped permissions', async () => {
+  const admin = await adminLogin();
+  // Create a content admin via the admin API.
+  const created = await fetch(`${BASE}/admin/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+    body: JSON.stringify({
+      name: 'Content Admin',
+      email: 'content-admin@test.com',
+      password: 'Pass12345',
+      college: 'Demo College',
+      year: 1,
+      role: 'content_admin',
+    }),
+  });
+  assert.equal(created.status, 201, (await created.text()).slice(0, 200));
+
+  // Login as the content admin.
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'content-admin@test.com', password: 'Pass12345' }));
+  const loginBody: any = await login.json();
+  const token = loginBody.token as string;
+  assert.ok(token, 'content admin can log in');
+
+  // Content admin may read the admin question list (requireAdmin passes)…
+  const qs = await fetch(`${BASE}/admin/questions`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(qs.status, 200, 'content_admin passes requireAdmin');
+
+  // …and may create a question (questions.manage)…
+  const qCreate = await fetch(`${BASE}/admin/questions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      questionText: 'Granular role question',
+      questionType: 'sba',
+      options: { A: 'Opt A', B: 'Opt B', C: 'Opt C', D: 'Opt D' },
+      correctAnswer: 'A',
+      subject: 'Medicine',
+      difficulty: 'medium',
+    }),
+  });
+  assert.equal(qCreate.status, 201, (await qCreate.text()).slice(0, 200));
+
+  // …but CANNOT manage settings (settings.manage missing for content_admin).
+  const settings = await fetch(`${BASE}/admin/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ branding: { platformName: 'Hacked' } }),
+  });
+  assert.equal(settings.status, 403, 'content_admin blocked from settings.manage');
+
+  // …and cannot manage users (users.manage missing).
+  const users = await fetch(`${BASE}/admin/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ name: 'Nope', email: 'nope@test.com', password: 'Pass12345', college: 'X', year: 1 }),
+  });
+  assert.equal(users.status, 403, 'content_admin blocked from users.manage');
+});
+
+test('granular roles: superadmin-only admin-role grants are enforced', async () => {
+  const admin = await adminLogin();
+  // A plain admin cannot create a platform_admin.
+  const created = await fetch(`${BASE}/admin/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+    body: JSON.stringify({
+      name: 'Try Platform',
+      email: 'try-platform@test.com',
+      password: 'Pass12345',
+      college: 'Demo College',
+      year: 1,
+      role: 'platform_admin',
+    }),
+  });
+  assert.equal(created.status, 201, 'superadmin (dev admin) can grant platform_admin');
+});

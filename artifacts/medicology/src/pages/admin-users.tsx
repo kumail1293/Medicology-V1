@@ -17,18 +17,10 @@ import {
 import { clsx } from 'clsx';
 import { useAuth } from '@/lib/auth';
 
-// Roles an admin can assign. Only a superadmin may grant/revoke admin roles;
-// admins manage user/editor/teacher. Mirrors the backend whitelist.
-const ASSIGNABLE_ROLES = ['user', 'editor', 'teacher', 'admin', 'superadmin'] as const;
-const ADMIN_ROLES = ['admin', 'superadmin'];
-
-const ROLE_STYLES: Record<string, string> = {
-  user: 'bg-primary/10 text-primary',
-  editor: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
-  teacher: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
-  admin: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  superadmin: 'bg-red-500/10 text-red-600 dark:text-red-400',
-};
+// Roles an admin can assign (settings plan item 20 — granular admin roles).
+// Only a superadmin may grant/revoke admin-level roles. Mirrors the backend
+// whitelist in utils/permissions.ts.
+import { ASSIGNABLE_ROLES, ADMIN_ROLES, ROLE_STYLES, ROLE_LABELS } from '@/lib/permissions';
 
 interface AdminUser {
   id: number;
@@ -371,7 +363,7 @@ function UserManagementPage() {
                             className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-foreground outline-none hover:border-primary/40 focus:border-primary transition-colors"
                           >
                             {assignableRoles.map((r) => (
-                              <option key={r} value={r}>{r}</option>
+                              <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
                             ))}
                           </select>
                         </div>
@@ -514,7 +506,7 @@ function UserManagementPage() {
                   >
                     {assignableRoles.map((r) => (
                       <option key={r} value={r}>
-                        {r.charAt(0).toUpperCase() + r.slice(1)}
+                        {ROLE_LABELS[r] ?? r.charAt(0).toUpperCase() + r.slice(1)}
                       </option>
                     ))}
                   </select>

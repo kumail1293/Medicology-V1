@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, requireContentEditor, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireContentEditor, AuthRequest, ADMIN_ROLES, roleHasPermission } from '../middleware/auth.js';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -187,9 +187,12 @@ storageRouter.patch('/media/:id', authenticate, async (req: AuthRequest, res: an
   try {
     const [existing] = await db.select().from(mediaTable).where(eq(mediaTable.id, Number(req.params.id)));
     if (!existing) return res.status(404).json({ error: 'Media not found' });
-    const isAdmin = req.user?.isAdmin || ['admin', 'superadmin'].includes(req.user?.role ?? '');
+    const isAdmin = req.user?.isAdmin || ADMIN_ROLES.includes(req.user?.role ?? '');
     if (!isAdmin && Number(existing.uploadedBy) !== Number(req.user?.id)) {
       return res.status(403).json({ error: 'You can only edit media you uploaded' });
+    }
+    if (isAdmin && !roleHasPermission(req.user?.role, 'media.manage')) {
+      return res.status(403).json({ error: 'Forbidden — requires the media.manage permission' });
     }
     const set: any = { updatedAt: new Date() };
     if (req.body.altText !== undefined) set.altText = String(req.body.altText).slice(0, 300);
@@ -209,9 +212,12 @@ storageRouter.delete('/media/:id', authenticate, async (req: AuthRequest, res: a
   try {
     const [existing] = await db.select().from(mediaTable).where(eq(mediaTable.id, Number(req.params.id)));
     if (!existing) return res.status(404).json({ error: 'Media not found' });
-    const isAdmin = req.user?.isAdmin || ['admin', 'superadmin'].includes(req.user?.role ?? '');
+    const isAdmin = req.user?.isAdmin || ADMIN_ROLES.includes(req.user?.role ?? '');
     if (!isAdmin && Number(existing.uploadedBy) !== Number(req.user?.id)) {
       return res.status(403).json({ error: 'You can only delete media you uploaded' });
+    }
+    if (isAdmin && !roleHasPermission(req.user?.role, 'media.manage')) {
+      return res.status(403).json({ error: 'Forbidden — requires the media.manage permission' });
     }
     const filePath = path.join(uploadDir, existing.filename);
     fs.rmSync(filePath, { force: true });
