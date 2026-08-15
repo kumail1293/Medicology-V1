@@ -12,6 +12,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'p0-test-secret';
 process.env.APP_BASE_URL = 'http://localhost:5099';
 
 const BASE = 'http://localhost:5099/api';
+const HOST = process.env.APP_BASE_URL as string; // http://localhost:5099 (no /api)
 
 before(async () => {
   // Importing app.ts boots the listener against the mock DB (PORT/DATABASE_URL above).
@@ -733,4 +734,75 @@ test('animation settings: validated roundtrip, public exposure, reduced-motion d
     headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify({ group: 'animations' }),
   });
+});
+
+test('media library: validated upload with metadata, list, update alt text, delete', async () => {
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminBody: any = await adminLogin.json();
+  const adminAuth = { Authorization: `Bearer ${adminBody.token}` };
+
+  // A real 2×1 PNG (valid header, readable by the dimension parser).
+  const png = Buffer.from(
+    '89504e470d0a1a0a0000000d4948445200000002000000010806000000' +
+    '1f15c4890000000d49444154789c6360f8cf000001010100f0fafbfa0000000049454e44ae426082',
+    'hex'
+  );
+
+  // 1. Upload (admin) → metadata recorded with dimensions.
+  const form = new FormData();
+  form.append('file', new Blob([png], { type: 'image/png' }), 'test-image.png');
+  form.append('category', 'announcement');
+  form.append('altText', 'A test image');
+  const up = await fetch(`${BASE}/storage/media`, { method: 'POST', headers: adminAuth, body: form });
+  const upBody: any = await up.json().catch(() => ({}));
+  assert.equal(up.status, 201, `upload failed: ${JSON.stringify(upBody)}`);
+  const media = upBody.media;
+  assert.equal(media.mimeType, 'image/png');
+  assert.equal(media.width, 2, 'PNG width parsed');
+  assert.equal(media.height, 1, 'PNG height parsed');
+  assert.equal(media.category, 'announcement');
+  assert.equal(media.altText, 'A test image');
+  assert.ok(media.url.startsWith('/api/storage/uploads/'), 'url points at the uploads endpoint');
+
+  // 2. The uploaded file is actually served (media.url already includes the /api prefix).
+  const served = await fetch(`${HOST}${media.url}`);
+  assert.equal(served.status, 200);
+
+  // 3. List (authenticated user) sees it; category filter works.
+  const { token: userToken } = await registerUser('media-user@test.com');
+  const userAuth = { Authorization: `Bearer ${userToken}` };
+  const list: any = await (await fetch(`${BASE}/storage/media?category=announcement`, { headers: userAuth })).json();
+  assert.ok(list.media.some((m: any) => m.id === media.id), 'media listed for authenticated users');
+
+  // 4. Unauthenticated upload is rejected.
+  const form2 = new FormData();
+  form2.append('file', new Blob([png], { type: 'image/png' }), 'anon.png');
+  const anon = await fetch(`${BASE}/storage/media`, { method: 'POST', body: form2 });
+  assert.equal(anon.status, 401, 'uploads require auth');
+
+  // 5. Invalid MIME rejected (settings-driven whitelist).
+  const form3 = new FormData();
+  form3.append('file', new Blob([Buffer.from('MZ')], { type: 'application/x-msdownload' }), 'evil.exe');
+  const bad = await fetch(`${BASE}/storage/media`, { method: 'POST', headers: adminAuth, body: form3 });
+  assert.ok(bad.status === 400, 'non-image uploads rejected');
+
+  // 6. Alt text + category update; a non-owner user cannot edit admin uploads.
+  const patch = await fetch(`${BASE}/storage/media/${media.id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', ...adminAuth },
+    body: JSON.stringify({ altText: 'Updated alt', category: 'seo' }),
+  });
+  assert.equal(patch.status, 200);
+  const patched: any = await patch.json();
+  assert.equal(patched.media.altText, 'Updated alt');
+  const forbidden = await fetch(`${BASE}/storage/media/${media.id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', ...userAuth },
+    body: JSON.stringify({ altText: 'hijack' }),
+  });
+  assert.equal(forbidden.status, 403, 'non-owner cannot edit others media');
+
+  // 7. Delete removes the row and the file.
+  const del = await fetch(`${BASE}/storage/media/${media.id}`, { method: 'DELETE', headers: adminAuth });
+  assert.equal(del.status, 200);
+  const gone = await fetch(`${HOST}${media.url}`);
+  assert.equal(gone.status, 404, 'file removed from disk after delete');
 });

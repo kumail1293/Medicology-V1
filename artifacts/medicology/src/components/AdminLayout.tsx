@@ -18,6 +18,7 @@ import {
   Megaphone,
   Network,
   UploadCloud,
+  Images,
   ClipboardCheck,
   Database,
   Layers,
@@ -116,6 +117,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       label: 'Flags & Reports',
       icon: <AlertCircle size={18} />,
       path: '/admin/flags',
+    },
+    {
+      label: 'Media Library',
+      icon: <Images size={18} />,
+      path: '/admin/media',
     },
     {
       label: 'Settings',

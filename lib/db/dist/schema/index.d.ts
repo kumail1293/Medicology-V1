@@ -11,6 +11,7 @@ export * from "./qbank_purchases.js";
 export * from "./study_buddies.js";
 export * from "./errata.js";
 export * from "./announcements.js";
+export * from "./media.js";
 export * from "./qbank_user_settings.js";
 export * from "./payment_orders.js";
 export * from "./security_events.js";

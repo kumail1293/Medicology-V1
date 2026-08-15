@@ -387,8 +387,26 @@ no duplicate systems.
 -   **`prefers-reduced-motion` always wins** (CSS hard rule + runtime
     matchMedia listener); admin toggles only affect other users.
 -   Admin → Settings → Animations includes a live preview.
--   Deferred next: media library, coming-soon catalogue, scoped
-    QBank/exam overrides, granular admin roles.
+## P0.5.10 ✅ Media library (shipped)
+
+-   Migration `0006` (additive): new `media` table — filename, original
+    name, MIME, size, parsed dimensions (PNG/JPEG/GIF/WebP header
+    parsing, no native deps), URL, alt text, category, uploader.
+-   Settings-driven upload validation: MIME whitelist + size cap from
+    the `storage` settings group; non-image uploads get a clean 400
+    (multer fileFilter error mapped, no more 500s).
+-   Admin → Media Library page: grid with previews, category filter
+    chips, search by name/alt text, inline alt-text edit, category
+    change, copy URL, delete (removes file + row).
+-   Shared `MediaPicker` dialog wired into the rich-text editor
+    (“Browse media library” toolbar button) — pick a stored image and
+    insert at the cursor; editor upload button routes through the
+    media endpoints (audited, metadata recorded).
+-   Owner-scoped edits: only the uploader (or admins) can edit/delete;
+    unauthenticated uploads 401; files served publicly via
+    `/api/storage/uploads/:filename`.
+-   Deferred next: coming-soon catalogue, scoped QBank/exam overrides,
+    granular admin roles.
 
 ------------------------------------------------------------------------
 

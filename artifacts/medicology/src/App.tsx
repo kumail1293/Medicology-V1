@@ -31,6 +31,7 @@ const AdminQuestions   = lazy(() => import("./pages/admin-questions"));
 const AdminAnnouncements = lazy(() => import("./pages/admin-announcements"));
 const AdminFlags       = lazy(() => import("./pages/admin-flags"));
 const AdminSettings    = lazy(() => import("./pages/admin-settings"));
+const AdminMedia       = lazy(() => import("./pages/admin-media"));
 const AdminTaxonomy    = lazy(() => import("./pages/admin-taxonomy"));
 const AdminImport      = lazy(() => import("./pages/admin-import"));
 const AdminReview      = lazy(() => import("./pages/admin-review"));
@@ -158,6 +159,9 @@ function Router() {
         </Route>
         <Route path="/admin/settings">
           {() => <AdminRoute component={() => <AdminLayout><AdminSettings /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/media">
+          {() => <AdminRoute component={() => <AdminLayout><AdminMedia /></AdminLayout>} />}
         </Route>
         <Route path="/admin/taxonomy">
           {() => <AdminRoute component={() => <AdminLayout><AdminTaxonomy /></AdminLayout>} />}

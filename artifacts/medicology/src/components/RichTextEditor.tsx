@@ -15,9 +15,11 @@ import {
   Undo2, Redo2, Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   Heading1, Heading2, Heading3, List, ListOrdered, Link2, ImagePlus,
   Table as TableIcon, Rows3, AlignLeft, AlignCenter, AlignRight, Highlighter,
-  Code, RemoveFormatting, Plus, Minus, X,
+  Code, RemoveFormatting, Plus, Minus, X, Library,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import MediaPicker from "./MediaPicker";
+import { uploadMedia } from "@/lib/media";
 import { apiFetch } from "@/lib/api";
 import { sanitizeRichHtml } from "@/lib/richText";
 import { useToast } from "@/hooks/use-toast";
@@ -114,23 +116,13 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
     }
   };
 
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   const uploadImage = async (file: File) => {
     try {
       setUploading(true);
-      const urlRes = await apiFetch("/api/storage/upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: file.name }),
-      });
-      if (!urlRes.ok) throw new Error("Failed to request upload URL");
-      const { objectPath } = await urlRes.json();
-
-      const form = new FormData();
-      form.append("file", file);
-      const upRes = await fetch(`/api/storage/upload/${objectPath.split("/").pop()}`, { method: "PUT", body: form });
-      if (!upRes.ok) throw new Error("Upload failed");
-      const { path } = await upRes.json();
-      editor?.chain().focus().setImage({ src: `/api/storage${path}` }).run();
+      const media = await uploadMedia(file, { category: "rich_content" });
+      editor?.chain().focus().setImage({ src: media.url }).run();
     } catch (err) {
       toast({ title: "Image upload failed", description: err instanceof Error ? err.message : "Please try again", variant: "destructive" });
     } finally {
@@ -177,6 +169,7 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
         <Divider />
         <ToolbarButton title="Link" {...btn(editor?.isActive("link"))} onClick={toggleLink}><Link2 size={15} /></ToolbarButton>
         <ToolbarButton title="Insert image (URL)" onClick={insertImageByUrl}><ImagePlus size={15} /></ToolbarButton>
+        <ToolbarButton title="Browse media library" onClick={() => setPickerOpen(true)}><Library size={15} className="text-violet-500" /></ToolbarButton>
         <ToolbarButton title={uploading ? "Uploading…" : "Upload image"} onClick={() => fileRef.current?.click()}><ImagePlus size={15} className="text-blue-500" /></ToolbarButton>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadImage(f); e.target.value = ""; }} />
         <Divider />
@@ -216,6 +209,13 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
       <div className="rich-text-editor px-3 py-2" style={{ minHeight }}>
         <EditorContent editor={editor} />
       </div>
+
+      {/* Media library picker — insert a stored image at the cursor. */}
+      <MediaPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(m) => { editor?.chain().focus().setImage({ src: m.url }).run(); setPickerOpen(false); }}
+      />
     </div>
   );
 }

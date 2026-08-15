@@ -51,3 +51,5 @@ clean/
 */clean/
 **/clean/
 .pnpm-store/
+# Media uploads (runtime artifacts, not source)
+artifacts/api-server/uploads/
