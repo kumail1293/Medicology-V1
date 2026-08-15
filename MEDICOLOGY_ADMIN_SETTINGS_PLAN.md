@@ -440,10 +440,22 @@ Shipped (commit `726024d` + follow-ups):
     owner-scoped edit/delete, audit trail; Admin → Media Library page with
     grid/filter/search, shared MediaPicker dialog wired into the rich-text
     editor (insert at cursor), and public file serving.
+-   ✅ QBank/exam scoped overrides (items 10–11) — new
+    `settings_overrides` table (migration `0007`) keyed by
+    (scope, scopeId, group, key) with JSONB values; scopes follow the plan's
+    precedence: safety constraints → QBank → topic → system → subject →
+    year → program → exam → country → platform default (fully
+    deterministic, provenance per key). New `examSettings` group covers QBank
+    defaults (trial questions, attempts, bookmarks/notes/reporting) and exam
+    behavior (count, duration, marking, pass %, navigation, palette, review,
+    auto-submit, pause/resume, result visibility, explanations, reveal).
+    Admin → Settings → Scoped Overrides lets admins pick a scope + entity
+    and set/remove per-key overrides with live provenance badges; session
+    creation applies the resolved rules (explicit client values win), and a
+    public `GET /api/settings/exam` serves the resolution to the exam engine.
 
 Deferred (next):
-coming-soon catalogue (17), QBank/exam scoped overrides (10–11, with
-precedence testing), granular admin roles (20).
+coming-soon catalogue (17), granular admin roles (20).
 
 ## Implementation Order
 

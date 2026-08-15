@@ -4,6 +4,12 @@ import { testSessionsTable, questionsTable } from '@workspace/db';
 import { eq, and, inArray, sql } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { findQbankBySlug, hasActiveEntitlement } from '../utils/entitlements.js';
+import {
+  resolveExamSettingsForQbank,
+  resolveExamSettings,
+  loadOverridesForContext,
+  platformGroup,
+} from '../utils/scoped-overrides.js';
 
 export const sessionsRouter = Router();
 
@@ -119,15 +125,18 @@ sessionsRouter.post('/create', authenticate, async (req: AuthRequest, res: any) 
   try {
     const {
       questionIds, specificQuestionIds,
-      subjects, systems, questionCount = 20, mode = 'tutor',
+      subjects, systems, questionCount: requestedCount, mode = 'tutor',
       difficulty, universityTag, examType,
-      title, blockSize, durationSeconds, questionFilter, qbankSlug,
+      title, blockSize, durationSeconds: requestedDuration, questionFilter, qbankSlug,
     } = req.body;
 
-    // Server-side entitlement gate for QBank-scoped sessions. Learners can only
-    // start a paid QBank session with an active entitlement (admins bypass).
+    // Resolved exam behavior for the session context. With a qbankSlug the
+    // QBank's own overrides (and its taxonomy chain) supply the defaults;
+    // otherwise platform-wide exam settings apply. Explicit client values
+    // always win over the resolved defaults.
+    let qbank: any = null;
     if (qbankSlug) {
-      const qbank = await findQbankBySlug(qbankSlug);
+      qbank = await findQbankBySlug(qbankSlug);
       if (!qbank) return res.status(404).json({ error: 'QBank not found' });
       const isAdmin = req.user?.role === 'admin' || req.user?.role === 'superadmin';
       if (!isAdmin && (qbank.status === 'available' || qbank.status === 'beta')) {
@@ -137,6 +146,15 @@ sessionsRouter.post('/create', authenticate, async (req: AuthRequest, res: any) 
         }
       }
     }
+    const resolvedExam = qbank
+      ? await resolveExamSettingsForQbank(qbank)
+      : await (async () => {
+          const platform = await platformGroup('examSettings');
+          return resolveExamSettings(platform, await loadOverridesForContext({}));
+        })();
+    const questionCount = requestedCount ?? resolvedExam.settings.questionCount;
+    const durationSeconds = requestedDuration
+      ?? (resolvedExam.settings.durationMinutes > 0 ? resolvedExam.settings.durationMinutes * 60 : null);
 
     let finalQuestionIds: number[] = questionIds || specificQuestionIds || [];
 

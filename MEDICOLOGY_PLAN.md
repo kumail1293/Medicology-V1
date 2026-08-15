@@ -405,8 +405,28 @@ no duplicate systems.
 -   Owner-scoped edits: only the uploader (or admins) can edit/delete;
     unauthenticated uploads 401; files served publicly via
     `/api/storage/uploads/:filename`.
--   Deferred next: coming-soon catalogue, scoped QBank/exam overrides,
-    granular admin roles.
+## P0.5.11 ✅ QBank/exam scoped overrides (shipped)
+
+-   Migration `0007` (additive): `settings_overrides` table — one row per
+    (scope, scopeId, group, key) with a JSONB value; unique per key.
+-   Scopes follow the plan's precedence (deterministic, tested):
+    system safety constraints → QBank → topic → system → subject →
+    year → program → exam → country → platform default.
+-   New `examSettings` group (platform-wide defaults): QBank defaults
+    (trial questions, attempt limit, bookmarks/notes/reporting) + exam
+    behavior (question count, duration, marking scheme, negative marking,
+    pass %, navigation, question palette, review behavior, auto-submit,
+    pause/resume, result visibility, explanations, answer reveal).
+-   Admin → Settings → Scoped Overrides: pick a scope + entity (QBank or
+    any taxonomy node), see every key's effective value with a provenance
+    badge, set an override or clear it to inherit. Every write/delete is
+    audit-logged; safety keys (maintenance mode, MFA, payment provider)
+    can never be overridden.
+-   Session creation resolves the context's rules (QBank + its taxonomy
+    chain); explicit client values always win. Public
+    `GET /api/settings/exam` serves the resolution + provenance to the
+    exam engine.
+-   Deferred next: coming-soon catalogue, granular admin roles.
 
 ------------------------------------------------------------------------
 

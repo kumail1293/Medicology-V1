@@ -101,6 +101,29 @@ export interface FeatureFlagsSettings {
   newExamEngine: boolean;
 }
 
+// QBank + exam behavior (plan items 10–11). Platform-wide defaults; any
+// scope (QBank / taxonomy node) can override keys via the overrides API.
+export interface ExamSettings {
+  trialQuestions: number;
+  attemptLimit: number;
+  bookmarksEnabled: boolean;
+  notesEnabled: boolean;
+  reportingEnabled: boolean;
+  questionCount: number;
+  durationMinutes: number;
+  markingScheme: "no_negative" | "standard";
+  negativeMarking: number;
+  passPercentage: number;
+  navigation: "free" | "locked";
+  questionPalette: boolean;
+  reviewBehavior: "after_each" | "end_only";
+  autoSubmit: boolean;
+  pauseResume: boolean;
+  resultVisibility: "immediate" | "end" | "admin_only";
+  explanationBehavior: "after_answer" | "end" | "never";
+  answerReveal: "after_answer" | "end";
+}
+
 export interface PlatformSettings {
   general: GeneralSettings;
   branding: BrandingSettings;
@@ -113,6 +136,7 @@ export interface PlatformSettings {
   integrations: IntegrationSettings;
   animations: AnimationsSettings;
   featureFlags: FeatureFlagsSettings;
+  examSettings: ExamSettings;
 }
 
 export const DEFAULT_SETTINGS: PlatformSettings = {
@@ -200,6 +224,26 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     repeat: "once",
     trigger: "on_load",
   },
+  examSettings: {
+    trialQuestions: 10,
+    attemptLimit: 0,
+    bookmarksEnabled: true,
+    notesEnabled: true,
+    reportingEnabled: true,
+    questionCount: 20,
+    durationMinutes: 60,
+    markingScheme: "no_negative",
+    negativeMarking: 0,
+    passPercentage: 50,
+    navigation: "free",
+    questionPalette: true,
+    reviewBehavior: "end_only",
+    autoSubmit: true,
+    pauseResume: true,
+    resultVisibility: "immediate",
+    explanationBehavior: "after_answer",
+    answerReveal: "after_answer",
+  },
 };
 
 export type SettingsGroup = keyof PlatformSettings;
@@ -224,6 +268,92 @@ export async function saveAdminSettings(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Failed to save settings");
   return data.settings;
+}
+
+// ---------------------------------------------------------------------------
+// Scoped overrides (plan items 10–11).
+// ---------------------------------------------------------------------------
+
+export const SETTING_SCOPES = ["qbank", "topic", "system", "subject", "year", "program", "exam", "country"] as const;
+export type SettingScope = (typeof SETTING_SCOPES)[number];
+
+export const SCOPE_LABELS: Record<SettingScope, string> = {
+  qbank: "QBank",
+  topic: "Topic",
+  system: "System",
+  subject: "Subject",
+  year: "Academic year",
+  program: "Program",
+  exam: "Exam / university",
+  country: "Country",
+};
+
+export interface SettingsOverride {
+  id: number;
+  scope: SettingScope;
+  scopeId: number;
+  group: string;
+  key: string;
+  value: unknown;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OverrideContext {
+  qbankId?: number;
+  topicId?: number;
+  systemId?: number;
+  subjectId?: number;
+  yearId?: number;
+  programId?: number;
+  examId?: number;
+  countryId?: number;
+}
+
+export interface ResolvedResult {
+  context: OverrideContext;
+  platform: ExamSettings;
+  settings: ExamSettings;
+  sources: Record<string, string>;
+  applied: { key: string; scope: SettingScope; scopeId: number; value: unknown }[];
+}
+
+export async function listOverrides(scope: SettingScope, scopeId: number): Promise<SettingsOverride[]> {
+  const res = await apiFetch(`/api/admin/settings/overrides?scope=${scope}&scopeId=${scopeId}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to load overrides");
+  return data.overrides ?? [];
+}
+
+export async function upsertOverride(opts: {
+  scope: SettingScope; scopeId: number; group: string; key: string; value: unknown;
+}): Promise<SettingsOverride> {
+  const res = await apiFetch("/api/admin/settings/overrides", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to save override");
+  return data.override;
+}
+
+export async function deleteOverride(opts: {
+  scope: SettingScope; scopeId: number; group: string; key: string;
+}): Promise<void> {
+  const q = new URLSearchParams({ scope: opts.scope, scopeId: String(opts.scopeId), group: opts.group, key: opts.key });
+  const res = await apiFetch(`/api/admin/settings/overrides?${q}`, { method: "DELETE" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to delete override");
+}
+
+export async function resolveOverrides(ctx: OverrideContext): Promise<ResolvedResult> {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(ctx)) if (v != null) q.set(k, String(v));
+  const res = await apiFetch(`/api/admin/settings/overrides/resolve?${q}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to resolve overrides");
+  return data;
 }
 
 export async function resetSettingsGroup(group?: SettingsGroup): Promise<PlatformSettings> {

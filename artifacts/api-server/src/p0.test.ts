@@ -806,3 +806,103 @@ test('media library: validated upload with metadata, list, update alt text, dele
   const gone = await fetch(`${HOST}${media.url}`);
   assert.equal(gone.status, 404, 'file removed from disk after delete');
 });
+
+test('scoped overrides: deterministic precedence + CRUD + public resolution', async () => {
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminBody: any = await adminLogin.json();
+  const adminAuth = { Authorization: `Bearer ${adminBody.token}` };
+  const put = (body: any) => fetch(`${BASE}/admin/settings/overrides`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json', ...adminAuth }, body: JSON.stringify(body),
+  });
+  const resolve = async (qs: string) =>
+    (await fetch(`${BASE}/admin/settings/overrides/resolve?${qs}`, { headers: adminAuth })).json();
+
+  // Layer the same key at three scopes: platform default 20 < country 15 < exam 25 < qbank 30.
+  assert.equal((await put({ scope: 'country', scopeId: 1, group: 'examSettings', key: 'questionCount', value: 15 })).status, 200);
+  assert.equal((await put({ scope: 'exam', scopeId: 1, group: 'examSettings', key: 'questionCount', value: 25 })).status, 200);
+  assert.equal((await put({ scope: 'qbank', scopeId: 1, group: 'examSettings', key: 'questionCount', value: 30 })).status, 200);
+  assert.equal((await put({ scope: 'qbank', scopeId: 1, group: 'examSettings', key: 'durationMinutes', value: 90 })).status, 200);
+
+  // Full chain → qbank (most specific) wins.
+  let r: any = await resolve('countryId=1&examId=1&qbankId=1');
+  assert.equal(r.settings.questionCount, 30, 'qbank beats exam + country');
+  assert.equal(r.settings.durationMinutes, 90, 'qbank duration applied');
+  assert.equal(r.sources.questionCount, 'qbank');
+
+  // No qbank → exam beats country.
+  r = await resolve('countryId=1&examId=1');
+  assert.equal(r.settings.questionCount, 25, 'exam beats country');
+  assert.equal(r.sources.questionCount, 'exam');
+  assert.equal(r.settings.durationMinutes, 60, 'platform default duration when no qbank override');
+
+  // Only country → country beats the platform default.
+  r = await resolve('countryId=1');
+  assert.equal(r.settings.questionCount, 15, 'country beats platform default');
+  assert.equal(r.sources.questionCount, 'country');
+
+  // No scope → platform default.
+  r = await resolve('');
+  assert.equal(r.settings.questionCount, 20, 'platform default when no scope matches');
+
+  // Public (no-auth) endpoint resolves identically for the exam engine.
+  const pub: any = await (await fetch(`${BASE}/settings/exam?countryId=1&examId=1&qbankId=1`)).json();
+  assert.equal(pub.settings.questionCount, 30);
+  assert.equal(pub.sources.questionCount, 'qbank');
+
+  // Validation: unknown key, wrong value type, non-examSettings group all rejected.
+  assert.equal((await put({ scope: 'qbank', scopeId: 1, group: 'examSettings', key: 'nonsense', value: 1 })).status, 400, 'unknown key rejected');
+  assert.equal((await put({ scope: 'qbank', scopeId: 1, group: 'examSettings', key: 'questionCount', value: 'many' })).status, 400, 'wrong value type rejected');
+  assert.equal((await put({ scope: 'qbank', scopeId: 1, group: 'security', key: 'maintenanceMode', value: true })).status, 400, 'non-examSettings groups rejected');
+
+  // Non-admin cannot write overrides.
+  const { token: userToken } = await registerUser('override-user@test.com');
+  const forbidden = await fetch(`${BASE}/admin/settings/overrides`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
+    body: JSON.stringify({ scope: 'qbank', scopeId: 1, group: 'examSettings', key: 'questionCount', value: 99 }),
+  });
+  assert.equal(forbidden.status, 403, 'non-admin rejected');
+
+  // Delete one override → resolution falls back to the next scope up.
+  const del = await fetch(`${BASE}/admin/settings/overrides?scope=qbank&scopeId=1&group=examSettings&key=questionCount`, { method: 'DELETE', headers: adminAuth });
+  assert.equal(del.status, 200);
+  r = await resolve('countryId=1&examId=1&qbankId=1');
+  assert.equal(r.settings.questionCount, 25, 'after delete, falls back to exam override');
+  assert.equal(r.sources.questionCount, 'exam');
+
+  // List endpoint reflects current overrides for a scope.
+  const list: any = await (await fetch(`${BASE}/admin/settings/overrides?scope=qbank&scopeId=1`, { headers: adminAuth })).json();
+  assert.ok(list.overrides.some((o: any) => o.key === 'durationMinutes'), 'qbank durationMinutes listed');
+  assert.ok(!list.overrides.some((o: any) => o.key === 'questionCount'), 'deleted override gone from list');
+});
+
+test('scoped overrides: QBank session creation applies resolved rules', async () => {
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminBody: any = await adminLogin.json();
+  const adminAuth = { Authorization: `Bearer ${adminBody.token}` };
+  const put = (body: any) => fetch(`${BASE}/admin/settings/overrides`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json', ...adminAuth }, body: JSON.stringify(body),
+  });
+  assert.equal((await put({ scope: 'qbank', scopeId: 1, group: 'examSettings', key: 'durationMinutes', value: 90 })).status, 200);
+  assert.equal((await put({ scope: 'qbank', scopeId: 1, group: 'examSettings', key: 'questionCount', value: 5 })).status, 200);
+
+  // Admin session create (bypasses the entitlement gate) with NO explicit
+  // count/duration → resolved QBank rules apply.
+  const created = await fetch(`${BASE}/sessions/create`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...adminAuth },
+    body: JSON.stringify({ qbankSlug: 'uhs-mbbs-1st-year' }),
+  });
+  assert.equal(created.status, 200);
+  const data: any = await created.json();
+  assert.equal(data.session.durationSeconds, 90 * 60, 'qbank duration override applied');
+  assert.ok(data.session.questionIds.length === 5, `qbank questionCount override applied (got ${data.session.questionIds.length})`);
+
+  // Explicit client values always win over the resolved defaults.
+  const explicit = await fetch(`${BASE}/sessions/create`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...adminAuth },
+    body: JSON.stringify({ qbankSlug: 'uhs-mbbs-1st-year', questionCount: 5, durationSeconds: 120 }),
+  });
+  assert.equal(explicit.status, 200);
+  const explicitData: any = await explicit.json();
+  assert.equal(explicitData.session.durationSeconds, 120, 'explicit duration wins');
+  assert.ok(explicitData.session.questionIds.length === 5, 'explicit questionCount wins');
+});

@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { appSettingsTable } from '@workspace/db';
-import { eq } from '../utils/drizzle.js';
+import { appSettingsTable, settingsOverridesTable, SETTING_SCOPES, type SettingScope } from '@workspace/db';
+import { and, eq } from '../utils/drizzle.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validation.js';
-import { updateSettingsSchema, UPDATE_SETTINGS_SHAPE } from './schemas.js';
+import { updateSettingsSchema, UPDATE_SETTINGS_SHAPE, settingsOverrideUpsertSchema, examSettingsSchema } from './schemas.js';
 import type { UpdateSettings } from './schemas.js';
 import {
   DEFAULT_SETTINGS,
@@ -14,6 +14,14 @@ import {
 import { recordAudit, getAuditLogs } from '../utils/audit.js';
 import { invalidateFeatureFlagsCache } from '../utils/feature-flags.js';
 import { invalidateMaintenanceCache } from '../middleware/maintenance.js';
+import {
+  SAFETY_KEYS,
+  SCOPE_LABELS,
+  loadOverridesForContext,
+  platformGroup,
+  resolveExamSettings,
+  type OverrideContext,
+} from '../utils/scoped-overrides.js';
 
 export const settingsRouter = Router();
 
@@ -194,6 +202,171 @@ settingsRouter.post('/admin/settings/restore', authenticate, requireAdmin, async
 
     const stored = await loadStored();
     res.json({ settings: mergeSettings(stored) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Scoped overrides (plan items 10–11) — QBank / taxonomy-scoped exam
+// settings layered over the platform defaults with deterministic precedence.
+// ---------------------------------------------------------------------------
+
+// Per-key zod validators for the examSettings group (used to validate the
+// JSONB value of an override before it is stored).
+const EXAM_SETTINGS_KEY_SCHEMAS: Record<string, any> = (examSettingsSchema as any).shape;
+
+function parseScopeId(v: any): number | null {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+// GET /api/admin/settings/overrides?scope=exam&scopeId=3 — list overrides
+// currently set on one scope.
+settingsRouter.get('/admin/settings/overrides', authenticate, requireAdmin, async (req: any, res: any) => {
+  try {
+    const { scope, scopeId } = req.query;
+    if (!SETTING_SCOPES.includes(scope)) {
+      return res.status(400).json({ error: `scope must be one of: ${SETTING_SCOPES.join(', ')}` });
+    }
+    const id = parseScopeId(scopeId);
+    if (!id) return res.status(400).json({ error: 'scopeId is required (positive integer)' });
+    const rows = await db.select().from(settingsOverridesTable)
+      .where(and(eq(settingsOverridesTable.scope, scope), eq(settingsOverridesTable.scopeId, id)));
+    res.json({ overrides: rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/settings/overrides — upsert one override. Validates the key
+// is a real examSettings key and the value matches its schema; rejects safety
+// keys; audits the change.
+settingsRouter.put('/admin/settings/overrides', authenticate, requireAdmin, validateBody(settingsOverrideUpsertSchema), async (req: any, res: any) => {
+  try {
+    const { scope, scopeId, group, key, value } = req.validatedBody;
+    if (SAFETY_KEYS.includes(`${group}.${key}`)) {
+      return res.status(400).json({ error: `${group}.${key} is a system safety constraint and cannot be overridden` });
+    }
+    const keySchema = EXAM_SETTINGS_KEY_SCHEMAS[key];
+    if (!keySchema) {
+      return res.status(400).json({ error: `Unknown key "${key}" for group "${group}"` });
+    }
+    const parsed = keySchema.safeParse(value);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid override value',
+        details: parsed.error.issues.map((i: any) => ({ field: i.path.join('.'), message: i.message })),
+      });
+    }
+
+    const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+    const existing = await db.select().from(settingsOverridesTable)
+      .where(and(
+        eq(settingsOverridesTable.scope, scope),
+        eq(settingsOverridesTable.scopeId, scopeId),
+        eq(settingsOverridesTable.group, group),
+        eq(settingsOverridesTable.key, key),
+      ));
+    let row;
+    if (existing.length > 0) {
+      row = existing[0];
+      const prev = JSON.parse(JSON.stringify(row.value));
+      await db.update(settingsOverridesTable)
+        .set({ value: parsed.data, updatedAt: new Date() })
+        .where(eq(settingsOverridesTable.id, row.id));
+      await recordAudit({
+        actor, action: 'settings_override.upsert', entityType: 'settings_override',
+        entityId: row.id, entityLabel: `${SCOPE_LABELS[scope as SettingScope]} #${scopeId} · ${key}`,
+        summary: `Updated override ${SCOPE_LABELS[scope as SettingScope]} #${scopeId} ${group}.${key}`,
+        oldValues: { value: prev }, newValues: { value: parsed.data }, ip: req.ip,
+      });
+    } else {
+      [row] = await db.insert(settingsOverridesTable).values({
+        scope, scopeId, group, key, value: parsed.data, createdBy: req.user?.id ?? null,
+      }).returning();
+      await recordAudit({
+        actor, action: 'settings_override.create', entityType: 'settings_override',
+        entityId: row.id, entityLabel: `${SCOPE_LABELS[scope as SettingScope]} #${scopeId} · ${key}`,
+        summary: `Added override ${SCOPE_LABELS[scope as SettingScope]} #${scopeId} ${group}.${key}`,
+        newValues: { value: parsed.data }, ip: req.ip,
+      });
+    }
+    res.json({ override: row });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/settings/overrides?scope=exam&scopeId=3&key=questionCount
+settingsRouter.delete('/admin/settings/overrides', authenticate, requireAdmin, async (req: any, res: any) => {
+  try {
+    const { scope, scopeId, key, group } = req.query;
+    if (!SETTING_SCOPES.includes(scope)) return res.status(400).json({ error: 'Invalid scope' });
+    const id = parseScopeId(scopeId);
+    if (!id) return res.status(400).json({ error: 'scopeId is required (positive integer)' });
+    if (!key) return res.status(400).json({ error: 'key is required' });
+    const g = group || 'examSettings';
+    const existing = await db.select().from(settingsOverridesTable)
+      .where(and(
+        eq(settingsOverridesTable.scope, scope),
+        eq(settingsOverridesTable.scopeId, id),
+        eq(settingsOverridesTable.group, g),
+        eq(settingsOverridesTable.key, key),
+      ));
+    if (existing.length === 0) return res.status(404).json({ error: 'Override not found' });
+    await db.delete(settingsOverridesTable).where(eq(settingsOverridesTable.id, existing[0].id));
+    await recordAudit({
+      actor: { id: req.user?.id, name: req.user?.name, email: req.user?.email },
+      action: 'settings_override.delete', entityType: 'settings_override',
+      entityId: existing[0].id, entityLabel: `${SCOPE_LABELS[scope as SettingScope]} #${id} · ${key}`,
+      summary: `Removed override ${SCOPE_LABELS[scope as SettingScope]} #${id} ${g}.${key}`,
+      oldValues: { value: existing[0].value }, ip: req.ip,
+    });
+    res.json({ deleted: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/settings/overrides/resolve?examId=1&qbankId=2&… — the
+// resolved exam settings for a context + per-key provenance (admin preview).
+settingsRouter.get('/admin/settings/overrides/resolve', authenticate, requireAdmin, async (req: any, res: any) => {
+  try {
+    const ctx: OverrideContext = {};
+    for (const scope of SETTING_SCOPES) {
+      const id = parseScopeId(req.query[`${scope}Id`]);
+      if (id) ctx[`${scope}Id` as keyof OverrideContext] = id;
+    }
+    const platform = await platformGroup('examSettings');
+    const rows = await loadOverridesForContext(ctx);
+    const resolved = resolveExamSettings(platform, rows);
+    res.json({
+      context: ctx,
+      platform,
+      settings: resolved.settings,
+      sources: resolved.sources,
+      applied: resolved.applied,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/settings/exam?examId=1&qbankId=2&… — resolved exam behavior for a
+// context, no auth (exam config is not secret). Used by the exam engine to
+// pick up university/QBank-specific rules before a session starts.
+settingsRouter.get('/settings/exam', async (req: any, res: any) => {
+  try {
+    const ctx: OverrideContext = {};
+    for (const scope of SETTING_SCOPES) {
+      const id = parseScopeId(req.query[`${scope}Id`]);
+      if (id) ctx[`${scope}Id` as keyof OverrideContext] = id;
+    }
+    const platform = await platformGroup('examSettings');
+    const rows = await loadOverridesForContext(ctx);
+    const resolved = resolveExamSettings(platform, rows);
+    res.json({ settings: resolved.settings, sources: resolved.sources });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

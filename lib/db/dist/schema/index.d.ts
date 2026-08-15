@@ -25,4 +25,5 @@ export * from "./entitlements.js";
 export * from "./waitlist.js";
 export * from "./flashcards.js";
 export * from "./app_settings.js";
+export * from "./settings_overrides.js";
 //# sourceMappingURL=index.d.ts.map

@@ -454,6 +454,35 @@ export const featureFlagsSettingsSchema = z.object({
   newExamEngine: z.boolean(),
 });
 
+export const examSettingsSchema = z.object({
+  trialQuestions: z.number().int().min(0).max(1000),
+  attemptLimit: z.number().int().min(0).max(100),
+  bookmarksEnabled: z.boolean(),
+  notesEnabled: z.boolean(),
+  reportingEnabled: z.boolean(),
+  questionCount: z.number().int().min(1).max(500),
+  durationMinutes: z.number().int().min(0).max(1440),
+  markingScheme: z.enum(['no_negative', 'standard']),
+  negativeMarking: z.number().min(0).max(1),
+  passPercentage: z.number().min(0).max(100),
+  navigation: z.enum(['free', 'locked']),
+  questionPalette: z.boolean(),
+  reviewBehavior: z.enum(['after_each', 'end_only']),
+  autoSubmit: z.boolean(),
+  pauseResume: z.boolean(),
+  resultVisibility: z.enum(['immediate', 'end', 'admin_only']),
+  explanationBehavior: z.enum(['after_answer', 'end', 'never']),
+  answerReveal: z.enum(['after_answer', 'end']),
+});
+
+export const settingsOverrideUpsertSchema = z.object({
+  scope: z.enum(['qbank', 'topic', 'system', 'subject', 'year', 'program', 'exam', 'country']),
+  scopeId: z.number().int().positive(),
+  group: z.literal('examSettings'),
+  key: z.string().min(1).max(64),
+  value: z.unknown(),
+});
+
 export const updateSettingsSchema = z.object({
   general: generalSettingsSchema.partial().optional(),
   branding: brandingSettingsSchema.partial().optional(),
@@ -466,6 +495,7 @@ export const updateSettingsSchema = z.object({
   integrations: integrationSettingsSchema.partial().optional(),
   animations: animationsSettingsSchema.partial().optional(),
   featureFlags: featureFlagsSettingsSchema.partial().optional(),
+  examSettings: examSettingsSchema.partial().optional(),
 });
 
 export type UpdateSettings = z.infer<typeof updateSettingsSchema>;
@@ -483,4 +513,5 @@ export const UPDATE_SETTINGS_SHAPE = {
   integrations: integrationSettingsSchema.partial(),
   animations: animationsSettingsSchema.partial(),
   featureFlags: featureFlagsSettingsSchema.partial(),
+  examSettings: examSettingsSchema.partial(),
 } as const;

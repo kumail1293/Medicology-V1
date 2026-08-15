@@ -108,6 +108,34 @@ export interface FeatureFlagsSettings {
   newExamEngine: boolean; // NEW_EXAM_ENGINE
 }
 
+// QBank + exam behavior (plan items 10–11). These are the *platform-wide
+// defaults*; universities/exams and individual QBanks can override them via
+// the scoped-overrides system (see utils/scoped-overrides.ts). Resolution is
+// deterministic: safety constraints > QBank > topic > system > subject >
+// year > program > exam > country > platform default.
+export interface ExamSettings {
+  // QBank defaults (item 10).
+  trialQuestions: number; // free questions before the paywall (0 = full trial)
+  attemptLimit: number; // 0 = unlimited attempts
+  bookmarksEnabled: boolean;
+  notesEnabled: boolean;
+  reportingEnabled: boolean;
+  // Exam session behavior (item 11).
+  questionCount: number; // default questions per session
+  durationMinutes: number; // 0 = untimed
+  markingScheme: 'no_negative' | 'standard';
+  negativeMarking: number; // fraction deducted per wrong answer (0 = none)
+  passPercentage: number; // 0–100
+  navigation: 'free' | 'locked'; // free = jump anywhere; locked = sequential
+  questionPalette: boolean; // show the question-number palette
+  reviewBehavior: 'after_each' | 'end_only';
+  autoSubmit: boolean; // submit when the timer expires
+  pauseResume: boolean;
+  resultVisibility: 'immediate' | 'end' | 'admin_only';
+  explanationBehavior: 'after_answer' | 'end' | 'never';
+  answerReveal: 'after_answer' | 'end';
+}
+
 export interface PlatformSettings {
   general: GeneralSettings;
   branding: BrandingSettings;
@@ -120,6 +148,7 @@ export interface PlatformSettings {
   integrations: IntegrationSettings;
   animations: AnimationsSettings;
   featureFlags: FeatureFlagsSettings;
+  examSettings: ExamSettings;
 }
 
 export const DEFAULT_SETTINGS: PlatformSettings = {
@@ -205,6 +234,26 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     delayMs: 0,
     repeat: 'once',
     trigger: 'on_load',
+  },
+  examSettings: {
+    trialQuestions: 10,
+    attemptLimit: 0,
+    bookmarksEnabled: true,
+    notesEnabled: true,
+    reportingEnabled: true,
+    questionCount: 20,
+    durationMinutes: 60,
+    markingScheme: 'no_negative',
+    negativeMarking: 0,
+    passPercentage: 50,
+    navigation: 'free',
+    questionPalette: true,
+    reviewBehavior: 'end_only',
+    autoSubmit: true,
+    pauseResume: true,
+    resultVisibility: 'immediate',
+    explanationBehavior: 'after_answer',
+    answerReveal: 'after_answer',
   },
 };
 

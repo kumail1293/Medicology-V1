@@ -3,14 +3,19 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Settings, Palette, BookOpen, UserPlus, Bell, Shield, CreditCard,
   Database, Plug, Save, RotateCcw, Loader2, ChevronRight, Globe, LayoutDashboard,
-  FileText, Type, Ruler, Flag, History, Sparkles, Play, Pause,
+  FileText, Type, Ruler, Flag, History, Sparkles, Play, Pause, Timer, GitBranch,
+  Trash2, Plus, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  DEFAULT_SETTINGS, PlatformSettings, SettingsGroup,
+  DEFAULT_SETTINGS, PlatformSettings, SettingsGroup, ExamSettings,
   fetchAdminSettings, saveAdminSettings, resetSettingsGroup,
   fetchSettingsHistory, restoreSettings,
+  SETTING_SCOPES, SCOPE_LABELS, SettingScope,
+  listOverrides, upsertOverride, deleteOverride, resolveOverrides,
+  ResolvedResult, OverrideContext,
 } from "@/lib/adminSettings";
+import { apiFetch } from "@/lib/api";
 import { applyBranding } from "@/components/BrandingApplier";
 import { hexToHslTriplet } from "@/components/BrandingApplier";
 
@@ -99,7 +104,7 @@ function Card({ title, description, children }: { title: string; description?: s
 /* ── Group definitions (WordPress-style settings sections) ─────────────── */
 
 // "history" is a read-only pseudo-group (audit trail), not a settings key.
-const GROUPS: { id: SettingsGroup | "history"; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; blurb: string }[] = [
+const GROUPS: { id: SettingsGroup | "history" | "overrides"; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; blurb: string }[] = [
   { id: "general", label: "General", icon: Settings, blurb: "Site identity, homepage and regional defaults." },
   { id: "branding", label: "Branding & Design", icon: Palette, blurb: "Elementor-style design tokens — colors, fonts, radius, logo." },
   { id: "content", label: "Content & QBanks", icon: BookOpen, blurb: "Default statuses and content workflow rules." },
@@ -111,6 +116,8 @@ const GROUPS: { id: SettingsGroup | "history"; label: string; icon: React.Compon
   { id: "integrations", label: "Integrations", icon: Plug, blurb: "Analytics, SEO meta and custom head code." },
   { id: "animations", label: "Animations", icon: Sparkles, blurb: "Platform-wide motion — always respects prefers-reduced-motion." },
   { id: "featureFlags", label: "Feature Flags", icon: Flag, blurb: "Toggle protected capabilities platform-wide (enforced server-side)." },
+  { id: "examSettings", label: "Exam & QBank Defaults", icon: Timer, blurb: "Platform-wide exam behavior — question count, timing, marking, navigation." },
+  { id: "overrides", label: "Scoped Overrides", icon: GitBranch, blurb: "University/exam/QBank-specific rules layered over the platform defaults." },
   { id: "history", label: "Activity & History", icon: History, blurb: "Audit trail of settings changes with one-click restore." },
 ];
 
@@ -285,6 +292,263 @@ function AnimationsSection({ draft, set }: { draft: PlatformSettings; set: (patc
         </p>
       </div>
     </div>
+  );
+}
+
+/* ── Exam & QBank defaults (plan items 10–11, platform-wide) ──────────── */
+
+const EXAM_KEY_META: { key: keyof ExamSettings; label: string; hint?: string; kind: "number" | "boolean" | "enum"; min?: number; max?: number; step?: number; options?: [string, string][] }[] = [
+  { key: "questionCount", label: "Questions per session", kind: "number", min: 1, max: 500 },
+  { key: "durationMinutes", label: "Duration (minutes)", kind: "number", min: 0, max: 1440, hint: "0 = untimed" },
+  { key: "markingScheme", label: "Marking scheme", kind: "enum", options: [["no_negative", "No negative marking"], ["standard", "Standard (deduct for wrong answers)"]] },
+  { key: "negativeMarking", label: "Negative marking fraction", kind: "number", min: 0, max: 1, step: 0.05, hint: "Fraction of the question's marks deducted per wrong answer." },
+  { key: "passPercentage", label: "Pass percentage", kind: "number", min: 0, max: 100 },
+  { key: "navigation", label: "Navigation", kind: "enum", options: [["free", "Free (jump anywhere)"], ["locked", "Locked (sequential)"]] },
+  { key: "questionPalette", label: "Question palette", kind: "boolean", hint: "Show the question-number palette during a session." },
+  { key: "reviewBehavior", label: "Review behavior", kind: "enum", options: [["after_each", "After each question"], ["end_only", "End of session only"]] },
+  { key: "autoSubmit", label: "Auto-submit on timer expiry", kind: "boolean" },
+  { key: "pauseResume", label: "Pause / resume", kind: "boolean" },
+  { key: "attemptLimit", label: "Attempt limit", kind: "number", min: 0, max: 100, hint: "0 = unlimited attempts" },
+  { key: "resultVisibility", label: "Result visibility", kind: "enum", options: [["immediate", "Immediate"], ["end", "At session end"], ["admin_only", "Admins only"]] },
+  { key: "explanationBehavior", label: "Explanations", kind: "enum", options: [["after_answer", "After answering"], ["end", "At session end"], ["never", "Never"]] },
+  { key: "answerReveal", label: "Answer reveal", kind: "enum", options: [["after_answer", "After answering"], ["end", "At session end"]] },
+  { key: "trialQuestions", label: "Trial questions", kind: "number", min: 0, max: 1000, hint: "Free questions before the paywall (0 = full trial)." },
+  { key: "bookmarksEnabled", label: "Bookmarks", kind: "boolean" },
+  { key: "notesEnabled", label: "Notes", kind: "boolean" },
+  { key: "reportingEnabled", label: "Question reporting", kind: "boolean" },
+];
+
+function ExamSettingsSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["examSettings"]>) => void }) {
+  const es = draft.examSettings;
+  const renderControl = (meta: (typeof EXAM_KEY_META)[number]) => {
+    const v = es[meta.key];
+    if (meta.kind === "boolean") {
+      return <Toggle checked={!!v} onChange={(val) => set({ [meta.key]: val } as any)} label={meta.label} hint={meta.hint} />;
+    }
+    if (meta.kind === "enum") {
+      return (
+        <Field label={meta.label} hint={meta.hint}>
+          <SelectInput value={String(v)} onChange={(val) => set({ [meta.key]: val } as any)}
+            options={(meta.options ?? []).map(([value, label]) => ({ value, label }))} />
+        </Field>
+      );
+    }
+    return (
+      <Field label={meta.label} hint={meta.hint}>
+        <NumberInput value={Number(v)} onChange={(val) => set({ [meta.key]: val } as any)} min={meta.min} max={meta.max} step={meta.step} />
+      </Field>
+    );
+  };
+  return (
+    <Card title="Exam & QBank defaults" description="Platform-wide behavior. Any university/exam/QBank can override these via the Scoped Overrides tab — resolution is deterministic and tested.">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {EXAM_KEY_META.filter((m) => m.kind !== "boolean").map((m) => <div key={m.key}>{renderControl(m)}</div>)}
+      </div>
+      <div className="space-y-2 pt-2">
+        {EXAM_KEY_META.filter((m) => m.kind === "boolean").map((m) => <div key={m.key}>{renderControl(m)}</div>)}
+      </div>
+    </Card>
+  );
+}
+
+/* ── Scoped Overrides (QBank / university / exam / … rules) ───────────── */
+
+interface EntityOption { id: number; name: string }
+
+function OverridesSection() {
+  const { toast } = useToast();
+  const [scope, setScope] = useState<SettingScope>("qbank");
+  const [entities, setEntities] = useState<EntityOption[]>([]);
+  const [entityId, setEntityId] = useState<number | "">("");
+  const [resolved, setResolved] = useState<ResolvedResult | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, unknown>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => { void loadEntities(scope); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadEntities = async (s: SettingScope) => {
+    setLoading(true);
+    setEntityId("");
+    setResolved(null);
+    setDrafts({});
+    try {
+      if (s === "qbank") {
+        // Admin endpoint: raw qbank rows carry the numeric id (the store
+        // catalogue exposes slug as id, which is not a scope key).
+        const res = await apiFetch("/api/admin/qbanks");
+        const data = await res.json().catch(() => ({}));
+        const list: EntityOption[] = (data.qbanks ?? []).map((c: any) => ({ id: Number(c.id), name: c.name }));
+        setEntities(list);
+      } else {
+        const res = await apiFetch("/api/taxonomy/tree");
+        const tree: any = await res.json().catch(() => ({}));
+        const flat: EntityOption[] = [];
+        const key = s === "exam" ? "exams" : s === "year" ? "years" : s === "system" ? "systems" : s === "topic" ? "topics" : `${s}s`;
+        if (key === "subjects") {
+          (tree.subjects ?? []).forEach((sub: any) => flat.push({ id: sub.id, name: sub.name }));
+        } else {
+          (tree.countries ?? []).forEach((c: any) => {
+            (c.examSystems ?? []).forEach((es: any) => {
+              (es.exams ?? []).forEach((e: any) => {
+                if (key === "exams") flat.push({ id: e.id, name: `${c.name} · ${e.name}` });
+                (e.programs ?? []).forEach((p: any) => {
+                  if (key === "programs") flat.push({ id: p.id, name: `${e.name} · ${p.name}` });
+                  (p.years ?? []).forEach((y: any) => {
+                    if (key === "years") flat.push({ id: y.id, name: `${p.name} · ${y.name}` });
+                  });
+                });
+              });
+            });
+          });
+          if (key === "systems") {
+            (tree.subjects ?? []).forEach((sub: any) => (sub.systems ?? []).forEach((sys: any) => flat.push({ id: sys.id, name: `${sub.name} · ${sys.name}` })));
+          }
+          if (key === "topics") {
+            (tree.subjects ?? []).forEach((sub: any) => (sub.systems ?? []).forEach((sys: any) => (sys.topics ?? []).forEach((t: any) => flat.push({ id: t.id, name: `${sub.name} · ${sys.name} · ${t.name}` }))));
+          }
+        }
+        setEntities(flat);
+      }
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to load entities", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectScope = (s: SettingScope) => { setScope(s); void loadEntities(s); };
+
+  const selectEntity = async (id: number) => {
+    setEntityId(id);
+    try {
+      const ctx: OverrideContext = { [`${scope}Id`]: id } as any;
+      const r = await resolveOverrides(ctx);
+      setResolved(r);
+      // Seed drafts from the effective values (override = what you change).
+      const d: Record<string, unknown> = {};
+      for (const meta of EXAM_KEY_META) d[meta.key] = (r.settings as any)[meta.key];
+      setDrafts(d);
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to resolve overrides", variant: "destructive" });
+    }
+  };
+
+  const hasOverride = (key: string) =>
+    resolved?.applied.some((a) => a.key === key && a.scope === scope && a.scopeId === Number(entityId));
+
+  const saveOverride = async (key: string) => {
+    if (entityId === "") return;
+    setSaving(key);
+    try {
+      await upsertOverride({ scope, scopeId: Number(entityId), group: "examSettings", key, value: drafts[key] });
+      toast({ title: "Saved", description: `${EXAM_KEY_META.find((m) => m.key === key)?.label} override applied for this ${SCOPE_LABELS[scope].toLowerCase()}.` });
+      await selectEntity(Number(entityId));
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to save override", variant: "destructive" });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const removeOverride = async (key: string) => {
+    if (entityId === "") return;
+    setSaving(key);
+    try {
+      await deleteOverride({ scope, scopeId: Number(entityId), group: "examSettings", key });
+      toast({ title: "Inherited", description: `${EXAM_KEY_META.find((m) => m.key === key)?.label} now inherits from the parent scope.` });
+      await selectEntity(Number(entityId));
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to remove override", variant: "destructive" });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const sourceBadge = (key: string) => {
+    const src = resolved?.sources[key];
+    if (!src || src === "platform") {
+      return <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Platform default</span>;
+    }
+    return <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{SCOPE_LABELS[src as SettingScope]} override</span>;
+  };
+
+  return (
+    <Card title="Scoped overrides" description="WordPress-style per-scope rules: system safety → QBank → topic → system → subject → year → program → exam → country → platform default. More specific scopes always win.">
+      {/* Scope + entity pickers */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Scope">
+          <SelectInput value={scope} onChange={(v) => selectScope(v as SettingScope)}
+            options={SETTING_SCOPES.map((s) => ({ value: s, label: SCOPE_LABELS[s] }))} />
+        </Field>
+        <Field label={SCOPE_LABELS[scope]} hint={loading ? "Loading…" : undefined}>
+          <select value={entityId} onChange={(e) => { const v = Number(e.target.value); if (v > 0) void selectEntity(v); }}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">{loading ? "Loading…" : `Select a ${SCOPE_LABELS[scope].toLowerCase()}…`}</option>
+            {entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      {entityId === "" && (
+        <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          Pick a {SCOPE_LABELS[scope].toLowerCase()} to see its effective exam rules and set overrides.
+        </p>
+      )}
+
+      {entityId !== "" && resolved && (
+        <div className="space-y-2 pt-2">
+          {EXAM_KEY_META.map((meta) => {
+            const v = drafts[meta.key];
+            const isBool = meta.kind === "boolean";
+            const overridden = hasOverride(meta.key);
+            return (
+              <div key={meta.key} className="flex flex-wrap items-center gap-3 rounded-xl border border-border p-3">
+                <div className="min-w-[180px] flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{meta.label}</span>
+                    {sourceBadge(meta.key)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{meta.hint ?? ""}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isBool ? (
+                    <button type="button" role="switch" aria-checked={!!v}
+                      onClick={() => setDrafts((d) => ({ ...d, [meta.key]: !v }))}
+                      className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", v ? "bg-primary" : "bg-muted-foreground/30")}>
+                      <span className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all" style={{ left: v ? 18 : 2 }} />
+                    </button>
+                  ) : meta.kind === "enum" ? (
+                    <select value={String(v)} onChange={(e) => setDrafts((d) => ({ ...d, [meta.key]: e.target.value }))}
+                      className="rounded-lg border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                      {(meta.options ?? []).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  ) : (
+                    <input type="number" value={Number(v)} min={meta.min} max={meta.max} step={meta.step ?? 1}
+                      onChange={(e) => setDrafts((d) => ({ ...d, [meta.key]: Number(e.target.value) }))}
+                      className="w-24 rounded-lg border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                  )}
+                  <button onClick={() => void saveOverride(meta.key)} disabled={saving === meta.key}
+                    className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50">
+                    {saving === meta.key ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Override
+                  </button>
+                  {overridden && (
+                    <button onClick={() => void removeOverride(meta.key)} disabled={saving === meta.key}
+                      title="Clear this override — inherit from the parent scope"
+                      className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:border-destructive/40 hover:text-destructive disabled:opacity-50">
+                      <Trash2 size={12} /> Inherit
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <p className="flex items-center gap-1 pt-1 text-xs text-muted-foreground">
+            <X size={12} /> "Inherit" removes this scope's override so the value falls back up the chain.
+          </p>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -639,6 +903,32 @@ function IntegrationsSection({ draft, set }: { draft: PlatformSettings; set: (pa
   );
 }
 
+/* ── Active section (module-level so it never remounts) ─────────────────── */
+
+function ActiveSection({ active, draft, setGroup }: {
+  active: string;
+  draft: PlatformSettings;
+  setGroup: (patch: any) => void;
+}) {
+  switch (active) {
+    case "general": return <GeneralSection draft={draft} set={setGroup as any} />;
+    case "branding": return <BrandingSection draft={draft} set={setGroup as any} />;
+    case "content": return <ContentSection draft={draft} set={setGroup as any} />;
+    case "registration": return <RegistrationSection draft={draft} set={setGroup as any} />;
+    case "notifications": return <NotificationsSection draft={draft} set={setGroup as any} />;
+    case "security": return <SecuritySection draft={draft} set={setGroup as any} />;
+    case "payments": return <PaymentsSection draft={draft} set={setGroup as any} />;
+    case "storage": return <StorageSection draft={draft} set={setGroup as any} />;
+    case "integrations": return <IntegrationsSection draft={draft} set={setGroup as any} />;
+    case "animations": return <AnimationsSection draft={draft} set={setGroup as any} />;
+    case "featureFlags": return <FeatureFlagsSection draft={draft} set={setGroup as any} />;
+    case "examSettings": return <ExamSettingsSection draft={draft} set={setGroup as any} />;
+    case "overrides": return <OverridesSection />;
+    case "history": return <HistorySection />;
+    default: return null;
+  }
+}
+
 /* ── Page ──────────────────────────────────────────────────────────────── */
 
 export default function AdminSettingsPage() {
@@ -704,23 +994,8 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const ActiveSection = () => {
-    switch (active) {
-      case "general": return <GeneralSection draft={draft} set={setGroup as any} />;
-      case "branding": return <BrandingSection draft={draft} set={setGroup as any} />;
-      case "content": return <ContentSection draft={draft} set={setGroup as any} />;
-      case "registration": return <RegistrationSection draft={draft} set={setGroup as any} />;
-      case "notifications": return <NotificationsSection draft={draft} set={setGroup as any} />;
-      case "security": return <SecuritySection draft={draft} set={setGroup as any} />;
-      case "payments": return <PaymentsSection draft={draft} set={setGroup as any} />;
-      case "storage": return <StorageSection draft={draft} set={setGroup as any} />;
-      case "integrations": return <IntegrationsSection draft={draft} set={setGroup as any} />;
-      case "animations": return <AnimationsSection draft={draft} set={setGroup as any} />;
-      case "featureFlags": return <FeatureFlagsSection draft={draft} set={setGroup as any} />;
-      case "history": return <HistorySection />;
-      default: return null;
-    }
-  };
+  // NOTE: module-level (stable identity) so the active section keeps its own
+  // state — an inline component would remount on every parent re-render.
 
   if (!loaded) {
     return (
@@ -773,13 +1048,13 @@ export default function AdminSettingsPage() {
               <p className="text-sm text-muted-foreground">{GROUPS.find((g) => g.id === active)?.blurb}</p>
             </div>
             <div className="flex shrink-0 gap-2">
-              {active !== "history" && (
+              {active !== "history" && active !== "overrides" && (
                 <button onClick={() => void reset()} disabled={resetting}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 disabled:opacity-50">
                   <RotateCcw size={14} /> {resetting ? "Resetting…" : "Reset"}
                 </button>
               )}
-              {active !== "history" && (
+              {active !== "history" && active !== "overrides" && (
                 <button onClick={() => void save()} disabled={!dirty || saving}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50">
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save Changes
@@ -788,7 +1063,7 @@ export default function AdminSettingsPage() {
             </div>
           </div>
 
-          <ActiveSection />
+          <ActiveSection active={active} draft={draft} setGroup={setGroup as any} />
 
           {dirty && (
             <div className="fixed bottom-6 right-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
