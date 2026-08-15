@@ -27,6 +27,11 @@ export const usersTable = pgTable("users", {
   college: text("college").notNull(),
   university: text("university"),
   year: integer("year").notNull(),
+  bio: text("bio"),
+  phone: text("phone"),
+  // Amboss-style study aim: the student's goal for their current subscription.
+  // Changing the aim resets progress (fresh start under the new goal).
+  studyAim: jsonb("study_aim").$type<StudyAim>().default({}),
   isAdmin: boolean("is_admin").notNull().default(false),
   role: text("role").notNull().default("user"),
   customPermissions: jsonb("custom_permissions").$type<CustomPermissions>().default({}),
@@ -35,6 +40,15 @@ export const usersTable = pgTable("users", {
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export type StudyAim = {
+  targetExam?: string;        // e.g. "UHS MBBS 1st Year"
+  targetQbankId?: number;     // qbank_id the aim is tied to
+  targetDate?: string;        // ISO date
+  dailyQuestions?: number;    // daily question goal
+  weeklyGoal?: number;        // optional weekly hours/questions
+  setAt?: string;             // ISO timestamp when the aim was set/changed
+};
 
 export type NotificationPrefs = {
   email?: {

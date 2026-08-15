@@ -374,10 +374,10 @@ export declare const flashcardsTable: import("drizzle-orm/pg-core").PgTableWithC
 }>;
 export declare const insertFlashcardDeckSchema: z.ZodObject<{
     name: z.ZodString;
+    slug: z.ZodString;
+    subject: z.ZodOptional<z.ZodString>;
     status: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    subject: z.ZodOptional<z.ZodString>;
-    slug: z.ZodString;
     cardCount: z.ZodOptional<z.ZodInt>;
     createdBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
 }, {
@@ -386,12 +386,12 @@ export declare const insertFlashcardDeckSchema: z.ZodObject<{
 }>;
 export declare const insertFlashcardSchema: z.ZodObject<{
     sortOrder: z.ZodOptional<z.ZodInt>;
-    tags: z.ZodOptional<z.ZodNullable<z.ZodType<string[], string[], z.core.$ZodTypeInternals<string[], string[]>>>>;
     createdBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     deckId: z.ZodInt;
     front: z.ZodString;
     back: z.ZodOptional<z.ZodString>;
     note: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    tags: z.ZodOptional<z.ZodNullable<z.ZodType<string[], string[], z.core.$ZodTypeInternals<string[], string[]>>>>;
     image: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }, {
     out: {};

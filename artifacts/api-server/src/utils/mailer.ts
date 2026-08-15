@@ -11,7 +11,7 @@ import { renderEmail, renderEmailPlain, type EmailBlock } from './email-renderer
 
 const SECRET_KEY = '__secret_email_smtp_password';
 
-async function loadEmailSettings(): Promise<{ settings: EmailSettings; smtpPassword: string }> {
+async function loadEmailSettings(): Promise<{ settings: EmailSettings; smtpPassword: string; socials: { platform: string; url: string }[] }> {
   const rows = await db.select().from(appSettingsTable);
   const stored: Record<string, any> = {};
   let smtpPassword = '';
@@ -23,7 +23,7 @@ async function loadEmailSettings(): Promise<{ settings: EmailSettings; smtpPassw
     stored[row.key] = row.value;
   }
   const merged = mergeSettings(stored);
-  return { settings: merged.email, smtpPassword };
+  return { settings: merged.email, smtpPassword, socials: merged.footer?.socials ?? [] };
 }
 
 export interface SendEmailInput {
@@ -133,13 +133,14 @@ async function sendSmtp(opts: {
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
-  const { settings, smtpPassword } = await loadEmailSettings();
+  const { settings, smtpPassword, socials } = await loadEmailSettings();
   const fromName = settings.fromName || 'Medicology';
-  const fromEmail = settings.fromEmail || 'no-reply@medicology.com';
+  const fromEmail = settings.fromEmail || 'no-reply@medicology.net';
   const html = renderEmail({
     blocks: input.blocks,
     data: input.data,
     platformFooter: settings.footerText,
+    socials,
     unsubscribeUrl: input.data?.unsubscribeUrl ? String(input.data.unsubscribeUrl) : undefined,
     primaryColor: '#0d9488',
     brandName: fromName,

@@ -132,6 +132,25 @@ export declare const announcementsTable: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        targetUserIds: import("drizzle-orm/pg-core").PgColumn<{
+            name: "target_user_ids";
+            tableName: "announcements";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: number[];
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: number[];
+        }>;
         startsAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "starts_at";
             tableName: "announcements";
@@ -318,6 +337,7 @@ export declare const insertAnnouncementSchema: z.ZodObject<{
     buttonText: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     buttonUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     targetRoles: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    targetUserIds: z.ZodOptional<z.ZodNullable<z.ZodType<number[], number[], z.core.$ZodTypeInternals<number[], number[]>>>>;
     startsAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
     expiresAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
     priority: z.ZodOptional<z.ZodString>;

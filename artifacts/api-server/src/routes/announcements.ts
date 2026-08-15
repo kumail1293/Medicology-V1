@@ -27,6 +27,7 @@ function toRow(body: any) {
   if (body.buttonText !== undefined) row.buttonText = body.buttonText;
   if (body.buttonUrl !== undefined) row.buttonUrl = body.buttonUrl;
   if (body.targetRoles !== undefined) row.targetRoles = body.targetRoles;
+  if (body.targetUserIds !== undefined) row.targetUserIds = Array.isArray(body.targetUserIds) ? body.targetUserIds.map(Number) : [];
   if (body.isActive !== undefined) row.isActive = Boolean(body.isActive);
   if (body.priority !== undefined) row.priority = body.priority;
   if (body.theme !== undefined) row.theme = body.theme;
@@ -67,10 +68,16 @@ announcementsRouter.get('/active', authenticate, async (req: AuthRequest, res: a
 
     const now = Date.now();
     const role = req.user!.role || 'user';
+    const userId = Number(req.user!.id);
     const announcements = active
       .filter((a: any) => {
         if (a.startsAt && new Date(a.startsAt).getTime() > now) return false;
         if (a.expiresAt && new Date(a.expiresAt).getTime() < now) return false;
+        // User-specific targeting takes precedence over role targeting.
+        const userIds = Array.isArray(a.targetUserIds) && a.targetUserIds.length > 0
+          ? a.targetUserIds.map(Number)
+          : [];
+        if (userIds.length > 0) return userIds.includes(userId);
         const roles = a.targetRoles
           ? String(a.targetRoles).split(',').map((r: string) => r.trim()).filter(Boolean)
           : [];
@@ -228,6 +235,7 @@ announcementsRouter.post('/', authenticate, requireAdmin, requirePermission('ann
       buttonText: body.buttonText ?? null,
       buttonUrl: body.buttonUrl ?? null,
       targetRoles: body.targetRoles ?? 'all',
+      targetUserIds: body.targetUserIds ?? [],
       isActive: body.isActive ?? false,
       startsAt: body.startsAt ?? null,
       expiresAt: body.expiresAt ?? null,
@@ -297,7 +305,7 @@ announcementsRouter.post('/:id/email', authenticate, requireAdmin, requirePermis
       .filter((u) => !u.deletedAt && (roles === null || roles.includes(u.role)))
       .slice(0, 500);
 
-    const baseUrl = process.env.APP_BASE_URL || 'https://medicology.com';
+    const baseUrl = process.env.APP_BASE_URL || 'https://medicology.net';
     for (const user of recipients) {
       queueTransactional({
         to: user.email,

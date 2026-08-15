@@ -256,8 +256,11 @@ export default function CreateTestPage() {
     fetch('/api/qbanks/my', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => {
-        const ids = (d.purchases || []).map((p: any) => p.qbankType as string);
-        setPurchasedIds(ids);
+        // `purchases` carries catalogueIds (slug with - -> _) that match the
+        // wizard's PARENT_QBANKS catalogueIds. Normalize as a defensive fallback.
+        const norm = (s: string) => String(s).trim().toLowerCase().replace(/-/g, '_');
+        const ids = (d.purchases || []).map((p: any) => norm(p.catalogueId ?? p.qbankType ?? ''));
+        setPurchasedIds(ids.filter(Boolean));
         setPurchasesLoaded(true);
       })
       .catch(() => setPurchasesLoaded(true));
@@ -288,9 +291,17 @@ export default function CreateTestPage() {
   const isBlockMode = mode === 'block';
   const effectiveQuestionCount = isBlockMode ? blockSize * blockCount : questionCount;
 
+  // MBBS banks are purchased per university + year (e.g. uhs_mbbs_1st_year),
+  // so the MBBS parent unlocks when ANY university-prefixed bank is owned.
   const hasPurchased = (parent: ParentQBank) => {
     if (isAdmin) return true;
-    return parent.catalogueIds.some(cid => purchasedIds.includes(cid));
+    const norm = (s: string) => String(s).trim().toLowerCase().replace(/-/g, '_');
+    if (parent.isMBBS) {
+      return purchasedIds.some((id) =>
+        parent.subtypes.some((sub) => sub.id && norm(id).startsWith(`${sub.id}_`))
+      );
+    }
+    return parent.catalogueIds.some(cid => purchasedIds.includes(norm(cid)));
   };
 
   const availableParents = purchasesLoaded
@@ -301,7 +312,8 @@ export default function CreateTestPage() {
     ? selectedParent.subtypes.filter(sub => {
         if (!sub.catalogueId) return true; // MBBS universities: always show
         if (isAdmin) return true;
-        return purchasedIds.includes(sub.catalogueId);
+        const norm = (s: string) => String(s).trim().toLowerCase().replace(/-/g, '_');
+        return purchasedIds.includes(norm(sub.catalogueId));
       })
     : [];
 

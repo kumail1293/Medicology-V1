@@ -132,11 +132,29 @@ qbanksRouter.get('/pricing', authenticate, async (req: AuthRequest, res: any) =>
   }
 });
 
-// My entitlements (raw).
+// My entitlements (raw) + purchased qbank slugs. The `purchases` array maps to
+// the catalogueIds used by the create-test wizard (slug with - replaced by _).
 qbanksRouter.get('/my', authenticate, async (req: AuthRequest, res: any) => {
   try {
-    const entitlements = await getEntitlementsForUser(req.user!.id);
-    res.json({ entitlements });
+    const [entitlements, qbanks] = await Promise.all([
+      getEntitlementsForUser(req.user!.id),
+      db.select().from(qbanksTable),
+    ]);
+    const now = Date.now();
+    const qbById = new Map(qbanks.map((qb: any) => [Number(qb.id), qb]));
+    const purchases = entitlements
+      .filter((e: any) => isEntitledStatus(e.status) && (!e.expiresAt || new Date(e.expiresAt).getTime() > now))
+      .map((e: any) => {
+        const qb: any = qbById.get(Number(e.qbankId));
+        return {
+          qbankId: e.qbankId,
+          qbankType: qb?.slug ?? `qbank-${e.qbankId}`,
+          catalogueId: qb?.slug ? String(qb.slug).replace(/-/g, '_') : `qbank_${e.qbankId}`,
+          status: e.status,
+          expiresAt: e.expiresAt,
+        };
+      });
+    res.json({ entitlements, purchases });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

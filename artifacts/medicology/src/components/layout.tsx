@@ -27,6 +27,7 @@ import {
   ExternalLink,
   CreditCard,
   Command,
+  User,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -201,8 +202,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Study Buddies", href: "/buddies", icon: Users },
     { name: "Achievements", href: "/achievements", icon: Trophy },
     { name: "Leaderboard", href: "/leaderboard", icon: Trophy },
+    { name: "My Profile", href: "/profile", icon: User },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
+
+  if (user?.isAdmin) {
+    navItems.push({ name: "Admin Panel", href: "/admin", icon: ShieldAlert });
+  }
 
   if (user?.isAdmin) {
     navItems.push({ name: "Admin Panel", href: "/admin", icon: ShieldAlert });

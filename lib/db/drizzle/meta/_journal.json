@@ -85,6 +85,27 @@
       "when": 1786797234746,
       "tag": "0011_round_cammi",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786802354101,
+      "tag": "0012_announcement_user_targeting",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786802459603,
+      "tag": "0013_user_profile_bio",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786802943923,
+      "tag": "0014_user_study_aim",
+      "breakpoints": true
     }
   ]
 }

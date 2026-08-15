@@ -227,7 +227,7 @@ paymentsRouter.post('/verify', authenticate, async (req: AuthRequest, res: any) 
               ? new Date(entitlement.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
               : 'Lifetime access',
             'platform.name': 'Medicology',
-            'platform.siteUrl': process.env.APP_BASE_URL || 'https://medicology.com',
+            'platform.siteUrl': process.env.APP_BASE_URL || 'https://medicology.net',
           },
         });
         queueTransactional({
@@ -241,7 +241,7 @@ paymentsRouter.post('/verify', authenticate, async (req: AuthRequest, res: any) 
               ? new Date(entitlement.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
               : 'Lifetime access',
             'platform.name': 'Medicology',
-            'platform.siteUrl': process.env.APP_BASE_URL || 'https://medicology.com',
+            'platform.siteUrl': process.env.APP_BASE_URL || 'https://medicology.net',
           },
         });
       }

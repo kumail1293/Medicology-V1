@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -33,6 +33,9 @@ export const announcementsTable = pgTable("announcements", {
   buttonText: text("button_text"),
   buttonUrl: text("button_url"),
   targetRoles: text("target_roles").default("all"),
+  // User-specific targeting (in-app only): when set, the announcement is
+  // delivered only to these user IDs. Empty = role-based / everyone.
+  targetUserIds: jsonb("target_user_ids").$type<number[]>().default([]),
   // --- Scheduling + presentation (admin settings plan items 13-14) ---
   startsAt: timestamp("starts_at"),
   expiresAt: timestamp("expires_at"),

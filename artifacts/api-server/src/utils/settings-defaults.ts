@@ -216,7 +216,7 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
   general: {
     siteName: "Medicology",
     tagline: "Master your medical knowledge. The premier QBank platform designed exclusively for Medical, Dental & Allied Health students.",
-    supportEmail: "support@medicology.com",
+    supportEmail: "support@medicology.net",
     timezone: "Asia/Karachi",
     locale: "en",
     dateFormat: "MMM d, yyyy",
@@ -244,7 +244,7 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     requireEmailVerification: false,
     inviteOnly: false,
     allowedDomains: [],
-    adminEmail: "admin@medicology.com",
+    adminEmail: "admin@medicology.net",
   },
   notifications: {
     emailNewUser: true,
@@ -280,8 +280,8 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
   email: {
     provider: "log", // "log" prints to console in dev; "smtp" sends for real
     fromName: "Medicology",
-    fromEmail: "no-reply@medicology.com",
-    replyTo: "support@medicology.com",
+    fromEmail: "no-reply@medicology.net",
+    replyTo: "support@medicology.net",
     smtpHost: "",
     smtpPort: 587,
     smtpSecure: false,
@@ -301,7 +301,7 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     ogImage: "/images/og-cover.png",
     twitterCard: 'summary_large_image',
     robots: 'index,follow',
-    canonicalUrl: "https://medicology.com/",
+    canonicalUrl: "https://medicology.net/",
   },
   footer: {
     footerText: "Medicology — Master your medical knowledge.",
@@ -311,9 +311,13 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     termsLink: "/terms",
     refundLink: "/refunds",
     socials: [
-      { platform: "instagram", url: "https://instagram.com/medicology" },
-      { platform: "facebook", url: "https://facebook.com/medicology" },
-      { platform: "x", url: "https://x.com/medicology" },
+      { platform: "instagram", url: "https://instagram.com/medicologyworld" },
+      { platform: "facebook", url: "https://facebook.com/medicologyworld" },
+      { platform: "x", url: "https://x.com/medicologyworld" },
+      { platform: "tiktok", url: "https://tiktok.com/@medicologyworld" },
+      { platform: "youtube", url: "https://youtube.com/@medicologyworld" },
+      { platform: "linkedin", url: "https://linkedin.com/company/medicologyworld" },
+      { platform: "whatsapp", url: "https://wa.me/medicologyworld" },
     ],
   },
   featureFlags: {

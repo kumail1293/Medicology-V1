@@ -529,6 +529,8 @@ export interface UpdateProfileRequest {
   college?: string;
   university?: string;
   year?: number;
+  bio?: string;
+  phone?: string;
   currentPassword?: string;
   newPassword?: string;
 }

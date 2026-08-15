@@ -3,7 +3,7 @@ import { useSettings, AppTheme, FontFamily, FontSize } from "@/lib/settings";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sun, Moon, Leaf, Monitor, Type, Palette, Check, Zap, User, Shield, Bell, Download, Trash2, Loader2, Smartphone, Globe, KeyRound } from "lucide-react";
+import { Sun, Moon, Leaf, Monitor, Type, Palette, Check, Zap, User, Shield, Bell, Download, Trash2, Loader2, Smartphone, Globe, KeyRound, Target, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,14 +11,16 @@ import { useLocation } from "wouter";
 import {
   fetchSessions, revokeSession, revokeAllSessions, fetchSecurityEvents,
   saveNotificationPrefs, changePassword, exportMyData, deleteMyAccount,
-  SessionInfo, SecurityEvent, NotificationPrefs,
+  fetchStudyAim, saveStudyAim,
+  SessionInfo, SecurityEvent, NotificationPrefs, StudyAim,
 } from "@/lib/account";
 
-type Tab = "appearance" | "profile" | "security" | "notifications" | "privacy";
+type Tab = "appearance" | "profile" | "security" | "notifications" | "privacy" | "aim";
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "profile", label: "Profile", icon: User },
+  { id: "aim", label: "Study Aim", icon: Target },
   { id: "security", label: "Security", icon: Shield },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "privacy", label: "Privacy & Data", icon: Download },
@@ -47,6 +49,7 @@ export default function SettingsPage() {
 
       {tab === "appearance" && <AppearanceTab settings={settings} update={update} />}
       {tab === "profile" && <ProfileTab />}
+      {tab === "aim" && <StudyAimTab />}
       {tab === "security" && <SecurityTab />}
       {tab === "notifications" && <NotificationsTab />}
       {tab === "privacy" && <PrivacyTab />}
@@ -479,6 +482,119 @@ function PrivacyTab() {
               </Button>
               <Button variant="outline" onClick={() => setConfirming(false)}>Cancel</Button>
             </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/* ── Study Aim (AMBOSS-style goal for the current subscription) ────────── */
+
+const AIM_EXAM_OPTIONS = [
+  "UHS MBBS 1st Year", "UHS MBBS 2nd Year", "UHS MBBS 3rd Year", "UHS MBBS 4th Year", "UHS MBBS Final Year",
+  "KMU MBBS", "NUMS MBBS", "FCPS Part 1", "FCPS Part 2", "USMLE Step 1", "USMLE Step 2 CK", "PLAB 1", "PLAB 2", "NRE-1", "NRE-2",
+];
+
+function StudyAimTab() {
+  const { toast } = useToast();
+  const [aim, setAim] = useState<StudyAim>({});
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [changed, setChanged] = useState(false);
+
+  useEffect(() => {
+    fetchStudyAim()
+      .then((a) => { setAim(a); setLoaded(true); })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  const patch = (p: Partial<StudyAim>) => { setAim((prev) => ({ ...prev, ...p })); setChanged(true); };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const res = await saveStudyAim(aim);
+      setAim(res.aim);
+      setChanged(false);
+      setConfirmReset(false);
+      toast({
+        title: res.progressReset ? "Aim updated — progress reset" : "Study aim saved",
+        description: res.progressReset ? "Your sessions, per-question progress and daily challenges were cleared for a fresh start." : undefined,
+        variant: res.progressReset ? "destructive" : "default",
+      });
+    } catch (err: any) {
+      toast({ title: "Failed to save", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-primary/10 p-3"><Target className="text-primary" size={22} /></div>
+            <div>
+              <h3 className="font-bold">Your Study Aim</h3>
+              <p className="text-sm text-muted-foreground">
+                Set the goal you're studying towards. Changing your aim starts a fresh
+                session — your test history, per-question progress and daily challenges
+                are reset so analytics reflect your new target (like AMBOSS).
+              </p>
+            </div>
+          </div>
+
+          {!loaded && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+
+          {loaded && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Target exam / QBank">
+                <select value={aim.targetExam ?? ""} onChange={(e) => patch({ targetExam: e.target.value })}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                  <option value="">Select your target…</option>
+                  {AIM_EXAM_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </Field>
+              <Field label="Target exam date">
+                <input type="date" value={aim.targetDate ?? ""} onChange={(e) => patch({ targetDate: e.target.value })}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </Field>
+              <Field label="Daily question goal">
+                <input type="number" min={0} value={aim.dailyQuestions ?? ""} onChange={(e) => patch({ dailyQuestions: e.target.value ? Number(e.target.value) : undefined })}
+                  placeholder="e.g. 40" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </Field>
+              <Field label="Weekly goal (questions)">
+                <input type="number" min={0} value={aim.weeklyGoal ?? ""} onChange={(e) => patch({ weeklyGoal: e.target.value ? Number(e.target.value) : undefined })}
+                  placeholder="e.g. 200" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </Field>
+            </div>
+          )}
+
+          {changed && (
+            <div className="flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                <AlertTriangle size={16} /> Aim changes reset your progress
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Saving a different aim clears your test sessions, per-question progress and
+                daily challenge history so your analytics start fresh. Bookmarks and notes are kept.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={save} disabled={busy}>
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target size={14} />} Save & reset progress
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setChanged(false)} disabled={busy}>Discard</Button>
+              </div>
+            </div>
+          )}
+
+          {!changed && loaded && (
+            <Button onClick={() => setChanged(true)} disabled={busy}>
+              {aim.targetExam ? "Change my aim" : "Set my study aim"}
+            </Button>
           )}
         </CardContent>
       </Card>

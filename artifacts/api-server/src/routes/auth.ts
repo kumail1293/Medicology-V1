@@ -7,7 +7,7 @@ import { generateToken, authenticate, AuthRequest } from '../middleware/auth.js'
 import { checkRegistrationPolicy } from '../utils/registration-policy.js';
 import { createSession, listSessions, revokeSession, revokeAllSessions, loginHistory } from '../utils/sessions.js';
 import { queueTransactional } from '../utils/transactional-email.js';
-import { securityEventsTable, passwordResetTokensTable } from '@workspace/db';
+import { securityEventsTable, passwordResetTokensTable, userProgressTable, testSessionsTable, dailyChallengeTable } from '@workspace/db';
 
 export const authRouter = Router();
 
@@ -65,8 +65,8 @@ authRouter.post('/register', async (req, res: any) => {
         'user.firstName': String(user.name).split(' ')[0],
         'user.name': user.name,
         'platform.name': 'Medicology',
-        'platform.siteUrl': process.env.APP_BASE_URL || 'https://medicology.com',
-        'platform.supportEmail': 'support@medicology.com',
+        'platform.siteUrl': process.env.APP_BASE_URL || 'https://medicology.net',
+        'platform.supportEmail': 'support@medicology.net',
         'currentDate': new Date().toLocaleDateString(),
       },
     });
@@ -78,7 +78,7 @@ authRouter.post('/register', async (req, res: any) => {
         data: {
           'user.firstName': String(user.name).split(' ')[0],
           'user.email': user.email,
-          'verificationUrl': `${process.env.APP_BASE_URL || 'https://medicology.com'}/verify-email?userId=${user.id}`,
+          'verificationUrl': `${process.env.APP_BASE_URL || 'https://medicology.net'}/verify-email?userId=${user.id}`,
           'platform.name': 'Medicology',
         },
       });
@@ -134,7 +134,7 @@ authRouter.get('/me', authenticate, async (req: AuthRequest, res: any) => {
 // Update profile
 authRouter.put('/me', authenticate, async (req: AuthRequest, res: any) => {
   try {
-    const { name, email, college, university, year } = req.body;
+    const { name, email, college, university, year, bio, phone } = req.body;
     const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
     const [user] = await db.update(usersTable)
       .set({
@@ -143,6 +143,8 @@ authRouter.put('/me', authenticate, async (req: AuthRequest, res: any) => {
         college: college ? String(college).trim() : undefined,
         university: university !== undefined ? (university ? String(university).trim() : null) : undefined,
         year: year !== undefined ? Number(year) : undefined,
+        bio: bio !== undefined ? (bio ? String(bio).trim() : null) : undefined,
+        phone: phone !== undefined ? (phone ? String(phone).trim() : null) : undefined,
       })
       .where(eq(usersTable.id, req.user!.id))
       .returning();
@@ -206,7 +208,7 @@ authRouter.post('/forgot-password', async (req: any, res: any) => {
       return res.json({ success: true });
     }
     const token = await generateResetToken(user.id);
-    const baseUrl = process.env.APP_BASE_URL || 'https://medicology.com';
+    const baseUrl = process.env.APP_BASE_URL || 'https://medicology.net';
     queueTransactional({
       to: user.email,
       slug: 'password_reset',
@@ -216,7 +218,7 @@ authRouter.post('/forgot-password', async (req: any, res: any) => {
         'user.email': user.email,
         'resetUrl': `${baseUrl}/reset-password?token=${token}`,
         'platform.name': 'Medicology',
-        'platform.supportEmail': 'support@medicology.com',
+        'platform.supportEmail': 'support@medicology.net',
       },
     });
     res.json({ success: true });
@@ -310,6 +312,61 @@ authRouter.put('/me/notification-prefs', authenticate, async (req: any, res: any
     await db.update(usersTable).set({ notificationPrefs: prefs }).where(eq(usersTable.id, req.user!.id));
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
     res.json({ prefs: user.notificationPrefs ?? {} });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/auth/me/aim — the student's current study aim (Amboss-style goal
+// for the active subscription).
+authRouter.get('/me/aim', authenticate, async (req: any, res: any) => {
+  try {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ aim: user.studyAim ?? {} });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/auth/me/aim — set a new study aim. Changing the aim resets all
+// progress (sessions, per-question progress, daily challenges) so the student
+// starts fresh under the new goal — like AMBOSS switching your target exam.
+authRouter.put('/me/aim', authenticate, async (req: any, res: any) => {
+  try {
+    const { targetExam, targetQbankId, targetDate, dailyQuestions, weeklyGoal } = req.body ?? {};
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const prev = user.studyAim ?? {};
+    const next = {
+      targetExam: targetExam !== undefined ? String(targetExam) : prev.targetExam,
+      targetQbankId: targetQbankId !== undefined ? Number(targetQbankId) || undefined : prev.targetQbankId,
+      targetDate: targetDate !== undefined ? String(targetDate) : prev.targetDate,
+      dailyQuestions: dailyQuestions !== undefined ? Number(dailyQuestions) || undefined : prev.dailyQuestions,
+      weeklyGoal: weeklyGoal !== undefined ? Number(weeklyGoal) || undefined : prev.weeklyGoal,
+      setAt: new Date().toISOString(),
+    };
+
+    const changed =
+      next.targetExam !== prev.targetExam ||
+      next.targetQbankId !== prev.targetQbankId ||
+      next.targetDate !== prev.targetDate ||
+      next.dailyQuestions !== prev.dailyQuestions ||
+      next.weeklyGoal !== prev.weeklyGoal;
+
+    await db.update(usersTable).set({ studyAim: next }).where(eq(usersTable.id, req.user!.id));
+
+    // Fresh start: clear progress when the aim actually changes.
+    let progressReset = false;
+    if (changed && Object.keys(prev).length > 0) {
+      await db.delete(userProgressTable).where(eq(userProgressTable.userId, user.id));
+      await db.delete(testSessionsTable).where(eq(testSessionsTable.userId, user.id));
+      await db.delete(dailyChallengeTable).where(eq(dailyChallengeTable.userId, user.id));
+      progressReset = true;
+    }
+
+    res.json({ aim: next, progressReset });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

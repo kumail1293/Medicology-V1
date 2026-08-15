@@ -30,6 +30,8 @@ export interface EmailRenderOptions {
   data?: Record<string, string | number | boolean | undefined>;
   /** Platform-wide footer appended when the template has no footer block. */
   platformFooter?: string;
+  /** Social links rendered as brand-icon row (when the template has no social block). */
+  socials?: { platform: string; url: string }[];
   unsubscribeUrl?: string;
   primaryColor?: string;
   brandName?: string;
@@ -121,6 +123,26 @@ export function sanitizeEmailHtml(html: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Social icons — brand SVGs as data-URIs (email-client safe; no external
+// requests). `generic` is a fallback for unknown platforms.
+// ---------------------------------------------------------------------------
+
+function svgDataUri(svg: string): string {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const SOCIAL_ICON_DATA_URI: Record<string, string> = {
+  instagram: svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5.5" fill="#E4405F"/><circle cx="12" cy="12" r="4.2" stroke="#fff" stroke-width="1.8"/><circle cx="17.3" cy="6.7" r="1.3" fill="#fff"/></svg>`),
+  facebook: svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#1877F2"><path d="M13.5 21v-7h2.4l.4-3h-2.8V9.1c0-.9.3-1.5 1.6-1.5h1.3V4.9c-.3 0-1.2-.1-2.2-.1-2.2 0-3.7 1.3-3.7 3.8V11H8v3h2.5v7h3z"/></svg>`),
+  x: svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#000000"><path d="M17.7 3h2.9l-6.4 7.3L21.8 21h-5.9l-4.6-6-5.3 6H3.1l6.9-7.8L2.6 3h6l4.1 5.5L17.7 3zm-1 16.2h1.6L7.6 4.7H5.9l10.8 14.5z"/></svg>`),
+  tiktok: svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#000000"><path d="M16.6 3c.4 2.2 1.8 3.6 4 3.9v3c-1.5 0-2.9-.5-4-1.3v6.2c0 3.8-2.7 6-6.1 5.4-2.4-.4-4.3-2.4-4.4-4.8-.1-3 2.4-5.3 5.4-5.1v3.1c-1.2-.2-2.3.4-2.5 1.6-.2 1 .4 2 1.4 2.3 1.2.3 2.3-.5 2.4-1.7V3h3.8z"/></svg>`),
+  youtube: svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#FF0000"><path d="M21.6 7.2a2.5 2.5 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.5 2.5 0 0 0 2.4 7.2 26 26 0 0 0 2 12a26 26 0 0 0 .4 4.8 2.5 2.5 0 0 0 1.8 1.8c1.6.4 7.8.4 7.8.4s6.2 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8A26 26 0 0 0 22 12a26 26 0 0 0-.4-4.8zM10 15.2V8.8l5.2 3.2L10 15.2z"/></svg>`),
+  linkedin: svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#0A66C2"><path d="M4.98 3.5A2.49 2.49 0 1 1 0 3.5a2.49 2.49 0 0 1 4.98 0zM.2 8.3h4.6V23H.2V8.3zm7.6 0h4.4v2h.1c.6-1.2 2.1-2.4 4.3-2.4 4.6 0 5.4 3 5.4 7V23h-4.6v-7.2c0-1.7 0-3.9-2.4-3.9-2.4 0-2.8 1.9-2.8 3.8V23H7.8V8.3z"/></svg>`),
+  whatsapp: svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#25D366"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.5-4.3-1.3l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.5.1-.2.2-.6.8-.8 1-.1.2-.3.2-.5.1a6.6 6.6 0 0 1-3.3-2.9c-.2-.4.2-.4.6-1.2.1-.2 0-.4 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.2.3-.9.9-.9 2.2s.9 2.5 1.1 2.7c.1.2 1.9 2.9 4.6 4.1 2.7 1.2 2.7.8 3.2.7.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>`),
+  generic: svgDataUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#374151"><circle cx="12" cy="12" r="10" fill="none" stroke="#374151" stroke-width="2"/><text x="12" y="16" font-size="11" font-family="Arial" fill="#374151" text-anchor="middle">i</text></svg>`),
+};
+
+// ---------------------------------------------------------------------------
 // Block → HTML
 // ---------------------------------------------------------------------------
 
@@ -170,7 +192,11 @@ function renderBlock(block: EmailBlock, opts: EmailRenderOptions): string {
     case "social": {
       if (!block.items?.length) return "";
       const links = block.items
-        .map((s) => `<a href="${escAttr(s.url)}" style="display:inline-block;margin:0 6px 6px 0;padding:8px 14px;border:1px solid #e5e7eb;border-radius:999px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#374151;text-decoration:none;">${esc(s.platform)}</a>`)
+        .map((s) => {
+          const icon = SOCIAL_ICON_DATA_URI[s.platform.toLowerCase()] ?? SOCIAL_ICON_DATA_URI.generic;
+          const label = esc(s.platform.charAt(0).toUpperCase() + s.platform.slice(1));
+          return `<a href="${escAttr(s.url)}" title="${label}" style="display:inline-block;margin:0 5px 6px;vertical-align:middle;"><img src="${icon}" alt="${label}" width="34" height="34" style="width:34px;height:34px;border:0;display:block;border-radius:8px;" /></a>`;
+        })
         .join("");
       return `<p style="margin:0 0 14px;text-align:center;">${links}</p>`;
     }
@@ -218,6 +244,18 @@ export function renderEmail(opts: EmailRenderOptions): string {
   const platformFooter = !hasFooterBlock && opts.platformFooter
     ? `<p style="margin:16px 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#9ca3af;text-align:center;">${esc(interpolate(opts.platformFooter, opts.data))}</p>`
     : "";
+  // Brand-icon social row — appended when the template doesn't define its own
+  // social block and the platform has configured social links.
+  const hasSocialBlock = opts.blocks.some((b) => b.type === "social");
+  const socialRow = !hasSocialBlock && opts.socials?.length
+    ? `<p style="margin:14px 0 6px;text-align:center;">${opts.socials
+        .map((s) => {
+          const icon = SOCIAL_ICON_DATA_URI[s.platform.toLowerCase()] ?? SOCIAL_ICON_DATA_URI.generic;
+          const label = esc(s.platform.charAt(0).toUpperCase() + s.platform.slice(1));
+          return `<a href="${escAttr(s.url)}" title="${label}" style="display:inline-block;margin:0 5px;vertical-align:middle;"><img src="${icon}" alt="${label}" width="30" height="30" style="width:30px;height:30px;border:0;display:block;border-radius:8px;" /></a>`;
+        })
+        .join("")}</p>`
+    : "";
   const unsubscribe = !hasUnsub && opts.unsubscribeUrl
     ? `<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#9ca3af;text-align:center;"><a href="${escAttr(opts.unsubscribeUrl)}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a></p>`
     : "";
@@ -238,6 +276,7 @@ ${body}
 </td></tr>
 <tr><td style="padding:20px 28px;background-color:#f9fafb;border-top:1px solid #f3f4f6;">
 ${platformFooter}
+${socialRow}
 ${unsubscribe}
 </td></tr>
 </table>

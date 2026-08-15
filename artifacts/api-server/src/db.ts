@@ -34,10 +34,10 @@ if (useSQLite) {
   // Seed a dev admin so the admin panel works out of the box with the mock
   // database (mock DB never runs in production). Credentials come from
   // ADMIN_EMAIL/ADMIN_PASSWORD when set, with a local default otherwise.
-  const adminEmail = (process.env.ADMIN_EMAIL || 'admin@medicology.com').toLowerCase().trim();
+  const adminEmail = (process.env.ADMIN_EMAIL || 'admin@medicology.net').toLowerCase().trim();
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
   if (!process.env.ADMIN_PASSWORD) {
-    console.warn('⚠️  Using default dev admin credentials (admin@medicology.com / admin123). Set ADMIN_PASSWORD in .env.');
+    console.warn('⚠️  Using default dev admin credentials (admin@medicology.net / admin123). Set ADMIN_PASSWORD in .env.');
   }
   const mockAdmin = {
     id: 1,

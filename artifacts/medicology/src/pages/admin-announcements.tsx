@@ -16,6 +16,7 @@ interface AnnouncementItem {
   dismissible?: boolean;
   frequency?: string;
   targetRoles?: string;
+  targetUserIds?: number[];
   targetRoute?: string;
   buttonText?: string;
   buttonUrl?: string;
@@ -82,7 +83,9 @@ const emptyForm = () => ({
   frequency: 'every_visit',
   startsAt: '',
   expiresAt: '',
+  audience: 'all',
   targetRoles: 'all',
+  targetUserIdsText: '',
   targetRoute: '',
   buttonText: '',
   buttonUrl: '',
@@ -159,6 +162,8 @@ export default function AdminAnnouncementsPage() {
       targetRoute: announcement.targetRoute || '',
       buttonText: announcement.buttonText || '',
       buttonUrl: announcement.buttonUrl || '',
+      audience: (announcement.targetUserIds && announcement.targetUserIds.length > 0) ? 'users' : 'all',
+      targetUserIdsText: (announcement.targetUserIds || []).join(', '),
     });
     setIsModalOpen(true);
   };
@@ -199,7 +204,10 @@ export default function AdminAnnouncementsPage() {
           frequency: form.frequency,
           startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
           expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
-          targetRoles: form.targetRoles,
+          targetRoles: form.audience === 'roles' ? form.targetRoles : 'all',
+          targetUserIds: form.audience === 'users'
+            ? form.targetUserIdsText.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0)
+            : [],
           targetRoute: form.targetRoute || null,
           buttonText: form.buttonText || null,
           buttonUrl: form.buttonUrl || null,
@@ -440,9 +448,20 @@ export default function AdminAnnouncementsPage() {
                   <label className="mb-1 block text-sm font-medium">Expires at</label>
                   <input type="datetime-local" value={form.expiresAt} onChange={(event) => setForm({ ...form, expiresAt: event.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2" />
                 </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">Audience (roles, comma-separated, "all")</label>
-                  <input value={form.targetRoles} onChange={(event) => setForm({ ...form, targetRoles: event.target.value })} placeholder="all" className="w-full rounded-lg border border-border bg-background px-3 py-2" />
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm font-medium">Audience (in-app delivery)</label>
+                  <select value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2">
+                    <option value="all">Everyone</option>
+                    <option value="roles">Specific roles</option>
+                    <option value="users">Specific users</option>
+                  </select>
+                  {form.audience === 'roles' && (
+                    <input value={form.targetRoles} onChange={(event) => setForm({ ...form, targetRoles: event.target.value })} placeholder="editor, teacher, reviewer" className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2" />
+                  )}
+                  {form.audience === 'users' && (
+                    <input value={form.targetUserIdsText} onChange={(event) => setForm({ ...form, targetUserIdsText: event.target.value })} placeholder="user IDs, e.g. 12, 45, 88" className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2" />
+                  )}
+                  <p className="mt-1 text-xs text-muted-foreground">Announcements are shown in-app only. Separate email campaigns live under <b>Email Templates</b>.</p>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium">Target route (optional, e.g. /exam)</label>

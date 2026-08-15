@@ -968,7 +968,7 @@ function SeoSection({ draft, set }: { draft: PlatformSettings; set: (patch: Part
           <TextInput value={s.siteTitle} onChange={(v) => set({ siteTitle: v })} />
         </Field>
         <Field label="Canonical URL">
-          <TextInput value={s.canonicalUrl} onChange={(v) => set({ canonicalUrl: v })} placeholder="https://medicology.com/" />
+          <TextInput value={s.canonicalUrl} onChange={(v) => set({ canonicalUrl: v })} placeholder="https://medicology.net/" />
         </Field>
       </div>
       <Field label="Meta description" hint="Search result snippet.">

@@ -137,6 +137,59 @@ export declare const usersTable: import("drizzle-orm/pg-core").PgTableWithColumn
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        bio: import("drizzle-orm/pg-core").PgColumn<{
+            name: "bio";
+            tableName: "users";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        phone: import("drizzle-orm/pg-core").PgColumn<{
+            name: "phone";
+            tableName: "users";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        studyAim: import("drizzle-orm/pg-core").PgColumn<{
+            name: "study_aim";
+            tableName: "users";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: StudyAim;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: StudyAim;
+        }>;
         isAdmin: import("drizzle-orm/pg-core").PgColumn<{
             name: "is_admin";
             tableName: "users";
@@ -263,6 +316,14 @@ export declare const usersTable: import("drizzle-orm/pg-core").PgTableWithColumn
     };
     dialect: "pg";
 }>;
+export type StudyAim = {
+    targetExam?: string;
+    targetQbankId?: number;
+    targetDate?: string;
+    dailyQuestions?: number;
+    weeklyGoal?: number;
+    setAt?: string;
+};
 export type NotificationPrefs = {
     email?: {
         welcome?: boolean;
@@ -288,6 +349,9 @@ export declare const insertUserSchema: z.ZodObject<{
     college: z.ZodString;
     university: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     year: z.ZodInt;
+    bio: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    phone: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    studyAim: z.ZodOptional<z.ZodNullable<z.ZodType<StudyAim, StudyAim, z.core.$ZodTypeInternals<StudyAim, StudyAim>>>>;
     isAdmin: z.ZodOptional<z.ZodBoolean>;
     role: z.ZodOptional<z.ZodString>;
     customPermissions: z.ZodOptional<z.ZodNullable<z.ZodType<CustomPermissions, CustomPermissions, z.core.$ZodTypeInternals<CustomPermissions, CustomPermissions>>>>;

@@ -200,7 +200,7 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     siteName: "Medicology",
     tagline:
       "Master your medical knowledge. The premier QBank platform designed exclusively for Medical, Dental & Allied Health students.",
-    supportEmail: "support@medicology.com",
+    supportEmail: "support@medicology.net",
     timezone: "Asia/Karachi",
     locale: "en",
     dateFormat: "MMM d, yyyy",
@@ -226,7 +226,7 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     openRegistration: true,
     defaultRole: "user",
     requireEmailVerification: false,
-    adminEmail: "admin@medicology.com",
+    adminEmail: "admin@medicology.net",
   },
   notifications: {
     emailNewUser: true,
@@ -262,8 +262,8 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
   email: {
     provider: "log",
     fromName: "Medicology",
-    fromEmail: "no-reply@medicology.com",
-    replyTo: "support@medicology.com",
+    fromEmail: "no-reply@medicology.net",
+    replyTo: "support@medicology.net",
     smtpHost: "",
     smtpPort: 587,
     smtpSecure: false,
@@ -283,7 +283,7 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     ogImage: "/images/og-cover.png",
     twitterCard: "summary_large_image",
     robots: "index,follow",
-    canonicalUrl: "https://medicology.com/",
+    canonicalUrl: "https://medicology.net/",
   },
   footer: {
     footerText: "Medicology — Master your medical knowledge.",

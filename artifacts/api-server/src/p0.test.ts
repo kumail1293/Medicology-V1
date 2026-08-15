@@ -154,7 +154,7 @@ function makeXlsxBuffer(rows: Record<string, any>[]): Buffer {
 }
 
 async function adminLogin() {
-  const res = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const res = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const data: any = await res.json();
   assert.ok(data.token, 'admin login should succeed');
   return data.token as string;
@@ -372,12 +372,12 @@ test('waitlist: notify registers once per user+qbank, admin sees demand', async 
   assert.equal(n2.created, false);
 
   // Admin demand view.
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: 'admin123' }));
   // The mock seed uses ADMIN_PASSWORD from the environment; fall back to the
   // default used by db.ts when it is not set.
   const adminBody: any = adminLogin.ok
     ? await adminLogin.json()
-    : await (await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }))).json();
+    : await (await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }))).json();
   const demand: any = await (await fetch(`${BASE}/admin/waitlist`, { headers: { Authorization: `Bearer ${adminBody.token}` } })).json();
   assert.ok(Array.isArray(demand.demand));
   const bds = demand.demand.find((d: any) => d.slug === 'uhs-bds-1st-year');
@@ -404,7 +404,7 @@ test('platform settings: public whitelist, admin update/reset roundtrip, validat
   assert.equal(pub.settings?.payments, undefined, 'payments are never exposed publicly');
 
   // 2. Admin login (mock seed admin).
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const adminBody: any = await adminLogin.json();
   const auth = { Authorization: `Bearer ${adminBody.token}` };
 
@@ -451,7 +451,7 @@ test('role management: admin assigns editor/teacher, guards enforce role boundar
   });
 
   // Dev mock admin is a superadmin.
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const adminBody: any = await adminLogin.json();
   const superAuth = { Authorization: `Bearer ${adminBody.token}` };
 
@@ -507,7 +507,7 @@ test('feature flags: public exposure, server-side enforcement, cache invalidatio
     body: JSON.stringify(body),
   });
 
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const adminBody: any = await adminLogin.json();
   const auth = { Authorization: `Bearer ${adminBody.token}` };
 
@@ -545,7 +545,7 @@ test('maintenance mode: enforced server-side with admin bypass and auth/settings
     body: JSON.stringify(body),
   });
 
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const adminBody: any = await adminLogin.json();
   const auth = { Authorization: `Bearer ${adminBody.token}` };
 
@@ -558,7 +558,7 @@ test('maintenance mode: enforced server-side with admin bypass and auth/settings
   assert.equal(qs.status, 503, 'normal API is blocked during maintenance');
 
   // 2. Auth still works (login required to reach admin).
-  const loginAgain = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const loginAgain = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   assert.equal(loginAgain.status, 200, 'auth is exempt during maintenance');
 
   // 3. Public settings endpoint still reachable (frontend needs maintenance status).
@@ -590,7 +590,7 @@ test('settings history: audit snapshots + restore roundtrip', async () => {
     body: JSON.stringify(body),
   });
 
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const adminBody: any = await adminLogin.json();
   const auth = { Authorization: `Bearer ${adminBody.token}` };
 
@@ -620,7 +620,7 @@ test('settings history: audit snapshots + restore roundtrip', async () => {
 });
 
 test('announcements: scheduling window, themes/priorities, and reusable template CRUD', async () => {
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const adminBody: any = await adminLogin.json();
   const auth = { Authorization: `Bearer ${adminBody.token}` };
   const postJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
@@ -690,7 +690,7 @@ test('announcements: scheduling window, themes/priorities, and reusable template
 });
 
 test('animation settings: validated roundtrip, public exposure, reduced-motion defaults', async () => {
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const adminBody: any = await adminLogin.json();
   const auth = { Authorization: `Bearer ${adminBody.token}` };
   const putJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
@@ -737,7 +737,7 @@ test('animation settings: validated roundtrip, public exposure, reduced-motion d
 });
 
 test('media library: validated upload with metadata, list, update alt text, delete', async () => {
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const adminBody: any = await adminLogin.json();
   const adminAuth = { Authorization: `Bearer ${adminBody.token}` };
 
@@ -808,7 +808,7 @@ test('media library: validated upload with metadata, list, update alt text, dele
 });
 
 test('scoped overrides: deterministic precedence + CRUD + public resolution', async () => {
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const adminBody: any = await adminLogin.json();
   const adminAuth = { Authorization: `Bearer ${adminBody.token}` };
   const put = (body: any) => fetch(`${BASE}/admin/settings/overrides`, {
@@ -876,7 +876,7 @@ test('scoped overrides: deterministic precedence + CRUD + public resolution', as
 });
 
 test('scoped overrides: QBank session creation applies resolved rules', async () => {
-  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
   const adminBody: any = await adminLogin.json();
   const adminAuth = { Authorization: `Bearer ${adminBody.token}` };
   const put = (body: any) => fetch(`${BASE}/admin/settings/overrides`, {
@@ -1687,4 +1687,92 @@ test('email: announcement can be emailed to its audience', async () => {
   const sd = (await sent.json()) as any;
   assert.equal(sent.status, 200, JSON.stringify(sd).slice(0, 150));
   assert.ok(sd.recipients >= 1, 'announcement emailed to audience');
+});
+
+// ---------------------------------------------------------------------------
+// Study aim (AMBOSS-style), announcement user targeting, purchases shape
+// ---------------------------------------------------------------------------
+
+test('PUT /me/aim sets an aim and resets progress when changed', async () => {
+  const reg = await fetch(`${BASE}/auth/register`, json({}, {
+    name: 'Aim Tester', email: `aim${Date.now()}@medicology.net`, password: 'AimPass123',
+    college: 'Test', year: 'Year 1',
+  }));
+  const { token } = await reg.json();
+
+  const set = async (body: any) =>
+    fetch(`${BASE}/auth/me/aim`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+
+  const r1 = await set({ targetExam: 'UHS MBBS 1st Year', dailyQuestions: 40 });
+  const d1 = await r1.json();
+  assert.equal(r1.status, 200);
+  assert.equal(d1.aim.targetExam, 'UHS MBBS 1st Year');
+  assert.equal(d1.progressReset, false, 'first aim set should not reset');
+
+  const r2 = await set({ targetExam: 'FCPS Part 1', dailyQuestions: 60 });
+  const d2 = await r2.json();
+  assert.equal(d2.progressReset, true, 'changing aim resets progress');
+
+  const r3 = await set({ targetExam: 'FCPS Part 1', dailyQuestions: 60 });
+  const d3 = await r3.json();
+  assert.equal(d3.progressReset, false, 'unchanged aim should not reset');
+
+  const get = await fetch(`${BASE}/auth/me/aim`, { headers: { Authorization: `Bearer ${token}` } });
+  const dg = await get.json();
+  assert.equal(dg.aim.targetExam, 'FCPS Part 1');
+  assert.equal(dg.aim.dailyQuestions, 60);
+});
+
+test('announcements support user-specific targeting in /active', async () => {
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = (await adminLogin.json()).token;
+
+  const reg = await fetch(`${BASE}/auth/register`, json({}, {
+    name: 'Target User', email: `target${Date.now()}@medicology.net`, password: 'Target123',
+    college: 'Test', year: 'Year 2',
+  }));
+  const { token, user } = await reg.json();
+
+  // Create a user-specific announcement aimed at the new user.
+  const create = await fetch(`${BASE}/announcements`, json({ Authorization: `Bearer ${adminToken}` }, {
+    type: 'banner', title: 'Only for you', content: '<p>personal</p>',
+    targetUserIds: [user.id], isActive: true,
+  }));
+  assert.equal(create.status, 201);
+  const ann = await create.json();
+
+  // The targeted user sees it.
+  const mine = await fetch(`${BASE}/announcements/active`, { headers: { Authorization: `Bearer ${token}` } });
+  const mineData = await mine.json();
+  assert.ok(mineData.announcements.some((a: any) => a.id === ann.id), 'targeted user should see the announcement');
+
+  // Another user does not.
+  const reg2 = await fetch(`${BASE}/auth/register`, json({}, {
+    name: 'Other User', email: `other${Date.now()}@medicology.net`, password: 'Other123',
+    college: 'Test', year: 'Year 3',
+  }));
+  const token2 = (await reg2.json()).token;
+  const other = await fetch(`${BASE}/announcements/active`, { headers: { Authorization: `Bearer ${token2}` } });
+  const otherData = await other.json();
+  assert.ok(!otherData.announcements.some((a: any) => a.id === ann.id), 'other users should NOT see it');
+});
+
+test('/api/qbanks/my returns purchases with catalogueIds for the create-test wizard', async () => {
+  const reg = await fetch(`${BASE}/auth/register`, json({}, {
+    name: 'Buyer', email: `buyer${Date.now()}@medicology.net`, password: 'Buyer123',
+    college: 'Test', year: 'Year 4',
+  }));
+  const { token, user } = await reg.json();
+
+  // Grant an entitlement directly for UHS MBBS 1st Year (qbank id 1).
+  const { grantEntitlement } = await import('./utils/entitlements.js');
+  await grantEntitlement({ userId: user.id, qbankId: 1, source: 'complimentary', durationDays: 30, orderRef: 'ORD-AIM-1' });
+
+  const res = await fetch(`${BASE}/qbanks/my`, { headers: { Authorization: `Bearer ${token}` } });
+  const data = await res.json();
+  assert.ok(Array.isArray(data.purchases), 'purchases array present');
+  const purchased = data.purchases.find((p: any) => p.qbankId === 1);
+  assert.ok(purchased, 'has the granted qbank');
+  assert.equal(purchased.catalogueId, 'uhs_mbbs_1st_year');
+  assert.equal(purchased.qbankType, 'uhs-mbbs-1st-year');
 });

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../lib/auth";
 import { useUpdateCurrentUser } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
-import { User, Save, Lock, GraduationCap, Mail, Phone, BadgeCheck, Shield } from "lucide-react";
+import { User, Save, Lock, GraduationCap, Mail, Phone, BadgeCheck, Shield, UserRound } from "lucide-react";
 
 const YEAR_LABELS: Record<number, string> = {
   1: "1st Year (Pre-Clinical)",
@@ -42,6 +42,8 @@ export default function ProfilePage() {
   const [college, setCollege] = useState(user?.college ?? "");
   const [university, setUniversity] = useState(user?.university ?? "");
   const [year, setYear] = useState<number>(user?.year ?? 1);
+  const [bio, setBio] = useState((user as any)?.bio ?? "");
+  const [phone, setPhone] = useState((user as any)?.phone ?? "");
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -55,6 +57,8 @@ export default function ProfilePage() {
       setCollege(user.college);
       setUniversity(user.university ?? "");
       setYear(user.year);
+      setBio((user as any)?.bio ?? "");
+      setPhone((user as any)?.phone ?? "");
       hasInitialized.current = true;
     }
   }, [user]);
@@ -69,6 +73,8 @@ export default function ProfilePage() {
           college: college.trim(),
           university: university.trim() || undefined,
           year,
+          bio: bio.trim() || undefined,
+          phone: phone.trim() || undefined,
         },
       });
       if (res.token && res.user) {
@@ -192,6 +198,30 @@ export default function ProfilePage() {
                   <option key={y} value={y}>{label}</option>
                 ))}
               </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                <Phone size={10} /> Phone
+              </label>
+              <input
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="+92 300 1234567"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                <UserRound size={10} /> About me
+              </label>
+              <input
+                value={bio}
+                onChange={e => setBio(e.target.value)}
+                className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Final year MBBS, passionate about cardiology"
+              />
             </div>
           </div>
           <div className="flex justify-end pt-2">

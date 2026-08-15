@@ -17,6 +17,32 @@ export interface SecurityEvent {
   createdAt: string;
 }
 
+export interface StudyAim {
+  targetExam?: string;
+  targetQbankId?: number;
+  targetDate?: string;
+  dailyQuestions?: number;
+  weeklyGoal?: number;
+  setAt?: string;
+}
+
+export async function fetchStudyAim(): Promise<StudyAim> {
+  const res = await apiFetch("/api/auth/me/aim");
+  if (!res.ok) throw new Error("Failed to load study aim");
+  const data = await res.json();
+  return data.aim ?? {};
+}
+
+export async function saveStudyAim(aim: StudyAim): Promise<{ aim: StudyAim; progressReset: boolean }> {
+  const res = await apiFetch("/api/auth/me/aim", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(aim),
+  });
+  if (!res.ok) throw new Error("Failed to save study aim");
+  return res.json();
+}
+
 export interface NotificationPrefs {
   email?: {
     welcome?: boolean;

@@ -63,7 +63,7 @@ tests) — see commit history for the audit trail:
 | Audit logging + viewer | `[COMPLETED]` | actor, action, entity, old/new diff, IP; secrets never logged; Admin → Audit Logs viewer with filters + diff |
 | Granular RBAC | `[COMPLETED]` | role → permission matrix, `requirePermission` on sensitive routes, permission-aware nav |
 | Configuration registry (per-key metadata) | `[COMPLETED]` | per-key metadata (group/type/default/validation/scopes/public/audit) + `/admin/settings/registry` |
-| Email infrastructure + template builder | `[COMPLETED]` | SMTP/log mailer, secret-safe storage, DB templates with versions, visual block builder, device preview, test-send, send logs, **transactional sends** (welcome, verification, password reset, purchase, entitlement expiry, announcements) + 17 seeded templates |
+| Email infrastructure + template builder | `[COMPLETED]` | SMTP/log mailer, secret-safe storage, DB templates with versions, visual block builder, device preview, test-send, send logs, **transactional sends** + 17 seeded templates; **medicology.net** branding + **@medicologyworld social icons** in every email |
 | Account configuration | `[COMPLETED]` | profile, password, sessions (track/revoke/revoke-all, middleware-enforced), login history, notification prefs, data export, deletion |
 | Registration enforcement audit | `[COMPLETED]` | open/closed, allowed domains, invite-only, password policy — enforced server-side on register |
 | SEO / footer-social groups | `[COMPLETED]` | dedicated groups, public exposure, applied via `usePlatformConfig` (SEO meta + footer/socials) |
@@ -76,13 +76,16 @@ Database migrations (all additive, backward compatible):
 types + structured explanations · `0005` announcement templates ·
 `0006` media library · `0007` settings overrides · `0008` coming soon ·
 `0009` email templates + logs · `0010` user sessions + notification
-prefs · `0011` entitlement `emailNotifiedAt` (transactional expiry emails).
+prefs · `0011` entitlement `emailNotifiedAt` (transactional expiry emails) ·
+`0012` announcement user targeting (`targetUserIds`) · `0013` user profile
+bio/phone · `0014` user study aim (`studyAim` — AMBOSS-style goal).
 
-Tests: 39 integration tests (settings precedence, overrides, imports,
+Tests: 42 integration tests (settings precedence, overrides, imports,
 media, coming soon, RBAC, email templates/renderer/secret handling,
 sessions/revocation, export/import, audit gating, transactional sends,
-template seeding, forgot/reset password, announcement email), backend +
-frontend typecheck, production build, 9-check browser QA — all green.
+template seeding, forgot/reset password, announcement email, study aim +
+progress reset, announcement user targeting, purchases shape), backend +
+frontend typecheck, production build, 11-check browser QA — all green.
 
 ------------------------------------------------------------------------
 
@@ -109,6 +112,11 @@ frontend typecheck, production build, 9-check browser QA — all green.
     subject/topic/subtopic, price, currency, duration, status, access
     rules, question mapping, question count, free trial, coming-soon).
 -   `questions ↔ qbank_questions ↔ qbanks` many-to-many.
+-   **Test-creation UX**: `/api/qbanks/my` now returns a `purchases` array
+    (catalogueIds derived from slugs) so the create-test wizard unlocks
+    purchased QBanks; MBBS banks match per-university prefixes
+    (`uhs_mbbs_1st_year` → UHS), and entitlement is enforced server-side
+    on session creation (never trust the frontend).
 
 ## P0.4 Import engine `[COMPLETED]`
 
@@ -214,6 +222,13 @@ Configuration registry `[IN PROGRESS]` (Phase 1):
     expired sweeper (hourly + on-boot), announcement → email broadcast.
 -   **17 seeded templates** (`seed-email-templates.ts`) covering every
     scenario; Admin → Email Templates → Restore defaults re-seeds.
+-   **Branding**: domain/emails use `medicology.net`; every email carries a
+    brand-icon social row (Instagram / Facebook / X / TikTok / YouTube /
+    LinkedIn @medicologyworld) rendered as email-safe data-URI SVGs —
+    auto-appended by the renderer from the footer socials settings.
+-   **Announcements ≠ emails**: announcements are in-app only (general,
+    role-based, or user-specific via `targetUserIds`); emails are separate
+    process/promotional campaigns under Email Templates.
 
 ## P0.16 Email template builder `[COMPLETED]`
 
@@ -245,8 +260,14 @@ Configuration registry `[IN PROGRESS]` (Phase 1):
 
 ## P0.19 Account configuration `[COMPLETED]`
 
--   Student-facing `/settings`: Appearance | Profile | Security |
-    Notifications | Privacy & Data tabs.
+-   Student-facing `/settings`: Appearance | Profile | **Study Aim** |
+    Security | Notifications | Privacy & Data tabs.
+-   **Study Aim (AMBOSS-style)**: the student sets their goal for the
+    current subscription (target exam, target date, daily/weekly question
+    goals). Changing the aim resets sessions, per-question progress and
+    daily challenges for a fresh start (bookmarks/notes kept).
+-   Editable **/profile** page (reachable from the sidebar): name, email,
+    college, university, year, phone, bio + password change.
 -   Security: per-login sessions tracked (unique `jti` per token),
     listed, individually revoked or revoke-all (current session kept),
     **enforced in the auth middleware** — a revoked token 401s
