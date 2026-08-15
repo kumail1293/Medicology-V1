@@ -48,7 +48,9 @@ if (useSQLite) {
     university: 'UHS',
     year: 1,
     isAdmin: true,
-    role: 'admin',
+    // Dev admin is a superadmin so every admin capability (including granting
+    // admin roles) is exercisable locally. Production seeds its own superadmin.
+    role: 'superadmin',
     customPermissions: {},
     rewardPoints: 0,
     createdAt: now,

@@ -867,6 +867,17 @@ adminRouter.get(
   }
 );
 
+// Assignable roles. Only a superadmin may grant/revoke admin or superadmin;
+// admins manage user/editor/teacher.
+const ALLOWED_ROLES = ['user', 'editor', 'teacher', 'admin', 'superadmin'];
+const ADMIN_ROLES = ['admin', 'superadmin'];
+
+function normalizeRole(role: unknown): string | null {
+  if (role === undefined || role === null || role === '') return 'user';
+  const r = String(role);
+  return ALLOWED_ROLES.includes(r) ? r : null;
+}
+
 // Create user
 adminRouter.post('/users', async (req: any, res: any) => {
   try {
@@ -875,6 +886,15 @@ adminRouter.post('/users', async (req: any, res: any) => {
 
     if (!name || !email || !password || !college || !year) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const normalizedRole = normalizeRole(role);
+    if (normalizedRole === null) {
+      return res.status(400).json({ error: `Invalid role. Allowed: ${ALLOWED_ROLES.join(', ')}` });
+    }
+    // Only a superadmin can create admin/superadmin accounts.
+    if (ADMIN_ROLES.includes(normalizedRole) && req.user?.role !== 'superadmin') {
+      return res.status(403).json({ error: 'Only a superadmin can create admin accounts' });
     }
 
     const passwordHash = await bcrypt.default.hash(password, 10);
@@ -888,8 +908,8 @@ adminRouter.post('/users', async (req: any, res: any) => {
         college,
         university: university || null,
         year,
-        role: role || 'user',
-        isAdmin: role === 'admin' || role === 'superadmin',
+        role: normalizedRole,
+        isAdmin: ADMIN_ROLES.includes(normalizedRole),
       })
       .returning();
 
@@ -915,15 +935,60 @@ adminRouter.put(
       const { id } = req.validatedParams as { id: number };
       const { name, email, college, university, year, role } = req.body;
 
+      // Role guards run before any write:
+      // 1. Whitelist — reject unknown roles outright.
+      // 2. Superadmin-only — only a superadmin may grant/revoke admin roles
+      //    (both promoting someone to admin AND demoting an existing admin).
+      // 3. Self-demotion — an admin cannot demote themselves out of admin.
+      // 4. Last-admin — never leave the platform without an admin.
+      const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+      if (!existing) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      let normalizedRole: string | null = null;
+      if (role !== undefined) {
+        normalizedRole = normalizeRole(role);
+        if (normalizedRole === null) {
+          return res.status(400).json({ error: `Invalid role. Allowed: ${ALLOWED_ROLES.join(', ')}` });
+        }
+        const touchesAdminRole =
+          ADMIN_ROLES.includes(normalizedRole) || ADMIN_ROLES.includes(existing.role);
+        if (touchesAdminRole && req.user?.role !== 'superadmin') {
+          return res.status(403).json({ error: 'Only a superadmin can assign or change admin roles' });
+        }
+      }
+
       const updateData: any = {};
       if (name !== undefined) updateData.name = name;
       if (email !== undefined) updateData.email = email;
       if (college !== undefined) updateData.college = college;
       if (university !== undefined) updateData.university = university;
       if (year !== undefined) updateData.year = year;
-      if (role !== undefined) {
-        updateData.role = role;
-        updateData.isAdmin = role === 'admin' || role === 'superadmin';
+
+      let roleChanged = false;
+      // Snapshot primitives BEFORE the update — the mock DB mutates rows in
+      // place, so reading `existing.role` after updating would see the new role.
+      const oldRole = existing.role;
+      const oldIsAdmin = existing.isAdmin;
+      if (normalizedRole !== null && normalizedRole !== oldRole) {
+        // Self-demotion guard: don't let the last admin lock everyone out.
+        if (Number(existing.id) === Number(req.user?.id) && ADMIN_ROLES.includes(oldRole) && !ADMIN_ROLES.includes(normalizedRole)) {
+          return res.status(400).json({ error: 'You cannot remove your own admin role' });
+        }
+        // Last-admin guard: the final superadmin cannot be demoted or deleted.
+        if (ADMIN_ROLES.includes(oldRole)) {
+          const admins = await db
+            .select({ id: usersTable.id })
+            .from(usersTable)
+            .where(inArray(usersTable.role, ADMIN_ROLES));
+          if (admins.length <= 1) {
+            return res.status(400).json({ error: 'Cannot demote the last admin account' });
+          }
+        }
+        updateData.role = normalizedRole;
+        updateData.isAdmin = ADMIN_ROLES.includes(normalizedRole);
+        roleChanged = true;
       }
 
       if (Object.keys(updateData).length === 0) {
@@ -938,6 +1003,22 @@ adminRouter.put(
 
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Audit role changes (and general profile edits) for the admin trail.
+      const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+      if (roleChanged) {
+        await recordAudit({
+          actor,
+          action: 'user.role_change',
+          entityType: 'user',
+          entityId: user.id,
+          entityLabel: user.email,
+          summary: `Role changed: ${oldRole} → ${user.role}`,
+          oldValues: { role: oldRole, isAdmin: oldIsAdmin },
+          newValues: { role: user.role, isAdmin: user.isAdmin },
+          ip: req.ip,
+        });
       }
 
       return res.json({

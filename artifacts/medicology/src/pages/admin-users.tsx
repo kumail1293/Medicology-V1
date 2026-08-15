@@ -15,6 +15,20 @@ import {
   Lock,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useAuth } from '@/lib/auth';
+
+// Roles an admin can assign. Only a superadmin may grant/revoke admin roles;
+// admins manage user/editor/teacher. Mirrors the backend whitelist.
+const ASSIGNABLE_ROLES = ['user', 'editor', 'teacher', 'admin', 'superadmin'] as const;
+const ADMIN_ROLES = ['admin', 'superadmin'];
+
+const ROLE_STYLES: Record<string, string> = {
+  user: 'bg-primary/10 text-primary',
+  editor: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  teacher: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+  admin: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  superadmin: 'bg-red-500/10 text-red-600 dark:text-red-400',
+};
 
 interface AdminUser {
   id: number;
@@ -46,6 +60,46 @@ function UserManagementPage() {
     password: '',
   });
   const { toast } = useToast();
+  const { isSuperAdmin } = useAuth();
+
+  // Roles this admin may actually assign (superadmin: all; admin: no admin roles).
+  const assignableRoles = isSuperAdmin
+    ? ASSIGNABLE_ROLES
+    : ASSIGNABLE_ROLES.filter((r) => !ADMIN_ROLES.includes(r));
+
+  // Quick role assignment straight from the table row.
+  const handleRoleChange = async (user: AdminUser, role: string) => {
+    if (role === user.role) return;
+    if (!confirm(`Change ${user.name}'s role from ${user.role} to ${role}?`)) return;
+
+    const previous = users;
+    // Optimistic update.
+    setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, role } : u)));
+    try {
+      const token = localStorage.getItem('medicology_token');
+      const response = await fetch(`/api/admin/users/${user.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update role');
+      }
+      toast({ title: 'Success', description: `Role updated to ${role}` });
+    } catch (err) {
+      console.error('Error updating role:', err);
+      setUsers(previous);
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to update role',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -302,10 +356,25 @@ function UserManagementPage() {
                       <td className="px-6 py-4 text-sm text-muted-foreground">{user.college}</td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">Year {user.year}</td>
                       <td className="px-6 py-4 text-sm">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                          <Shield size={12} />
-                          {user.role.toUpperCase()}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={clsx(
+                            'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium',
+                            ROLE_STYLES[user.role] || ROLE_STYLES.user
+                          )}>
+                            <Shield size={12} />
+                            {user.role.toUpperCase()}
+                          </span>
+                          <select
+                            value={user.role}
+                            onChange={(e) => void handleRoleChange(user, e.target.value)}
+                            title={`Assign role for ${user.name}`}
+                            className="rounded-md border border-border bg-background px-1.5 py-1 text-xs text-foreground outline-none hover:border-primary/40 focus:border-primary transition-colors"
+                          >
+                            {assignableRoles.map((r) => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-500">
@@ -443,10 +512,11 @@ function UserManagementPage() {
                     disabled={modalMode === 'view'}
                     className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground disabled:opacity-50"
                   >
-                    <option value="user">User</option>
-                    <option value="editor">Editor</option>
-                    <option value="teacher">Teacher</option>
-                    <option value="admin">Admin</option>
+                    {assignableRoles.map((r) => (
+                      <option key={r} value={r}>
+                        {r.charAt(0).toUpperCase() + r.slice(1)}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

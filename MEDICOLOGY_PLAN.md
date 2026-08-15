@@ -330,6 +330,17 @@ sync into their local spaced-repetition system:
 -   Migration `0002_flashcard_decks_and_cards.sql` (additive, no drops)
 -   Typecheck, build, and the API test suite must stay green
 
+## P0.5.6 ✅ Role management (shipped)
+
+-   Admins assign `user` / `editor` / `teacher` roles directly from the
+    Users admin page (inline per-row dropdown + edit modal)
+-   Only `superadmin` can grant or revoke `admin` / `superadmin` roles
+-   Guards: role whitelist validation, self-demotion blocked, last-admin
+    cannot be demoted, and every role change is audit-logged
+    (`user.role_change` with before/after)
+
+------------------------------------------------------------------------
+
 ------------------------------------------------------------------------
 
 # Phase P1 --- Examination Engine

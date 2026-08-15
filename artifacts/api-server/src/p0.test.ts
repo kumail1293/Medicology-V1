@@ -436,3 +436,65 @@ test('platform settings: public whitelist, admin update/reset roundtrip, validat
   const resetBody: any = await resetRes.json();
   assert.equal(resetBody.settings.branding.primaryColor, '#0d9488', 'reset returns default brand color');
 });
+
+test('role management: admin assigns editor/teacher, guards enforce role boundaries', async () => {
+  const putJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+  const postJson = (headers: Record<string, string>, body: unknown): RequestInit => ({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+
+  // Dev mock admin is a superadmin.
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.com', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminBody: any = await adminLogin.json();
+  const superAuth = { Authorization: `Bearer ${adminBody.token}` };
+
+  // 1. Create a plain user via the admin endpoint.
+  const email = `role-${Date.now()}@test.com`;
+  const created: any = await (await fetch(`${BASE}/admin/users`, postJson(superAuth, {
+    name: 'Role Test', email, password: 'TestPass123', college: 'Demo College', year: 2,
+  }))).json();
+  assert.equal(created.role, 'user', 'new users default to user role');
+  const userId = created.id;
+
+  // 2. Assign editor, then teacher — both succeed and sync isAdmin=false.
+  const toEditor = await fetch(`${BASE}/admin/users/${userId}`, putJson(superAuth, { role: 'editor' }));
+  assert.equal(toEditor.status, 200);
+  const editorBody: any = await toEditor.json();
+  assert.equal(editorBody.role, 'editor');
+  const toTeacher = await fetch(`${BASE}/admin/users/${userId}`, putJson(superAuth, { role: 'teacher' }));
+  const teacherBody: any = await toTeacher.json();
+  assert.equal(teacherBody.role, 'teacher');
+
+  // 3. Unknown roles are rejected outright.
+  const bad = await fetch(`${BASE}/admin/users/${userId}`, putJson(superAuth, { role: 'hacker' }));
+  assert.equal(bad.status, 400);
+
+  // 4. A plain admin cannot grant or revoke admin roles (403).
+  const adminUser: any = await (await fetch(`${BASE}/admin/users`, postJson(superAuth, {
+    name: 'Plain Admin', email: `plain-admin-${Date.now()}@test.com`, password: 'TestPass123', college: 'Demo College', year: 2, role: 'admin',
+  }))).json();
+  const adminLogin2 = await fetch(`${BASE}/auth/login`, json({}, { email: adminUser.email, password: 'TestPass123' }));
+  const adminLogin2Body: any = await adminLogin2.json();
+  const adminAuth = { Authorization: `Bearer ${adminLogin2Body.token}` };
+  const grantAdmin = await fetch(`${BASE}/admin/users/${userId}`, putJson(adminAuth, { role: 'admin' }));
+  assert.equal(grantAdmin.status, 403, 'plain admin cannot grant admin role');
+  const demoteSuper = await fetch(`${BASE}/admin/users/1`, putJson(adminAuth, { role: 'user' }));
+  assert.equal(demoteSuper.status, 403, 'plain admin cannot demote the superadmin');
+
+  // 5. Self-demotion is blocked (400) so the platform never loses its last admin.
+  const selfDemote = await fetch(`${BASE}/admin/users/1`, putJson(superAuth, { role: 'user' }));
+  assert.equal(selfDemote.status, 400, 'superadmin cannot demote themselves');
+
+  // 6. Role changes land in the audit trail with the before → after pair.
+  const audit: any = await (await fetch(`${BASE}/admin/audit-logs?limit=20`, { headers: superAuth })).json();
+  const logs = audit.logs || audit.auditLogs || [];
+  const roleChanges = logs.filter((l: any) => l.action === 'user.role_change' && String(l.entityId) === String(userId));
+  assert.ok(roleChanges.length >= 2, 'role changes are audited');
+  assert.match(roleChanges[0].summary, /user → editor/, 'audit records the old and new role');
+});
