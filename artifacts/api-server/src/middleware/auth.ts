@@ -18,8 +18,13 @@ export interface AuthRequest extends Request {
   headers: any;
 }
 
+import { randomUUID } from 'node:crypto';
+
 export function generateToken(user: { id: number; email: string; isAdmin: boolean; role: string }) {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
+  // Unique jti: jsonwebtoken's iat is second-granularity, so two logins in the
+  // same second would otherwise produce byte-identical tokens (breaking the
+  // per-session revocation registry).
+  return jwt.sign(user, JWT_SECRET, { expiresIn: '30d', jwtid: randomUUID() });
 }
 
 /** Resolve a bearer token to a user, or null when absent/invalid. */
@@ -52,15 +57,23 @@ function resolveUserFromToken(token: string | undefined): any {
   }
 }
 
-export function authenticate(req: any, res: any, next: any): void {
+export async function authenticate(req: any, res: any, next: any): Promise<void> {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
-  const user = resolveUserFromToken(header.split(' ')[1]);
+  const token = header.split(' ')[1];
+  const user = resolveUserFromToken(token);
   if (!user) {
     res.status(401).json({ error: 'Invalid token' });
+    return;
+  }
+  // Revoked sessions are rejected (Account → Security → revoke device).
+  const { sessionIsValid } = await import('../utils/sessions.js');
+  const valid = await sessionIsValid(token);
+  if (!valid) {
+    res.status(401).json({ error: 'Session revoked — please sign in again' });
     return;
   }
   req.user = user;

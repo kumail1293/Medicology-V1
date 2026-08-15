@@ -31,8 +31,29 @@ export const usersTable = pgTable("users", {
   role: text("role").notNull().default("user"),
   customPermissions: jsonb("custom_permissions").$type<CustomPermissions>().default({}),
   rewardPoints: integer("reward_points").notNull().default(0),
+  notificationPrefs: jsonb("notification_prefs").$type<NotificationPrefs>().default({}),
+  deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export type NotificationPrefs = {
+  email?: {
+    welcome?: boolean;
+    purchase?: boolean;
+    paymentFailure?: boolean;
+    qbankUnlock?: boolean;
+    qbankExpiry?: boolean;
+    announcements?: boolean;
+    examReminders?: boolean;
+    results?: boolean;
+    security?: boolean;
+  };
+  inApp?: {
+    announcements?: boolean;
+    results?: boolean;
+    system?: boolean;
+  };
+};
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;

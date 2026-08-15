@@ -163,7 +163,7 @@ export declare const mediaTable: import("drizzle-orm/pg-core").PgTableWithColumn
             tableName: "media";
             dataType: "string";
             columnType: "PgText";
-            data: "logo" | "icon" | "announcement" | "qbank_cover" | "flashcard" | "rich_content" | "seo" | "other";
+            data: "icon" | "logo" | "announcement" | "qbank_cover" | "flashcard" | "rich_content" | "seo" | "other";
             driverParam: string;
             notNull: true;
             hasDefault: true;
@@ -175,7 +175,7 @@ export declare const mediaTable: import("drizzle-orm/pg-core").PgTableWithColumn
             identity: undefined;
             generated: undefined;
         }, {}, {
-            $type: "logo" | "icon" | "announcement" | "qbank_cover" | "flashcard" | "rich_content" | "seo" | "other";
+            $type: "icon" | "logo" | "announcement" | "qbank_cover" | "flashcard" | "rich_content" | "seo" | "other";
         }>;
         uploadedBy: import("drizzle-orm/pg-core").PgColumn<{
             name: "uploaded_by";
@@ -232,6 +232,7 @@ export declare const mediaTable: import("drizzle-orm/pg-core").PgTableWithColumn
     dialect: "pg";
 }>;
 export declare const insertMediaSchema: z.ZodObject<{
+    category: z.ZodOptional<z.ZodString>;
     filename: z.ZodString;
     originalName: z.ZodString;
     mimeType: z.ZodString;
@@ -240,7 +241,6 @@ export declare const insertMediaSchema: z.ZodObject<{
     height: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     url: z.ZodString;
     altText: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    category: z.ZodOptional<z.ZodString>;
     uploadedBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
 }, {
     out: {};

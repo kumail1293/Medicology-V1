@@ -723,8 +723,8 @@ adminRouter.post(
   }
 );
 
-// Get audit logs
-adminRouter.get('/audit-logs', async (req: any, res: any) => {
+// Get audit logs (permission-gated — audit.view; router-level auth already applied)
+adminRouter.get('/audit-logs', requirePermission('audit.view'), async (req: any, res: any) => {
   try {
     const { entityType, action, limit, offset } = req.query;
       const result = await getAuditLogs({

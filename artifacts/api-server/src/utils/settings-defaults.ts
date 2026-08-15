@@ -37,6 +37,8 @@ export interface RegistrationSettings {
   openRegistration: boolean;
   defaultRole: "user" | "editor" | "teacher";
   requireEmailVerification: boolean;
+  inviteOnly: boolean;
+  allowedDomains: string[];
   adminEmail: string;
 }
 
@@ -151,6 +153,46 @@ export interface ExamSettings {
   answerReveal: 'after_answer' | 'end';
 }
 
+export interface SeoSettings {
+  siteTitle: string;
+  metaDescription: string;
+  keywords: string[];
+  ogTitle: string;
+  ogDescription: string;
+  ogImage: string;
+  twitterCard: 'summary' | 'summary_large_image';
+  robots: 'index,follow' | 'noindex,nofollow';
+  canonicalUrl: string;
+}
+
+export interface FooterSettings {
+  footerText: string;
+  copyright: string;
+  supportLink: string;
+  privacyLink: string;
+  termsLink: string;
+  refundLink: string;
+  socials: { platform: string; url: string }[];
+}
+
+export interface EmailSettings {
+  provider: "log" | "smtp";
+  fromName: string;
+  fromEmail: string;
+  replyTo: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser: string;
+  // smtpPassword is stored server-side only and NEVER returned by the API.
+  // smtpPasswordSet tracks whether a password has been configured.
+  smtpPasswordSet: boolean;
+  footerText: string;
+  unsubscribeEnabled: boolean;
+  trackingEnabled: boolean;
+  retryPolicy: "none" | "once" | "thrice";
+}
+
 export interface PlatformSettings {
   general: GeneralSettings;
   branding: BrandingSettings;
@@ -161,6 +203,9 @@ export interface PlatformSettings {
   payments: PaymentSettings;
   storage: StorageSettings;
   integrations: IntegrationSettings;
+  seo: SeoSettings;
+  footer: FooterSettings;
+  email: EmailSettings;
   animations: AnimationsSettings;
   featureFlags: FeatureFlagsSettings;
   examSettings: ExamSettings;
@@ -197,6 +242,8 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     openRegistration: true,
     defaultRole: "user",
     requireEmailVerification: false,
+    inviteOnly: false,
+    allowedDomains: [],
     adminEmail: "admin@medicology.com",
   },
   notifications: {
@@ -229,6 +276,45 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     googleAnalyticsId: "",
     metaDescription: "",
     customHeadCode: "",
+  },
+  email: {
+    provider: "log", // "log" prints to console in dev; "smtp" sends for real
+    fromName: "Medicology",
+    fromEmail: "no-reply@medicology.com",
+    replyTo: "support@medicology.com",
+    smtpHost: "",
+    smtpPort: 587,
+    smtpSecure: false,
+    smtpUser: "",
+    smtpPasswordSet: false, // derived from stored secret; never the secret itself
+    footerText: "© 2026 Medicology. All rights reserved.",
+    unsubscribeEnabled: true,
+    trackingEnabled: false,
+    retryPolicy: "once",
+  },
+  seo: {
+    siteTitle: "Medicology — Medical Exam Preparation",
+    metaDescription: "Master your medical knowledge with Medicology. The premier QBank platform designed exclusively for Medical, Dental & Allied Health students.",
+    keywords: ["medical", "qbank", "usmle", "mbbs", "mcqs", "exam prep"],
+    ogTitle: "Medicology — Medical Exam Preparation",
+    ogDescription: "The premier QBank platform for Medical, Dental & Allied Health students.",
+    ogImage: "/images/og-cover.png",
+    twitterCard: 'summary_large_image',
+    robots: 'index,follow',
+    canonicalUrl: "https://medicology.com/",
+  },
+  footer: {
+    footerText: "Medicology — Master your medical knowledge.",
+    copyright: "© 2026 Medicology. All rights reserved.",
+    supportLink: "/support",
+    privacyLink: "/privacy",
+    termsLink: "/terms",
+    refundLink: "/refunds",
+    socials: [
+      { platform: "instagram", url: "https://instagram.com/medicology" },
+      { platform: "facebook", url: "https://facebook.com/medicology" },
+      { platform: "x", url: "https://x.com/medicology" },
+    ],
   },
   featureFlags: {
     flashcards: true,
@@ -292,6 +378,8 @@ export const PUBLIC_SETTINGS_GROUPS: (keyof PlatformSettings)[] = [
   "featureFlags",
   "animations",
   "branding",
+  "seo",
+  "footer",
 ];
 
 type StoredGroups = Partial<{ [K in keyof PlatformSettings]: Partial<PlatformSettings[K]> }>;

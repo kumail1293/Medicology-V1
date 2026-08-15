@@ -392,6 +392,8 @@ export const registrationSettingsSchema = z.object({
   openRegistration: z.boolean(),
   defaultRole: z.enum(['user', 'editor', 'teacher']),
   requireEmailVerification: z.boolean(),
+  inviteOnly: z.boolean(),
+  allowedDomains: z.array(z.string().min(1).max(80)).max(50),
   adminEmail: z.string().email(),
 });
 
@@ -429,6 +431,28 @@ export const integrationSettingsSchema = z.object({
   googleAnalyticsId: z.string().max(100),
   metaDescription: z.string().max(500),
   customHeadCode: z.string().max(10000),
+});
+
+export const seoSettingsSchema = z.object({
+  siteTitle: z.string().min(1).max(200),
+  metaDescription: z.string().max(500),
+  keywords: z.array(z.string().min(1).max(60)).max(30),
+  ogTitle: z.string().max(200),
+  ogDescription: z.string().max(500),
+  ogImage: z.string().max(2000),
+  twitterCard: z.enum(['summary', 'summary_large_image']),
+  robots: z.enum(['index,follow', 'noindex,nofollow']),
+  canonicalUrl: z.string().max(500),
+});
+
+export const footerSettingsSchema = z.object({
+  footerText: z.string().max(500),
+  copyright: z.string().max(200),
+  supportLink: z.string().max(500),
+  privacyLink: z.string().max(500),
+  termsLink: z.string().max(500),
+  refundLink: z.string().max(500),
+  socials: z.array(z.object({ platform: z.string().min(1).max(40), url: z.string().min(1).max(500) })).max(20),
 });
 
 export const animationsSettingsSchema = z.object({
@@ -495,6 +519,24 @@ export const settingsOverrideUpsertSchema = z.object({
   value: z.unknown(),
 });
 
+export const emailSettingsSchema = z.object({
+  provider: z.enum(['log', 'smtp']),
+  fromName: z.string().min(1).max(120),
+  fromEmail: z.string().email().max(200),
+  replyTo: z.string().email().max(200),
+  smtpHost: z.string().max(300),
+  smtpPort: z.number().int().min(1).max(65535),
+  smtpSecure: z.boolean(),
+  smtpUser: z.string().max(300),
+  // Accepted on write only — never persisted inside the group nor returned.
+  smtpPassword: z.string().max(500).optional(),
+  smtpPasswordSet: z.boolean().optional(),
+  footerText: z.string().max(500),
+  unsubscribeEnabled: z.boolean(),
+  trackingEnabled: z.boolean(),
+  retryPolicy: z.enum(['none', 'once', 'thrice']),
+});
+
 export const updateSettingsSchema = z.object({
   general: generalSettingsSchema.partial().optional(),
   branding: brandingSettingsSchema.partial().optional(),
@@ -505,6 +547,9 @@ export const updateSettingsSchema = z.object({
   payments: paymentSettingsSchema.partial().optional(),
   storage: storageSettingsSchema.partial().optional(),
   integrations: integrationSettingsSchema.partial().optional(),
+  seo: seoSettingsSchema.partial().optional(),
+  footer: footerSettingsSchema.partial().optional(),
+  email: emailSettingsSchema.partial().optional(),
   animations: animationsSettingsSchema.partial().optional(),
   featureFlags: featureFlagsSettingsSchema.partial().optional(),
   examSettings: examSettingsSchema.partial().optional(),
@@ -524,6 +569,9 @@ export const UPDATE_SETTINGS_SHAPE = {
   payments: paymentSettingsSchema.partial(),
   storage: storageSettingsSchema.partial(),
   integrations: integrationSettingsSchema.partial(),
+  seo: seoSettingsSchema.partial(),
+  footer: footerSettingsSchema.partial(),
+  email: emailSettingsSchema.partial(),
   animations: animationsSettingsSchema.partial(),
   featureFlags: featureFlagsSettingsSchema.partial(),
   examSettings: examSettingsSchema.partial(),

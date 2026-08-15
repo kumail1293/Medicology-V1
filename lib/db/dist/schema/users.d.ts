@@ -207,6 +207,42 @@ export declare const usersTable: import("drizzle-orm/pg-core").PgTableWithColumn
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        notificationPrefs: import("drizzle-orm/pg-core").PgColumn<{
+            name: "notification_prefs";
+            tableName: "users";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: NotificationPrefs;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {
+            $type: NotificationPrefs;
+        }>;
+        deletedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "deleted_at";
+            tableName: "users";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "users";
@@ -227,6 +263,24 @@ export declare const usersTable: import("drizzle-orm/pg-core").PgTableWithColumn
     };
     dialect: "pg";
 }>;
+export type NotificationPrefs = {
+    email?: {
+        welcome?: boolean;
+        purchase?: boolean;
+        paymentFailure?: boolean;
+        qbankUnlock?: boolean;
+        qbankExpiry?: boolean;
+        announcements?: boolean;
+        examReminders?: boolean;
+        results?: boolean;
+        security?: boolean;
+    };
+    inApp?: {
+        announcements?: boolean;
+        results?: boolean;
+        system?: boolean;
+    };
+};
 export declare const insertUserSchema: z.ZodObject<{
     name: z.ZodString;
     email: z.ZodString;
@@ -238,6 +292,8 @@ export declare const insertUserSchema: z.ZodObject<{
     role: z.ZodOptional<z.ZodString>;
     customPermissions: z.ZodOptional<z.ZodNullable<z.ZodType<CustomPermissions, CustomPermissions, z.core.$ZodTypeInternals<CustomPermissions, CustomPermissions>>>>;
     rewardPoints: z.ZodOptional<z.ZodInt>;
+    notificationPrefs: z.ZodOptional<z.ZodNullable<z.ZodType<NotificationPrefs, NotificationPrefs, z.core.$ZodTypeInternals<NotificationPrefs, NotificationPrefs>>>>;
+    deletedAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
 }, {
     out: {};
     in: {};

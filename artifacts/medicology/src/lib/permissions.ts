@@ -21,6 +21,7 @@ export type PermissionKey =
   | "overrides.manage"
   | "qbanks.manage"
   | "exam_settings.manage"
+  | "email.manage"
   | "audit.view";
 
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -31,6 +32,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     "audit.view", "announcements.manage", "coming_soon.manage", "import.run",
     "taxonomy.manage", "flags.manage", "errata.manage", "payments.manage",
     "entitlements.manage", "overrides.manage", "qbanks.manage", "review.manage",
+    "email.manage",
   ],
   content_admin: [
     "questions.manage", "taxonomy.manage", "flashcards.manage", "review.manage",
@@ -41,7 +43,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     "review.manage", "questions.manage", "taxonomy.manage", "flashcards.manage",
   ],
   finance_admin: ["payments.manage", "entitlements.manage", "users.view", "audit.view"],
-  marketing_admin: ["announcements.manage", "coming_soon.manage", "media.manage", "flags.manage"],
+  marketing_admin: ["announcements.manage", "coming_soon.manage", "media.manage", "flags.manage", "email.manage"],
   support_admin: ["users.view", "flags.manage", "errata.manage", "audit.view"],
   editor: ["questions.manage", "flashcards.manage"],
   teacher: ["questions.manage", "flashcards.manage"],

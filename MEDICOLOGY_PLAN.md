@@ -1,4 +1,4 @@
-# Medicology V1 --- DeepSeek Implementation Plan
+# Medicology V1 — Production Roadmap
 
 ## Objective
 
@@ -10,9 +10,10 @@ The platform roadmap is:
 
 -   Pakistan: UHS, KMU, KEMU, SZABMU, NUMS, DUHS and other
     universities/boards
--   Programs: MBBS, BDS
+-   Programs: MBBS, BDS, DPT / Pharmacy / Allied Health where appropriate
 -   Professional exams: FCPS, JCAT, PGET, NLE
--   Later: USMLE, PLAB, AMC and other international examinations
+-   Later (after the core architecture is stable): USMLE, PLAB, AMC,
+    MRCP, MRCS, DHA, HAAD, Prometric and other licensing exams
 
 Core hierarchy:
 
@@ -21,770 +22,447 @@ Core hierarchy:
 Every question has an immutable public QID and may belong to multiple
 QBanks.
 
-------------------------------------------------------------------------
+Architecture must be: DATABASE-DRIVEN · CONFIGURATION-DRIVEN ·
+TAXONOMY-DRIVEN · EXAM-SCOPED · QBANK-SCOPED · AUDITABLE · SECURE ·
+EXTENSIBLE · MOBILE-FIRST · PRODUCTION-READY.
 
-# Phase P0 --- Do This First
+Do NOT hard-code platform behavior into React components when the
+behavior should be configurable.
 
-Do not start P1/P2/P3 until P0 is stable and tested.
+## Status Legend
 
-## P0.1 Database-driven QBank catalogue
+-   `[COMPLETED]` — implemented, tested and verified working.
+-   `[PARTIAL]` — core exists; gaps remain (enumerated).
+-   `[IN PROGRESS]` — actively being built.
+-   `[PLANNED]` — specified, not started.
+-   `[BLOCKED]` — waiting on a dependency.
 
-Replace hard-coded QBank/product arrays with database entities.
+## System Audit (latest pass)
 
-A QBank/product should support:
+Verified against the repository (schema, migrations, routes, middleware,
+tests) — see commit history for the audit trail:
 
--   name, slug, description
--   country
--   exam system
--   exam/university
--   program
--   academic year/part
--   status
--   price/currency
--   access duration
--   question count
--   metadata
--   timestamps
+| Area | Status | Notes |
+|---|---|---|
+| Taxonomy | `[COMPLETED]` | Country → Exam → Program → Year → Subject → System → Topic → Subtopic; admin UI; no hard-coded universities |
+| QID system | `[COMPLETED]` | Immutable, sequential, deterministic; collision + duplicate detection; version history; audit |
+| Import engine | `[COMPLETED]` | XLSX/CSV/TSV, per-type templates, preview, type-aware validation, taxonomy mapping, duplicate + QID conflict detection, review-gated execution |
+| Question review | `[COMPLETED]` | draft → pending_review → approved → published → archived; reviewer identity; versions; audit |
+| QBank architecture | `[COMPLETED]` | DB-driven catalogue with price/currency/duration/status/access rules/question mapping/trial |
+| Entitlements | `[COMPLETED]` | purchase → grant (idempotent) → expiry/revocation; server-side enforcement |
+| Payments | `[COMPLETED]` | server-side pricing, orders, provider adapters, idempotency keys, webhooks |
+| Waitlist / Coming Soon | `[COMPLETED]` | Notify Me with dedupe, demand counts, admin visibility |
+| Flashcards | `[COMPLETED]` | DB-driven decks + cards, admin deck builder |
+| Rich content | `[COMPLETED]` | TipTap editor (tables, images, links, formatting) + `sanitizeRichHtml` on save |
+| Media library | `[COMPLETED]` | upload validation (MIME/size/dimensions), categories, search, MediaPicker, audit |
+| Settings engine | `[COMPLETED]` (foundation) | `app_settings` table, zod validation, admin UI, public/private endpoints |
+| Scoped overrides | `[COMPLETED]` | deterministic precedence (safety → qbank → … → country → default) + provenance |
+| Feature flags | `[COMPLETED]` | DB-backed flags + server-side enforcement |
+| Maintenance mode | `[COMPLETED]` | server-side 503 + admin bypass + premium page |
+| Announcements + templates | `[COMPLETED]` | types, scheduling, targeting, templates, animations |
+| Audit logging + viewer | `[COMPLETED]` | actor, action, entity, old/new diff, IP; secrets never logged; Admin → Audit Logs viewer with filters + diff |
+| Granular RBAC | `[COMPLETED]` | role → permission matrix, `requirePermission` on sensitive routes, permission-aware nav |
+| Configuration registry (per-key metadata) | `[COMPLETED]` | per-key metadata (group/type/default/validation/scopes/public/audit) + `/admin/settings/registry` |
+| Email infrastructure + template builder | `[COMPLETED]` | SMTP/log mailer, secret-safe storage, DB templates with versions, visual block builder, device preview, test-send, send logs |
+| Account configuration | `[COMPLETED]` | profile, password, sessions (track/revoke/revoke-all, middleware-enforced), login history, notification prefs, data export, deletion |
+| Registration enforcement audit | `[COMPLETED]` | open/closed, allowed domains, invite-only, password policy — enforced server-side on register |
+| SEO / footer-social groups | `[COMPLETED]` | dedicated groups, public exposure, applied via `usePlatformConfig` (SEO meta + footer/socials) |
+| Audit viewer / settings import-export / command center | `[COMPLETED]` | Admin Audit Logs page; settings export (secrets stripped) + validated import with diff preview; admin Ctrl+K palette |
 
-Statuses:
+Database migrations (all additive, backward compatible):
 
-`PLANNED`, `COMING_SOON`, `BETA`, `AVAILABLE`, `PAUSED`, `ARCHIVED`
+`0000` QBank/entitlements/waitlist · `0001` performance indexes ·
+`0002` flashcard decks+cards · `0003` app_settings · `0004` question
+types + structured explanations · `0005` announcement templates ·
+`0006` media library · `0007` settings overrides · `0008` coming soon ·
+`0009` email templates + logs · `0010` user sessions + notification prefs.
 
-No university/exam/product catalogue should be hard-coded in API routes.
-
-## P0.2 Question ↔ QBank many-to-many
-
-Use:
-
-`questions ↔ qbank_questions ↔ qbanks`
-
-A single QID must be reusable in UHS, KMU, FCPS, NLE, etc. without
-duplicating the question.
-
-## P0.3 Taxonomy integration
-
-Use the existing relational taxonomy as the source of truth.
-
-New questions must resolve relational IDs for:
-
--   Country
--   Exam System
--   Exam
--   Program
--   Academic Year
--   Subject
--   System
--   Topic
--   Subtopic
-
-Keep legacy text fields temporarily for backward compatibility; do not
-create a second taxonomy system.
-
-## P0.4 QID integrity
-
-Preserve the existing immutable QID architecture.
-
-Rules:
-
--   unique
--   immutable
--   preserve a valid QID supplied in Excel
--   generate one when blank
--   show conflicts before updates
--   never silently overwrite
-
-## P0.5 Versioning and audit
-
-Preserve existing question versioning/audit infrastructure.
-
-Lifecycle:
-
-`DRAFT → PENDING_REVIEW → MEDICAL_REVIEW → APPROVED → PUBLISHED`
-
-Additional states:
-
-`FLAGGED`, `ERRATA`, `ARCHIVED`
-
-Important changes must record editor, timestamp, old/new values and
-change type.
+Tests: 36 integration tests (settings precedence, overrides, imports,
+media, coming soon, RBAC, email templates/renderer/secret handling,
+sessions/revocation, export/import, audit gating), backend + frontend
+typecheck, production build, 12-check browser QA — all green.
 
 ------------------------------------------------------------------------
 
-# P0.6 Excel/CSV import pipeline
+# Phase P0 — Foundation & Production Hardening
 
-Build:
+## P0.1 Taxonomy `[COMPLETED]`
 
-`UPLOAD → COLUMN MAPPING → VALIDATION → PREVIEW → DUPLICATE DETECTION → TAXONOMY RESOLUTION → QID GENERATION → ERROR REPORT → IMPORT → REVIEW → PUBLISH`
+`Country → Exam System → Exam/University/Board → Program → Academic Year/Part → Subject → System → Topic → Subtopic`
 
-Support XLSX and CSV.
+-   All entities are DB tables with relational FKs and admin CRUD.
+-   New universities/exams/boards require data, not schema rewrites.
+-   Seed data covers UHS/KMU/KEMU/SZABMU/NUMS etc. for dev.
 
-Recommended columns:
+## P0.2 QID system `[COMPLETED]`
 
--   QID
--   Question
--   Option A-E
--   Correct Answer
--   Explanation
--   References
--   Country
--   Exam System
--   Exam
--   Program
--   Academic Year
--   Subject
--   System
--   Topic
--   Subtopic
--   Difficulty
--   Question Type
--   Exam Year
--   Tags
--   Image
--   Image Caption
--   Status
+-   Immutable public QID (`QID-MED-###########`); never silently changes.
+-   Deterministic sequential generation; collision detection against DB
+    and within-file; duplicate detection on import.
+-   `question_versions` + audit trail for every change.
 
-Never auto-publish imported questions.
+## P0.3 QBank architecture `[COMPLETED]`
 
-## Validation
+-   DB-driven catalogue (title, slug, description, exam/program/year/
+    subject/topic/subtopic, price, currency, duration, status, access
+    rules, question mapping, question count, free trial, coming-soon).
+-   `questions ↔ qbank_questions ↔ qbanks` many-to-many.
 
-Detect:
+## P0.4 Import engine `[COMPLETED]`
 
--   missing question
--   insufficient options
--   invalid answer
--   duplicate QID
--   duplicate normalized question
--   invalid taxonomy
--   unknown exam/university/program/year
--   invalid difficulty/question type
--   malformed image reference
+-   XLSX/CSV/TSV upload → parse → validate → preview → duplicate
+    detection → taxonomy resolution → QID generation → error report →
+    review-gated import.
+-   Per-type templates (SBA, Best-of-five, True/False, Assertion/Reason,
+    EMQ, Image-based, Vignette, Case) with a Guide sheet.
+-   Per-row editing with the full question editor before import.
+-   Never auto-publish; imports land in the Review Queue.
 
-Provide row-level errors and downloadable error reports.
+## P0.5 Review & versioning `[COMPLETED]`
 
-## Duplicate detection
+-   Lifecycle: `draft → pending_review → medical_review → approved → published`, plus `flagged | errata | archived`.
+-   Reviewer identity, version history, audit log, safe rollback,
+    immutable QID.
 
-Implement:
+## P0.6 Entitlements `[COMPLETED]`
 
-1.  exact QID duplicate detection
-2.  normalized-text duplicate detection
-3.  similarity detection where practical
+-   `user → entitlement → QBank`; purchase → activation → expiry →
+    revocation; idempotent grants.
+-   Server-side access enforcement on practice/exam/session routes —
+    frontend entitlement state is never trusted.
 
-Admin choices:
+## P0.7 Payments `[COMPLETED]`
 
--   Merge
--   Keep both
--   Reject
--   Review
+-   Server-side pricing → order → provider adapter → verification/
+    webhook → entitlement.
+-   Idempotency keys and replay protection; provider-agnostic adapters.
 
-Never silently delete or overwrite.
+## P0.8 Waitlist / Coming Soon `[COMPLETED]`
+
+-   `coming_soon` catalogue (exams/QBanks/features/programs/resources) +
+    interest tracking; Notify Me deduplicated per account/email; admin
+    demand counts; public dashboard section.
+
+## P0.9 Rich content `[COMPLETED]`
+
+-   TipTap everywhere content is written (questions, explanations,
+    flashcards, announcements): tables, images, links, formatting.
+-   `sanitizeRichHtml` on save; media picker for images.
+
+## P0.10 Flashcards `[COMPLETED]`
+
+-   DB-driven decks + cards, admin deck builder, spaced-repetition
+    foundation.
+
+## P0.11 Media library `[COMPLETED]`
+
+-   Upload validation (MIME whitelist, size cap, dimension parsing),
+    categories, search, alt text, copy URL, replace, delete with usage
+    awareness, audit; shared `MediaPicker` in the rich editor.
+
+## P0.12 Settings engine + configuration registry `[PARTIAL]`
+
+Foundation `[COMPLETED]`:
+
+-   `app_settings` (JSONB), zod-validated group schemas, admin UI with
+    sections (general, branding, content, registration, notifications,
+    security, payments, storage, integrations, feature flags, animations,
+    bulk import, exam/QBank defaults), public endpoint
+    (`/api/settings/public`), history + restore.
+
+Configuration registry `[IN PROGRESS]` (Phase 1):
+
+-   Per-setting metadata: `key, group, type, defaultValue, description,
+    validationSchema, scopes, public, editableBy, requiresAudit,
+    deprecated, dependencies`.
+-   Supported types: string, integer, decimal, boolean, enum, JSON,
+    color, URL, duration, percentage, rich text, image, file, array,
+    object.
+-   Registry-driven validation and admin rendering (no arbitrary unsafe
+    values).
+
+## P0.13 Scoped overrides `[COMPLETED]`
+
+-   Deterministic precedence preserved:
+    `SAFETY CONSTRAINTS > QBank > Topic > System > Subject > Year > Program > Exam > Country > Platform default`.
+-   Every resolved key exposes provenance (which scope supplied it);
+    safety keys (maintenance mode, MFA, payment provider) can never be
+    overridden.
+-   Admin UI: scoped override editor with provenance badges + Inherit.
+
+## P0.14 Branding `[PARTIAL]`
+
+-   Branding group exists (name, tagline, colors, logos) and design
+    tokens flow to the UI.
+-   Remaining (Phase 4): full color system (12 tokens), typography
+    controls, component styles (radius/shadow/button/card), favicon/OG
+    image upload, and a live branding preview panel.
+
+## P0.15 Email infrastructure `[PLANNED]`
+
+-   SMTP/provider configuration, sender/reply-to, domain, footer,
+    unsubscribe, tracking, test email, queue, delivery status, retry
+    policy.
+-   Secrets encrypted and never returned to the UI.
+
+## P0.16 Email template builder `[PLANNED]`
+
+-   DB-driven templates (welcome, verification, password reset, purchase,
+    entitlement events, waitlist, results, announcements, security,
+    custom) with subject/preheader/body/version/audience/language.
+-   Visual drag-and-drop block editor with desktop/tablet/mobile preview;
+    sanitized HTML output; variable picker with validation; draft/
+    published/archived + version compare/restore.
+
+## P0.17 Announcement builder `[COMPLETED]`
+
+-   Types: banner, alert, popup, modal, toast, dashboard card, exam
+    notice, QBank launch, maintenance, promotional.
+-   Scheduling, targeting (roles/audience), dismissible/once/session/
+    repeat, animations that respect `prefers-reduced-motion`.
+-   Reusable, admin-editable templates.
+
+## P0.18 Feature flags `[COMPLETED]`
+
+-   DB-backed flags (flashcards, daily challenge, study buddies, notes,
+    bookmarks, analytics, AI features, mock exams, custom exams,
+    certificates, notifications, social) with server-side enforcement.
+-   Scope-aware (platform/country/exam/program/university/year/subject/
+    qbank/user) via the overrides engine; audited.
+
+## P0.19 Account configuration `[PLANNED]`
+
+-   Student-facing: profile, security, password, email, sessions,
+    devices, notifications, appearance, language, study/exam
+    preferences, privacy, data export, account deletion.
+-   Security: active sessions, revoke, login history, suspicious-login
+    notifications. Never expose sensitive auth data.
+
+## P0.20 Registration controls `[PARTIAL]`
+
+-   Settings exist (enabled, email verification, allowed domains,
+    password policy, invite-only, maintenance restrictions).
+-   Remaining: complete server-side enforcement of every rule +
+    student verification + duplicate-account policy.
+
+## P0.21 Maintenance mode `[COMPLETED]`
+
+-   Server-side 503 for non-exempt routes with admin bypass; premium
+    maintenance page; configurable title/message/image/ETA/support
+    contact.
+
+## P0.22 Notification configuration `[PARTIAL]`
+
+-   Settings group exists (in-app/email defaults).
+-   Remaining (Phase 21): per-user notification preferences, event →
+    channel routing, future push/SMS.
+
+## P0.23 SEO `[PARTIAL]`
+
+-   Title/description/OG basics in the general group.
+-   Remaining (Phase 22): dedicated SEO group (OG image, Twitter cards,
+    robots, canonical, structured data) with safe injection rules.
+
+## P0.24 Audit & security `[PARTIAL]`
+
+-   Audit logging `[COMPLETED]` (actor, entity, diff, IP; secrets never
+    logged).
+-   Remaining: admin audit viewer (filters: date/actor/entity/action/
+    scope), configuration history UI with diff + restore, and a formal
+    security audit pass (Phase 27).
+
+## P0.25 Testing `[PARTIAL]`
+
+-   27 integration tests + typechecks + build `[COMPLETED]`.
+-   Remaining (Phase 30): settings resolver unit tests, email variables,
+    template versioning, announcement targeting, payment idempotency
+    replay, import edge cases, security-sensitive behavior.
+
+## P0.26 Production hardening `[PARTIAL]`
+
+-   Rate limiting, CORS, parameter validation, mock-DB compatibility,
+    migrations `[COMPLETED]`.
+-   Remaining: secrets management, real PostgreSQL CI, observability,
+    caching, CDN, backups (Phases P13).
 
 ------------------------------------------------------------------------
 
-# P0.7 Secure entitlement architecture
+# Phase P1 — Medical Exam Engine
 
-Do not use a purchase row as the access-control mechanism.
+## P1.1 Question types + structured explanations `[COMPLETED]`
 
-Use:
+-   question_type (sba, best_of_five, true_false, assertion_reason, emq,
+    image_based, clinical_vignette, case_based) + why_correct, why_wrong,
+    exam_pearl, common_trap; type-aware rendering and import validation.
 
-`User → Entitlement → QBank/Product`
+## P1.2 Confidence tracking `[COMPLETED]`
 
-Support:
+-   Per-question confidence ratings feeding analytics.
 
-`ACTIVE`, `EXPIRED`, `REVOKED`, `COMPLIMENTARY`, `SCHOLARSHIP`, `BETA`,
-`INSTITUTIONAL`
+## P1.3 Exam engine core `[IN PROGRESS]`
 
-Every protected QBank operation must verify entitlement server-side.
-
-## Payment security
-
-Never let a frontend request directly activate access.
-
-Target:
-
-`Order → Payment Provider → Verified Callback/Webhook → Server Verification → Entitlement`
-
-If no payment provider is configured, create a provider-neutral
-abstraction and secure development/mock provider.
-
-Use idempotency.
-
-Never trust frontend-supplied price, duration, ownership, payment
-status, role or entitlement state.
+-   Exam definitions + templates, university/year-specific rules,
+    subject/topic selection, custom + timed + mock exams, negative
+    marking, pass/fail, review, navigation, question palette,
+    pause/resume, autosave, result generation + analytics, attempt
+    history.
+-   Session creation already resolves scoped rules (duration, count)
+    from the overrides engine; explicit client values win.
+-   Universities are data, never hard-coded: `[PLANNED]` UHS, KMU,
+    KEMU, SZABMU, NUMS, FCPS, JCAT, PGET profiles on top of the engine.
 
 ------------------------------------------------------------------------
 
-# P0.8 Coming Soon / Notify Me
+# Phase P2 — Student Learning Platform `[PLANNED]`
 
-Products must be database-driven.
+Dashboard · progress · weak areas · bookmarks · notes · flashcards ·
+spaced repetition · daily challenge · study plans · streaks · goals ·
+revision planner · performance analytics · personalized recommendations.
 
-For `PLANNED` or `COMING_SOON` products display:
-
--   Coming Soon
--   Notify Me
-
-Store:
-
--   user
--   product
--   timestamp
--   status
-
-Prevent duplicate registrations.
-
-Provide admin demand counts.
+Foundations shipped (dashboard, bookmarks, notes, daily challenge,
+flashcards, progress, streaks).
 
 ------------------------------------------------------------------------
 
-# P0.9 Testing and migrations
+# Phase P3 — Medical Question Intelligence `[PLANNED]`
 
-Every schema change requires a proper migration.
-
-Never drop existing production data.
-
-Add tests for:
-
--   QID uniqueness/immutability
--   taxonomy relationships
--   import validation
--   duplicate detection
--   version creation
--   review permissions
--   entitlement access/expiry/revocation
--   payment verification
--   webhook idempotency
--   QBank filtering
-
-Run:
-
--   typecheck
--   tests
--   integration tests
--   frontend tests
--   production build
+Question quality metrics · difficulty/discrimination · topic performance
+· cohort analytics · item analysis · duplicate similarity · question
+health · flawed-question reporting · reviewer analytics.
 
 ------------------------------------------------------------------------
 
-# Phase P0.5 --- Rich Content Authoring & Flashcard Decks
+# Phase P4 — Advanced Analytics `[PLANNED]`
 
-Medical content is rich: tables, graphics, images and flowcharts are as
-important as the text. This phase makes every content surface editable
-with a WYSIWYG editor (Elementor-style experience) and moves flashcard
-decks into the database.
-
-## P0.5.1 Rich text everywhere content is written
-
-Editors (role `editor`, `teacher` and above; admins included) can edit
-with a rich-text toolbar instead of plain textareas:
-
--   MCQ stems and options
--   Explanations
--   Flashcards (front, back, note)
--   Announcements
-
-Required editor capabilities:
-
--   bold / italic / underline / strike / highlight
--   headings, bullet & numbered lists, code blocks
--   text alignment
--   links
--   tables (insert, add/remove rows & columns, delete)
--   images (paste URL or upload via the storage API)
--   flowcharts / diagrams are supported as embedded images
-
-Server-side: sanitize/validate rich HTML on write; render sanitized HTML
-on read (never `dangerouslySetInnerHTML` unsanitized content).
-
-## P0.5.2 Role-based content editing
-
-Server middleware (`requireContentEditor`) gates content-authoring
-routes to `editor`, `teacher`, and `admin` roles. Students keep
-read-only access.
-
-## P0.5.3 Database-driven flashcard decks
-
-Admin (and content editors) can publish official decks that students
-sync into their local spaced-repetition system:
-
--   `flashcard_decks`: slug, name, subject, description, status
-    (`draft | published | archived`), card count, created by
--   `flashcards`: deck FK, rich-HTML front/back, note, tags (jsonb),
-    image, sort order
--   Same rich-text editing capabilities as questions/announcements
--   Bulk-add a whole deck in one call (Q:/A: blocks or plain lines)
--   Publish/unpublish/archive with audit logging
--   Students see published decks only and sync cards locally (one-way
-    copy; local progress stays with the student)
-
-## P0.5.4 Flashcard rendering fixes
-
--   Markdown image links (`![alt](url)`) render as `<img>` in study
-    sessions and the card browser
--   Broken images show a graceful text fallback, never a broken-image
-    icon
--   External images are lazy-loaded with `referrerpolicy="no-referrer"`
--   Sanitized HTML rendering with left-aligned, readable typography
-    (tables, images and flowcharts flow correctly inside cards)
-
-## P0.5.5 Migration & tests
-
--   Migration `0002_flashcard_decks_and_cards.sql` (additive, no drops)
--   Typecheck, build, and the API test suite must stay green
-
-## P0.5.6 ✅ Role management (shipped)
-
--   Admins assign `user` / `editor` / `teacher` roles directly from the
-    Users admin page (inline per-row dropdown + edit modal)
--   Only `superadmin` can grant or revoke `admin` / `superadmin` roles
--   Guards: role whitelist validation, self-demotion blocked, last-admin
-    cannot be demoted, and every role change is audit-logged
-    (`user.role_change` with before/after)
+Student: accuracy, speed, completion, retention, weak topics,
+improvement, percentile. Admin: question/QBank performance, revenue,
+conversion, entitlement, retention, exam performance, content quality.
 
 ------------------------------------------------------------------------
 
-## P0.5.7 ✅ Admin settings deep-dive (shipped)
+# Phase P5 — Content & Curriculum Platform `[PLANNED]`
 
-Applied `MEDICOLOGY_ADMIN_SETTINGS_PLAN`/`SKILL` (WordPress/Elementor-style
-platform config). Reused the existing `app_settings` table + audit trail —
-no duplicate systems.
-
--   **Feature flags** — `featureFlags` group (flashcards, rich content,
-    past papers, AI tutor/review, spaced repetition, study buddies, daily
-    challenge, payments, waitlist, exam engine) exposed via
-    `/api/settings/public` and **enforced server-side** (`requireFeature`
-    middleware → 503 on payments/flashcards/daily/buddies/waitlist when
-    disabled). Frontend toggles in Admin → Settings → Feature Flags.
--   **Maintenance mode** — now **enforced server-side**: 503 for
-    non-exempt routes when enabled, with `/api/health`, `/api/auth`,
-    `/api/settings` and `/api/admin` exempt (admin bypass). Frontend shows
-    a friendly maintenance screen for non-admins.
--   **History & restore** — settings PUT/PATCH/reset now snapshot
-    `oldValues`; `GET /api/admin/settings/history` reads the audit trail and
-    `POST /api/admin/settings/restore` re-applies a snapshot. Admin UI
-    "Activity & History" tab with one-click Restore.
--   **Section-scoped API** — `GET`/`PATCH /api/admin/settings/:section`
-    with per-section zod validation.
--   Cache invalidation for flags + maintenance after every settings write.
-
-## P0.5.8 ✅ Announcement templates + scheduling (shipped)
-
--   Migration `0005` (additive): `announcements` gains `starts_at`
-    (scheduling window with `expires_at`), `priority`, `theme`,
-    `dismissible`, `frequency` (once/daily/every-visit), `target_route`;
-    new `announcement_templates` table.
--   Reusable admin-authored templates (exam alert, QBank launch,
-    promotion, system notice, maintenance, feature) with full CRUD +
-    audit; "Use template" prefills the announcement builder.
--   Active feed enforces the schedule window, role targeting, and sorts
-    by priority; display honours themes, modal/toast/exam-alert/promotion
-    types, dismissibility frequency, and route targeting.
-## P0.5.9 ✅ Animation controls (shipped)
-
--   New `animations` settings group (master switch, effect, duration,
-    delay, repeat) exposed via `/api/settings/public` and applied by an
-    `AnimationProvider` as CSS variables + an `.anim` utility class.
--   Effects: none, fade, slide, scale, zoom, bounce, shimmer, pulse,
-    marquee, typewriter — all with keyframes in `index.css`.
--   **`prefers-reduced-motion` always wins** (CSS hard rule + runtime
-    matchMedia listener); admin toggles only affect other users.
--   Admin → Settings → Animations includes a live preview.
-## P0.5.10 ✅ Media library (shipped)
-
--   Migration `0006` (additive): new `media` table — filename, original
-    name, MIME, size, parsed dimensions (PNG/JPEG/GIF/WebP header
-    parsing, no native deps), URL, alt text, category, uploader.
--   Settings-driven upload validation: MIME whitelist + size cap from
-    the `storage` settings group; non-image uploads get a clean 400
-    (multer fileFilter error mapped, no more 500s).
--   Admin → Media Library page: grid with previews, category filter
-    chips, search by name/alt text, inline alt-text edit, category
-    change, copy URL, delete (removes file + row).
--   Shared `MediaPicker` dialog wired into the rich-text editor
-    (“Browse media library” toolbar button) — pick a stored image and
-    insert at the cursor; editor upload button routes through the
-    media endpoints (audited, metadata recorded).
--   Owner-scoped edits: only the uploader (or admins) can edit/delete;
-    unauthenticated uploads 401; files served publicly via
-    `/api/storage/uploads/:filename`.
-## P0.5.11 ✅ QBank/exam scoped overrides (shipped)
-
--   Migration `0007` (additive): `settings_overrides` table — one row per
-    (scope, scopeId, group, key) with a JSONB value; unique per key.
--   Scopes follow the plan's precedence (deterministic, tested):
-    system safety constraints → QBank → topic → system → subject →
-    year → program → exam → country → platform default.
--   New `examSettings` group (platform-wide defaults): QBank defaults
-    (trial questions, attempt limit, bookmarks/notes/reporting) + exam
-    behavior (question count, duration, marking scheme, negative marking,
-    pass %, navigation, question palette, review behavior, auto-submit,
-    pause/resume, result visibility, explanations, answer reveal).
--   Admin → Settings → Scoped Overrides: pick a scope + entity (QBank or
-    any taxonomy node), see every key's effective value with a provenance
-    badge, set an override or clear it to inherit. Every write/delete is
-    audit-logged; safety keys (maintenance mode, MFA, payment provider)
-    can never be overridden.
--   Session creation resolves the context's rules (QBank + its taxonomy
-    chain); explicit client values always win. Public
-    `GET /api/settings/exam` serves the resolution + provenance to the
-    exam engine.
--   Deferred next: coming-soon catalogue, granular admin roles.
+Curriculum builder · university curriculum mapping · subject/topic
+mapping · learning objectives · resources · notes · lectures ·
+references · flashcards · revision content.
 
 ------------------------------------------------------------------------
 
-## P0.5.12 ✅ Bulk import upgrade: templates + per-row editing (shipped)
+# Phase P6 — Commercial Platform `[PLANNED]`
 
--   **Templates per type**: Admin → Bulk Import → Download template gives a
-    downloadable `.xlsx` with every supported column as headers, one fully
-    filled example row per question type (SBA, Best-of-five, True/False,
-    Assertion/Reason, EMQ, Image-based, Clinical vignette, Case-based), and
-    a Guide sheet explaining exactly where to put what. The type dropdown
-    filters to a per-type template. (`GET /api/admin/import/template`)
--   **Type-aware validation**: `validateRow` now checks per-type layout —
-    True/False needs exactly Option A (True) + Option B (False) with a
-    True/False answer; Assertion/Reason needs both Assertion and Reason
-    text with a classic A–E answer; standard MCQs need ≥4 options and a
-    valid A–E answer. Structured explanations (Why Correct, Why Wrong,
-    Exam Pearl, Common Trap) map from their columns.
--   **Per-row editing before import**: every preview row has an **Edit**
-    button that opens the same rich question editor used for individual
-    questions (question text via the rich-text editor with media picker,
-    options, answer, structured explanations, taxonomy). Edits apply back
-    to the preview in-memory; nothing is written until the admin imports.
--   **Review-gated import**: imports land in the Review Queue, never
-    straight into the QBank — with a "Review imported questions" CTA after
-    a successful import. Imported questions use the configured default
-    status (pending_review by default) and can be edited again from the
-    Review Queue.
--   **Bulk Import settings group** (Admin → Settings → Bulk Import):
-    default import status, default difficulty, duplicate threshold,
-    max upload size, allowed file types, review-before-publish gate,
-    auto-create taxonomy, audit-logging of imports — all zod-validated,
-    read live by the importer (file limits + allowed types + validation
-    policy).
--   Fixed: the import page used raw `fetch()` and relied on the
-    `window.fetch` auth patch; it now uses `apiFetch` like every other
-    admin page. Also fixed a column misalignment in the template's example
-    rows (6 of 8 rows had their Correct Answer one slot off, which broke
-    validation for those question types).
--   Deferred next: (none — all settings-plan items shipped).
+Subscriptions · bundles · coupons · discounts · promotions · invoices ·
+refunds · affiliate/referrals · institutional licensing · university
+partnerships.
 
 ------------------------------------------------------------------------
 
-## P0.5.13 ✅ Coming Soon catalogue (shipped)
+# Phase P7 — Communication Platform `[PLANNED]`
 
--   Migration `0008_coming_soon.sql` (additive): `coming_soon` table (name,
-    description, category exam/qbank/feature/program/resource, icon, image
-    URL, expected release, status planned/in_progress/launching, notify-me
-    flag, audience, CTA label/URL, sort order, active, creator) +
-    `coming_soon_interests` for Notify Me demand tracking.
--   Admin → **Coming Soon** page: card grid with interest counts, create /
-    edit / delete (all audit-logged), toggle public visibility, per-item
-    CTA — the `FCPS → Coming Soon → Notify Me` flow from the plan.
--   Public **Coming Soon section** on the dashboard shows active items with
-    Notify Me buttons; authenticated users are keyed by account, anonymous
-    visitors by email, and registrations are deduplicated (one per entry).
-    Admin sees demand counts to decide what to build next.
--   `GET /api/coming-soon` (public) + `POST /api/coming-soon/:id/notify`
-    (optional auth) + admin CRUD behind requireAdmin.
-
-## P0.5.14 ✅ Granular admin roles (shipped)
-
--   Role → permission matrix (`utils/permissions.ts`): Super Admin, Admin,
-    Platform Admin, Content Admin, Exam Admin, Finance Admin, Marketing
-    Admin, Support Admin, plus editor/teacher/reviewer. Each role maps to
-    explicit permission keys (`users.manage`, `settings.manage`,
-    `media.manage`, `import.run`, `questions.manage`, `taxonomy.manage`,
-    `flashcards.manage`, `review.manage`, `announcements.manage`,
-    `coming_soon.manage`, `payments.manage`, `entitlements.manage`,
-    `flags.manage`, `errata.manage`, `overrides.manage`, `qbanks.manage`,
-    `audit.view`).
--   `requirePermission(...)` middleware enforces scopes server-side on the
-    sensitive routes: settings + reset/restore + scoped overrides, user
-    create/update/delete/password, question create/update/delete, review
-    approval, QBank CRUD, media edit/delete, import (template/preview/
-    execute), coming-soon CRUD, announcements + templates, taxonomy
-    mutations, flashcards, flags, errata. Granular admins pass `requireAdmin`
-    but are blocked from operations outside their role.
--   Admin → **Users** page: role dropdown now lists every assignable role
-    with friendly labels; only a superadmin may grant/revoke admin-level
-    roles (unchanged guard).
--   Frontend mirrors the matrix (`lib/permissions.ts`); `useAuth().can()`
-    drives the Admin sidebar, which now hides sections the signed-in role
-    cannot use (e.g. a Content Admin sees Questions/Taxonomy/Import but
-    not Users/Settings).
--   Fixed along the way: the admin dashboard stats endpoint 500'd on the
-    mock DB (raw `sql` count) — now uses the aggregate helper.
+Email · in-app notifications · push · announcements · campaigns ·
+segmentation · automated journeys. (Depends on P0.15/P0.16/P0.22.)
 
 ------------------------------------------------------------------------
 
-------------------------------------------------------------------------
+# Phase P8 — AI Medical Learning Layer `[PLANNED] (future only)`
 
-# Phase P1 --- Examination Engine
+AI explanations · AI tutor · question generation · question validation ·
+semantic search · personalized study plans · adaptive testing.
 
-## P1.1 ✅ Question types + structured explanations (shipped)
-
--   Migration `0004_p1_question_types_structured_explanations.sql`
-    (additive): `questions.question_type` (default `sba`) +
-    `why_correct`, `why_wrong`, `exam_pearl`, `common_trap` columns
--   Formal types supported: SBA, Best-of-five, True/False,
-    Assertion/Reason, EMQ, Image-based, Clinical Vignette, Case-based
-    (`QUESTION_TYPES` const in `lib/db/src/schema/questions.ts`)
--   Admin question editor: type picker + structured-explanation rich
-    text sections (why-correct / why-wrong / exam pearl / common trap)
--   Session (`session-v2`) + `QuestionView` render True/False and
-    Assertion/Reason with their standard option sets, and show the
-    structured explanation sections in feedback
--   Imported questions default to `sba` (DB default)
-
-## P1.2 ✅ Confidence tracking (shipped)
-
--   Guess / Unsure / Fairly Confident / Very Confident picker after
-    each answered question; persisted per answer in
-    `test_sessions.answers[].confidence` (JSONB, no migration needed)
--   Powers future mastery/analytics work
-
-## P1.3 In progress / next
-
--   Image question specialty metadata (ECG, X-ray, CT, MRI, histopath,
-    anatomy, ophthalmology, dentistry)
--   Exam simulator polish: marking scheme, section-level config
-    (timer/palette/autosave/flags already exist in `session-v2`)
--   Database-driven Custom Test Builder (currently client-side in
-    `create-test.tsx`)
--   Mastery engine (per question/subtopic/topic/system/subject/QBank/
-    exam) and spaced repetition for questions
--   Confidence → analytics dashboards (P2)
+AI output must never silently replace reviewed medical content.
 
 ------------------------------------------------------------------------
 
-# Phase P2 --- Analytics
+# Phase P9 — Mobile / PWA `[PLANNED]`
 
-Add:
-
--   subject/topic/difficulty accuracy
--   time/question
--   retention
--   confidence
--   mastery
--   QBank completion
--   mistake patterns
--   exam readiness
--   study consistency
--   historically frequently tested/past-paper metadata
-
-Do not make unsupported prediction claims.
+Installable PWA · offline mode · local question caching · sync · push
+notifications · mobile exam UX.
 
 ------------------------------------------------------------------------
 
-# Phase P3 --- Future Platform
+# Phase P10 — Internationalization `[PLANNED]`
 
-Later:
-
--   AI taxonomy suggestions
--   duplicate detection
--   question quality checks
--   difficulty/Bloom classification
--   reviewer assistance
--   adaptive testing
--   institutional licensing
--   university dashboards
--   teacher/reviewer portals
--   PWA/offline/low-data mode
--   internationalization
--   international exams
--   subscriptions
--   scholarships
-
-AI must never silently publish medical content; human medical review
-remains authoritative.
+Languages · country configuration · localization · currencies ·
+date/time · regional exam rules.
 
 ------------------------------------------------------------------------
 
-# UI/UX Direction
+# Phase P11 — International Exams `[PLANNED]`
 
-Medicology should feel like a professional medical examination platform,
-not a generic SaaS dashboard.
+USMLE, PLAB, AMC, MRCP, MRCS, DHA, Prometric — build only after the core
+architecture is stable.
 
-Priorities:
+------------------------------------------------------------------------
 
--   mobile-first
--   clean typography
--   strong hierarchy
--   fast navigation
--   accessible contrast
--   subtle meaningful animations
--   excellent exam-taking experience
--   minimal clutter
+# Phase P12 — Institutional / Enterprise `[PLANNED]`
 
-Avoid excessive cards, gradients, modals and decorative animation.
+Institutions · organizations · universities · institutional admins ·
+licenses · cohorts · institution analytics · SSO readiness.
+
+------------------------------------------------------------------------
+
+# Phase P13 — Scale / Infrastructure `[PLANNED]`
+
+Observability · logging · metrics · tracing · caching · queues · CDN ·
+backups · disaster recovery · security monitoring · rate limiting ·
+horizontal scaling.
 
 ------------------------------------------------------------------------
 
 # Architecture Rules
 
-The database is the source of truth.
+1.  Inspect before modifying.
+2.  Reuse existing architecture; do not duplicate systems.
+3.  Do not break or remove working functionality without justification.
+4.  Keep migrations backward compatible.
+5.  Never hard-code configurable platform behavior.
+6.  Never trust frontend authorization, pricing, entitlement, exam
+    rules, or feature flags — all security-sensitive rules are
+    server-side.
+7.  Never expose secrets (DB URLs, API keys, SMTP credentials, signing
+    keys, tokens).
+8.  Sanitize rich content (TipTap) before persistence.
+9.  Test every security-sensitive feature.
+10. Keep the mock DB behaving like production (settings, users, QBanks,
+    questions, templates, announcements, media, flashcards,
+    entitlements, audit logs).
+11. Keep TypeScript strict; avoid `any`/unsafe casts unless justified.
+12. Keep API contracts synchronized; update generated clients when
+    contracts change.
+13. Update documentation (README, MEDICOLOGY_PLAN,
+    MEDICOLOGY_ADMIN_SETTINGS_PLAN) for every major change.
 
-Do not hard-code:
+## Product principles
 
--   universities
--   exams
--   subjects
--   years
--   QBank products
--   prices
--   entitlements
+Everything connects through:
 
-A feature is not considered implemented merely because a table/component
-exists.
+`USER → ACCOUNT → EXAM PROFILE → TAXONOMY → QBANK → QUESTION → SESSION → ATTEMPT → RESULT → ANALYTICS → PERSONALIZED LEARNING`
 
-Definition of done:
+and
 
-`DATABASE + API + BUSINESS LOGIC + UI where applicable + AUTHORIZATION + VALIDATION + TESTS`
+`PLATFORM SETTINGS → SCOPED SETTINGS → EFFECTIVE CONFIGURATION → FEATURES / EXAM / QBANK / EMAIL / NOTIFICATIONS / UI`
 
-Do not rewrite the application or create competing schemas. Reuse
-existing functionality.
+Medicology must never become a collection of disconnected features.
 
-------------------------------------------------------------------------
+## UI quality bar
 
-# Recommended Execution Order
+The admin experience must feel like a premium SaaS product (WordPress,
+Elementor, Webflow, Stripe Dashboard). Use cards, tabs, grouped
+sections, side navigation, command/search, live previews, inline
+editing, drawers, modals, responsive tables, empty states, skeletons,
+confirmation dialogs, contextual help, status badges, validation
+indicators. Respect `prefers-reduced-motion`. Avoid excessive gradients,
+random shadows, and animation everywhere.
 
-`P0.1 QBanks` → `P0.2 QBank mapping` → `P0.3 taxonomy` →
-`P0.4 QID/version integrity` → `P0.5 import` → `P0.6 duplicates` →
-`P0.7 review` → `P0.8 entitlements` → `P0.9 payment security` →
-`P0.10 coming soon` → `tests/build/security audit` →
-`P0.5 content authoring (rich text + flashcard decks)` → `P1` → `P2` → `P3`
+Visual builders (email, announcement, template) follow the
+`LEFT blocks / CENTER canvas / RIGHT properties / TOP save-preview-publish` layout.
 
-------------------------------------------------------------------------
+## Recommended execution order
 
-# DeepSeek Agent Prompt
-
-You are the senior software architect and implementation engineer for
-Medicology.
-
-Repository: https://github.com/kumail1293/Medicology-V1
-
-Read `PLAN.md` before changing code.
-
-## Non-negotiable rules
-
-1.  Audit before editing.
-2.  Do not rewrite the application.
-3.  Do not replace the current React/Vite/Express/Drizzle architecture.
-4.  Do not create duplicate schemas or competing taxonomy systems.
-5.  Do not remove working functionality.
-6.  Do not claim a feature is complete merely because a
-    schema/table/component exists.
-7.  Preserve existing data.
-8.  Create migrations for schema changes.
-9.  Enforce security server-side.
-10. Run tests, typecheck and build before completion.
-
-## First task
-
-Inspect:
-
--   database schemas and migrations
--   API routes
--   frontend pages/components
--   authentication/authorization
--   QBank logic
--   question import
--   taxonomy
--   question versioning
--   audit logs
--   Test Builder
--   exam/session functionality
--   tests
-
-Create an internal matrix:
-
-`Feature | Existing | Partial | Missing | Files | Required Change`
-
-Then implement **P0 only**.
-
-## P0 requirements
-
-### 1. Database-driven QBanks
-
-Replace hard-coded QBank catalogue entries with database-driven
-products.
-
-### 2. Many-to-many questions/QBanks
-
-Implement:
-
-`questions ↔ qbank_questions ↔ qbanks`
-
-### 3. Taxonomy
-
-Use existing relational taxonomy:
-
-`Country → Exam System → Exam → Program → Academic Year → Subject → System → Topic → Subtopic`
-
-### 4. QID
-
-Keep immutable public QIDs. Preserve supplied QIDs, generate missing
-ones and detect conflicts.
-
-### 5. Versioning/audit
-
-Preserve existing versioning and audit architecture. Enforce the
-question review lifecycle.
-
-### 6. Import
-
-Implement:
-
-`upload → map → validate → preview → duplicate check → taxonomy resolution → QID generation → error report → import → review → publish`
-
-### 7. Duplicate detection
-
-Detect QID, normalized text and likely semantic duplicates. Never
-silently overwrite.
-
-### 8. Entitlements
-
-Create/use a proper server-side entitlement model.
-
-### 9. Payment
-
-Never trust `POST /purchase` or equivalent frontend assertions to grant
-access. Use provider abstraction, verification, webhook validation and
-idempotency.
-
-### 10. Coming Soon
-
-Database-driven status and Notify Me/waitlist.
-
-## Coding discipline
-
-After each major subsection:
-
-1.  inspect diff
-2.  run relevant tests
-3.  typecheck
-4.  validate migration
-5.  continue
-
-Do not make giant speculative changes.
-
-If a safe implementation cannot be completed, stop and explain the
-blocker rather than creating a fake implementation.
-
-## Final report
-
-Return:
-
-1.  Implemented
-2.  Partially implemented
-3.  Not implemented
-4.  Files changed
-5.  Database migrations
-6.  API changes
-7.  UI changes
-8.  Security fixes
-9.  Tests executed
-10. Build result
-11. Remaining risks
-12. Recommended next step
-
-Start with the audit and then implement P0.
+1.  Audit + plan sync (this document).
+2.  Phase 1 — Configuration Registry (metadata over settings).
+3.  Phase P0.15/P0.16 — Email infrastructure + template builder.
+4.  Phase P0.19/P0.20 — Account configuration + registration controls.
+5.  Phase P0.23 — SEO group.
+6.  Phase P0.24 — Audit viewer + config history UI.
+7.  Phase P1.3 — Exam engine completion.
+8.  Phases P2+ per roadmap.

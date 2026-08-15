@@ -4,6 +4,9 @@ import { db } from '../db.js';
 import { usersTable } from '@workspace/db';
 import { eq } from '../utils/drizzle.js';
 import { generateToken, authenticate, AuthRequest } from '../middleware/auth.js';
+import { checkRegistrationPolicy } from '../utils/registration-policy.js';
+import { createSession, listSessions, revokeSession, revokeAllSessions, loginHistory } from '../utils/sessions.js';
+import { securityEventsTable } from '@workspace/db';
 
 export const authRouter = Router();
 
@@ -25,6 +28,13 @@ authRouter.post('/register', async (req, res: any) => {
     }
     const normalizedEmail = String(email).trim().toLowerCase();
     console.log('Register attempt:', { name, email: normalizedEmail, college, university, year: parsedYear });
+
+    // Server-side registration policy (P0.20) — never trust the frontend.
+    const policy = await checkRegistrationPolicy({ email: normalizedEmail, password, inviteCode: req.body.inviteCode });
+    if (!policy.ok) {
+      return res.status(policy.status).json({ error: policy.error });
+    }
+
     const existing = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail));
     if (existing.length > 0) {
       return res.status(400).json({ error: 'Email already registered' });
@@ -42,6 +52,7 @@ authRouter.post('/register', async (req, res: any) => {
     }).returning();
     console.log('User created:', user);
     const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role });
+    await createSession({ userId: user.id, token, userAgent: req.headers['user-agent'], ip: req.ip });
     return res.status(201).json({ token, user: { ...user, passwordHash: undefined } });
   } catch (err: any) {
     console.error('Error in register:', err);
@@ -67,6 +78,7 @@ authRouter.post('/login', async (req, res: any) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role });
+    await createSession({ userId: user.id, token, userAgent: req.headers['user-agent'], ip: req.ip });
     return res.json({ token, user: { ...user, passwordHash: undefined } });
   } catch (err: any) {
     console.error('Error in login:', err);
@@ -128,9 +140,120 @@ authRouter.put('/me/password', authenticate, async (req: AuthRequest, res: any) 
     }
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, req.user!.id));
+    // Changing the password is a security event; keep other devices signed in.
+    try {
+      await db.insert(securityEventsTable).values({ userId: req.user!.id, type: 'password_change', userAgent: req.headers['user-agent'] ?? null, metadata: { ip: req.ip ?? null } });
+    } catch { /* best-effort */ }
     return res.json({ success: true });
   } catch (err: any) {
     console.error('Error in change password:', err);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Account settings (P0.19) — sessions, security history, prefs, data export,
+// account deletion. All endpoints require authentication and only ever touch
+// the caller's own account.
+// ---------------------------------------------------------------------------
+
+// GET /api/auth/me/sessions — active sessions on this account
+authRouter.get('/me/sessions', authenticate, async (req: any, res: any) => {
+  try {
+    const sessions = await listSessions(req.user!.id);
+    res.json({ sessions });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/auth/me/sessions/:id — revoke one device
+authRouter.delete('/me/sessions/:id', authenticate, async (req: any, res: any) => {
+  try {
+    const ok = await revokeSession(req.user!.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ error: 'Session not found' });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/auth/me/sessions — revoke all devices
+authRouter.delete('/me/sessions', authenticate, async (req: any, res: any) => {
+  try {
+    const { tokenHash } = await import('../utils/sessions.js');
+    const header = req.headers.authorization ?? '';
+    const current = header.startsWith('Bearer ') ? header.split(' ')[1] : null;
+    const count = await revokeAllSessions(req.user!.id, current ? tokenHash(current) : undefined);
+    res.json({ success: true, revoked: count });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/auth/me/security-events — login history
+authRouter.get('/me/security-events', authenticate, async (req: any, res: any) => {
+  try {
+    const events = await loginHistory(req.user!.id);
+    res.json({ events });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/auth/me/notification-prefs
+authRouter.put('/me/notification-prefs', authenticate, async (req: any, res: any) => {
+  try {
+    const prefs = req.body?.prefs ?? req.body;
+    if (!prefs || typeof prefs !== 'object') {
+      return res.status(400).json({ error: 'prefs object required' });
+    }
+    await db.update(usersTable).set({ notificationPrefs: prefs }).where(eq(usersTable.id, req.user!.id));
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
+    res.json({ prefs: user.notificationPrefs ?? {} });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/auth/me/data — personal data export (JSON). No secrets included.
+authRouter.get('/me/data', authenticate, async (req: any, res: any) => {
+  try {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const safe = {
+      profile: { name: user.name, email: user.email, college: user.college, university: user.university, year: user.year, createdAt: user.createdAt },
+      preferences: user.notificationPrefs ?? {},
+      sessions: await listSessions(user.id),
+      loginHistory: await loginHistory(user.id, 50),
+    };
+    res.setHeader('Content-Disposition', `attachment; filename="medicology-data-${user.id}.json"`);
+    res.json(safe);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/auth/me — delete account (anonymizes, never leaks PII to new
+// registrations, and revokes every session).
+authRouter.delete('/me', authenticate, async (req: any, res: any) => {
+  try {
+    const userId = req.user!.id;
+    await revokeAllSessions(userId);
+    const deletedEmail = `deleted-${userId}-${Date.now()}@deleted.medicology.local`;
+    await db.update(usersTable).set({
+      name: 'Deleted User',
+      email: deletedEmail,
+      college: 'Deleted',
+      university: null,
+      notificationPrefs: {},
+      deletedAt: new Date(),
+    }).where(eq(usersTable.id, userId));
+    try {
+      await db.insert(securityEventsTable).values({ userId, type: 'account_deleted', userAgent: req.headers['user-agent'] ?? null, metadata: { ip: req.ip ?? null } });
+    } catch { /* best-effort */ }
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });

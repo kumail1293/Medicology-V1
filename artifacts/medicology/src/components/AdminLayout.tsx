@@ -23,6 +23,10 @@ import {
   Database,
   Layers,
   Rocket,
+  Mail,
+  ScrollText,
+  Command,
+  ArrowRight,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -142,6 +146,18 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       permission: 'coming_soon.manage',
     },
     {
+      label: 'Email Templates',
+      icon: <Mail size={18} />,
+      path: '/admin/email',
+      permission: 'email.manage',
+    },
+    {
+      label: 'Audit Logs',
+      icon: <ScrollText size={18} />,
+      path: '/admin/audit',
+      permission: 'audit.view',
+    },
+    {
       label: 'Settings',
       icon: <Settings size={18} />,
       path: '/admin/settings',
@@ -149,7 +165,26 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     },
   ];
 
+  // ── Command center (Ctrl+K) ────────────────────────────────────────────
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const visibleNav = navItems.filter((item) => !item.permission || can(item.permission));
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+      if (e.key === 'Escape') setPaletteOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const paletteResults = visibleNav.filter(
+    (item) => item.label.toLowerCase().includes(query.toLowerCase()) || item.path.toLowerCase().includes(query.toLowerCase())
+  );
 
   const isActive = (path: string) => location === path;
 
@@ -243,7 +278,14 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           <div>
             <h1 className="text-xl font-bold">Medicology Admin Panel</h1>
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="hidden sm:inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+            >
+              <Command size={14} /> Quick actions
+              <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">Ctrl K</kbd>
+            </button>
             <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
               {user?.role?.toUpperCase()}
             </span>
@@ -255,6 +297,47 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </div>
+
+      {/* Command palette */}
+      {paletteOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-24 p-4"
+          onClick={() => setPaletteOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-card shadow-2xl border border-border overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+              <Command size={16} className="text-muted-foreground" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search admin sections…"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+              <button onClick={() => setPaletteOpen(false)} className="text-muted-foreground hover:text-foreground"><X size={15} /></button>
+            </div>
+            <div className="max-h-80 overflow-y-auto p-2 custom-scrollbar">
+              {paletteResults.length === 0 && (
+                <p className="px-3 py-6 text-center text-sm text-muted-foreground">No sections match “{query}”.</p>
+              )}
+              {paletteResults.map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => { setLocation(item.path); setPaletteOpen(false); setQuery(''); }}
+                  className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-primary/10 transition-colors text-left"
+                >
+                  <span className="text-primary">{item.icon}</span>
+                  <span className="flex-1 font-medium">{item.label}</span>
+                  <ArrowRight size={14} className="text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

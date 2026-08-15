@@ -275,6 +275,7 @@ export declare const questionVersionsTable: import("drizzle-orm/pg-core").PgTabl
 export declare const insertQuestionVersionSchema: z.ZodObject<{
     qid: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     questionId: z.ZodInt;
+    reviewedAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
     versionNumber: z.ZodOptional<z.ZodInt>;
     changeType: z.ZodOptional<z.ZodString>;
     summary: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -285,7 +286,6 @@ export declare const insertQuestionVersionSchema: z.ZodObject<{
     reviewerId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     reviewerName: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     reviewStatus: z.ZodOptional<z.ZodString>;
-    reviewedAt: z.ZodOptional<z.ZodNullable<z.ZodDate>>;
 }, {
     out: {};
     in: {};

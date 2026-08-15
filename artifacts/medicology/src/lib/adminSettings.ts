@@ -74,6 +74,45 @@ export interface IntegrationSettings {
   customHeadCode: string;
 }
 
+export interface SeoSettings {
+  siteTitle: string;
+  metaDescription: string;
+  keywords: string[];
+  ogTitle: string;
+  ogDescription: string;
+  ogImage: string;
+  twitterCard: "summary" | "summary_large_image";
+  robots: "index,follow" | "noindex,nofollow";
+  canonicalUrl: string;
+}
+
+export interface FooterSettings {
+  footerText: string;
+  copyright: string;
+  supportLink: string;
+  privacyLink: string;
+  termsLink: string;
+  refundLink: string;
+  socials: { platform: string; url: string }[];
+}
+
+export interface EmailSettings {
+  provider: "log" | "smtp";
+  fromName: string;
+  fromEmail: string;
+  replyTo: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser: string;
+  smtpPassword?: string; // write-only — never returned by the API
+  smtpPasswordSet: boolean;
+  footerText: string;
+  unsubscribeEnabled: boolean;
+  trackingEnabled: boolean;
+  retryPolicy: "none" | "once" | "thrice";
+}
+
 export type AnimationEffect =
   | 'none' | 'fade' | 'slide' | 'scale' | 'zoom' | 'bounce'
   | 'shimmer' | 'pulse' | 'marquee' | 'typewriter';
@@ -147,6 +186,9 @@ export interface PlatformSettings {
   payments: PaymentSettings;
   storage: StorageSettings;
   integrations: IntegrationSettings;
+  seo: SeoSettings;
+  footer: FooterSettings;
+  email: EmailSettings;
   animations: AnimationsSettings;
   featureFlags: FeatureFlagsSettings;
   examSettings: ExamSettings;
@@ -216,6 +258,45 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
     googleAnalyticsId: "",
     metaDescription: "",
     customHeadCode: "",
+  },
+  email: {
+    provider: "log",
+    fromName: "Medicology",
+    fromEmail: "no-reply@medicology.com",
+    replyTo: "support@medicology.com",
+    smtpHost: "",
+    smtpPort: 587,
+    smtpSecure: false,
+    smtpUser: "",
+    smtpPasswordSet: false,
+    footerText: "© 2026 Medicology. All rights reserved.",
+    unsubscribeEnabled: true,
+    trackingEnabled: false,
+    retryPolicy: "once",
+  },
+  seo: {
+    siteTitle: "Medicology — Medical Exam Preparation",
+    metaDescription: "Master your medical knowledge with Medicology. The premier QBank platform designed exclusively for Medical, Dental & Allied Health students.",
+    keywords: ["medical", "qbank", "usmle", "mbbs", "mcqs", "exam prep"],
+    ogTitle: "Medicology — Medical Exam Preparation",
+    ogDescription: "The premier QBank platform for Medical, Dental & Allied Health students.",
+    ogImage: "/images/og-cover.png",
+    twitterCard: "summary_large_image",
+    robots: "index,follow",
+    canonicalUrl: "https://medicology.com/",
+  },
+  footer: {
+    footerText: "Medicology — Master your medical knowledge.",
+    copyright: "© 2026 Medicology. All rights reserved.",
+    supportLink: "/support",
+    privacyLink: "/privacy",
+    termsLink: "/terms",
+    refundLink: "/refunds",
+    socials: [
+      { platform: "instagram", url: "https://instagram.com/medicology" },
+      { platform: "facebook", url: "https://facebook.com/medicology" },
+      { platform: "x", url: "https://x.com/medicology" },
+    ],
   },
   featureFlags: {
     flashcards: true,
@@ -397,6 +478,8 @@ export interface PublicSettings {
   branding: BrandingSettings;
   animations: AnimationsSettings;
   featureFlags: FeatureFlagsSettings;
+  seo?: SeoSettings;
+  footer?: FooterSettings;
 }
 
 export async function fetchPublicSettings(): Promise<{

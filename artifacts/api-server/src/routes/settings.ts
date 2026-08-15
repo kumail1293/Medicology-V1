@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { db } from '../db.js';
 import { appSettingsTable, settingsOverridesTable, SETTING_SCOPES, type SettingScope } from '@workspace/db';
 import { and, eq } from '../utils/drizzle.js';
@@ -11,6 +12,7 @@ import {
   mergeSettings,
   publicSettings,
 } from '../utils/settings-defaults.js';
+import { CONFIG_GROUPS, getConfigRegistry, getPublicConfigRegistry } from '../utils/config-registry.js';
 import { recordAudit, getAuditLogs } from '../utils/audit.js';
 import { invalidateFeatureFlagsCache } from '../utils/feature-flags.js';
 import { invalidateMaintenanceCache } from '../middleware/maintenance.js';
@@ -52,7 +54,28 @@ settingsRouter.put('/admin/settings', authenticate, requireAdmin, requirePermiss
   try {
     const body = req.validatedBody as UpdateSettings;
     const stored = await loadStored();
-    const merged = mergeSettings({ ...stored, ...body });
+
+    // --- SMTP password secret handling --------------------------------------
+    // The password is never stored inside the settings group or returned by the
+    // API. A non-empty smtpPassword in the payload is persisted under a secret
+    // key; an empty/absent one leaves the existing secret untouched.
+    const emailPatch = (body as any).email as Record<string, any> | undefined;
+    if (emailPatch && typeof emailPatch === 'object') {
+      const incomingPassword = emailPatch.smtpPassword;
+      if (typeof incomingPassword === 'string' && incomingPassword.length > 0) {
+        const existing = await db.select().from(appSettingsTable).where(eq(appSettingsTable.key, '__secret_email_smtp_password'));
+        if (existing.length > 0) {
+          await db.update(appSettingsTable).set({ value: incomingPassword, updatedBy: req.user?.id ?? null, updatedAt: new Date() })
+            .where(eq(appSettingsTable.key, '__secret_email_smtp_password'));
+        } else {
+          await db.insert(appSettingsTable).values({ key: '__secret_email_smtp_password', value: incomingPassword, updatedBy: req.user?.id ?? null });
+        }
+        emailPatch.smtpPasswordSet = true;
+      }
+      delete emailPatch.smtpPassword; // never persists inside the group
+    }
+
+    const merged = mergeSettings({ ...stored, ...(body as any) });
 
     const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
     const changed: string[] = [];
@@ -106,6 +129,99 @@ settingsRouter.put('/admin/settings', authenticate, requireAdmin, requirePermiss
   }
 });
 
+// GET /api/admin/settings/export — versioned snapshot of the effective
+// configuration. Secrets are stripped: the email group keeps only
+// smtpPasswordSet, and secret keys are never included.
+settingsRouter.get('/admin/settings/export', authenticate, requireAdmin, requirePermission('settings.manage'), async (_req: any, res: any) => {
+  try {
+    const stored = await loadStored();
+    const merged = mergeSettings(stored) as any;
+    // Strip secrets from the snapshot.
+    const safe: any = JSON.parse(JSON.stringify(merged));
+    if (safe.email) {
+      safe.email = { ...safe.email, smtpPassword: undefined };
+      delete safe.email.smtpPassword;
+    }
+    const snapshot = {
+      version: 1,
+      schema: 'medicology-settings',
+      exportedAt: new Date().toISOString(),
+      settings: safe,
+    };
+    res.setHeader('Content-Disposition', `attachment; filename="medicology-settings-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.json(snapshot);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/settings/import — validate + preview a snapshot (dry run
+// when ?dryRun=1), then apply. Audit-logged; secrets never imported.
+settingsRouter.post('/admin/settings/import', authenticate, requireAdmin, requirePermission('settings.manage'), validateBody(z.object({ snapshot: z.unknown() })), async (req: any, res: any) => {
+  try {
+    const snap = (req.validatedBody as any).snapshot as any;
+    if (!snap || typeof snap !== 'object' || !snap.settings || typeof snap.settings !== 'object') {
+      return res.status(400).json({ error: 'Invalid snapshot: expected { version, schema, settings }' });
+    }
+    // Validate every group against its zod schema before touching storage.
+    const { updateSettingsSchema } = await import('./schemas.js');
+    const parsed = updateSettingsSchema.safeParse(snap.settings);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Snapshot validation failed', details: parsed.error.flatten().fieldErrors });
+    }
+    const incoming = parsed.data as any;
+    if (incoming.email?.smtpPassword) delete incoming.email.smtpPassword; // secrets never imported
+    const stored = await loadStored();
+    const merged = mergeSettings({ ...stored, ...incoming });
+
+    // Diff for preview / audit.
+    const diff: Record<string, { old: any; new: any }> = {};
+    for (const [group, values] of Object.entries(incoming)) {
+      if (!values || typeof values !== 'object') continue;
+      const oldGroup = (stored[group] ?? (DEFAULT_SETTINGS as any)[group]) ?? {};
+      const newGroup = (merged as any)[group];
+      if (JSON.stringify(oldGroup) !== JSON.stringify(newGroup)) {
+        diff[group] = { old: oldGroup, new: newGroup };
+      }
+    }
+
+    const dryRun = String(req.query.dryRun) === '1';
+    if (dryRun) {
+      return res.json({ ok: true, dryRun: true, diff, groups: Object.keys(incoming) });
+    }
+
+    if (Object.keys(diff).length === 0) {
+      return res.json({ ok: true, applied: 0, message: 'No changes — snapshot matches current settings.' });
+    }
+
+    // Apply changed groups.
+    const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+    for (const [group, values] of Object.entries(incoming)) {
+      if (!values || typeof values !== 'object') continue;
+      if (!(diff as any)[group]) continue; // only changed groups
+      const fullGroup = (merged as any)[group];
+      const existing = await db.select().from(appSettingsTable).where(eq(appSettingsTable.key, group));
+      if (existing.length > 0) {
+        await db.update(appSettingsTable).set({ value: fullGroup, updatedBy: req.user?.id ?? null, updatedAt: new Date() }).where(eq(appSettingsTable.key, group));
+      } else {
+        await db.insert(appSettingsTable).values({ key: group, value: fullGroup, updatedBy: req.user?.id ?? null });
+      }
+    }
+    await recordAudit({
+      actor, action: 'settings.import', entityType: 'app_settings', entityId: 0, entityLabel: 'platform',
+      summary: `Imported settings snapshot (${Object.keys(diff).length} group(s))`,
+      oldValues: Object.fromEntries(Object.entries(diff).map(([g, d]) => [g, d.old])),
+      newValues: Object.fromEntries(Object.entries(diff).map(([g, d]) => [g, d.new])),
+      ip: req.ip,
+    });
+    invalidateFeatureFlagsCache();
+    invalidateMaintenanceCache();
+    res.json({ ok: true, applied: Object.keys(diff).length, groups: Object.keys(diff) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/admin/settings/reset — restore a group (or everything) to defaults.
 settingsRouter.post('/admin/settings/reset', authenticate, requireAdmin, requirePermission('settings.manage'), async (req: any, res: any) => {
   try {
@@ -120,6 +236,10 @@ settingsRouter.post('/admin/settings/reset', authenticate, requireAdmin, require
       if (!(g in DEFAULT_SETTINGS)) continue;
       await db.delete(appSettingsTable).where(eq(appSettingsTable.key, g));
       delete stored[g];
+      // Resetting the email group also clears the stored SMTP secret.
+      if (g === 'email') {
+        await db.delete(appSettingsTable).where(eq(appSettingsTable.key, '__secret_email_smtp_password'));
+      }
     }
     await recordAudit({
       actor,
@@ -373,6 +493,24 @@ settingsRouter.get('/settings/exam', async (req: any, res: any) => {
 });
 
 // GET /api/admin/settings/:section — one group, admin only.
+// ---------------------------------------------------------------------------
+// Configuration registry (Phase 1) — the metadata contract the admin UI
+// renders from. Admin-only; contains no secrets — only types, descriptions,
+// defaults, scopes and the editableBy/audit policy. Registered BEFORE the
+// /admin/settings/:section wildcard so it cannot be shadowed.
+// ---------------------------------------------------------------------------
+settingsRouter.get('/admin/settings/registry', authenticate, requireAdmin, requirePermission('settings.manage'), async (_req: any, res: any) => {
+  try {
+    res.json({
+      groups: CONFIG_GROUPS,
+      settings: getConfigRegistry(),
+      publicSettings: getPublicConfigRegistry(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 settingsRouter.get('/admin/settings/:section', authenticate, requireAdmin, async (req: any, res: any) => {
   try {
     const { section } = req.params as { section: string };

@@ -1256,3 +1256,339 @@ test('granular roles: superadmin-only admin-role grants are enforced', async () 
   });
   assert.equal(created.status, 201, 'superadmin (dev admin) can grant platform_admin');
 });
+// --- Configuration Registry (Phase 1) ---
+
+test('config registry: every default setting has a metadata entry', async () => {
+  const { registryCoversDefaults, buildConfigRegistry } = await import('../src/utils/config-registry.js');
+  const { missing } = registryCoversDefaults();
+  assert.deepEqual(missing, [], 'no default key may be missing from the registry');
+  const reg = buildConfigRegistry();
+  assert.ok(reg.length >= 80, `expected a full registry, got ${reg.length} entries`);
+  for (const e of reg) {
+    assert.ok(e.path.includes('.'), `path malformed: ${e.path}`);
+    assert.ok(typeof e.label === 'string' && e.label.length > 0, `label missing for ${e.path}`);
+    assert.ok(typeof e.type === 'string', `type missing for ${e.path}`);
+    assert.ok(Array.isArray(e.editableBy) && e.editableBy.length > 0, `editableBy missing for ${e.path}`);
+    assert.ok(typeof e.public === 'boolean', `public missing for ${e.path}`);
+    assert.ok('defaultValue' in e, `defaultValue missing for ${e.path}`);
+  }
+});
+
+test('config registry: registry validation accepts defaults and rejects bad values', async () => {
+  const { buildConfigRegistry, validateSetting } = await import('../src/utils/config-registry.js');
+  const reg = buildConfigRegistry();
+  for (const e of reg) {
+    const err = validateSetting(e.group, e.key, e.defaultValue);
+    assert.equal(err, null, `default should validate for ${e.path}: ${err}`);
+  }
+  const badColor = validateSetting('branding', 'primaryColor', 'not-a-color');
+  assert.ok(badColor && badColor.includes('primaryColor'), badColor);
+  const badCount = validateSetting('examSettings', 'questionCount', -5);
+  assert.ok(badCount, 'negative question count rejected');
+  const badEnum = validateSetting('examSettings', 'markingScheme', 'bogus');
+  assert.ok(badEnum, 'unknown enum value rejected');
+  assert.equal(validateSetting('branding', 'nope', 1), 'Unknown setting "branding.nope"');
+});
+
+test('config registry: GET /admin/settings/registry requires settings.manage', async () => {
+  const admin = await adminLogin();
+  const res = await fetch(`${BASE}/admin/settings/registry`, { headers: { Authorization: `Bearer ${admin}` } });
+  const data: any = await res.json();
+  assert.equal(res.status, 200, JSON.stringify(data).slice(0, 200));
+  assert.ok(Array.isArray(data.settings) && data.settings.length >= 80, 'registry served');
+  assert.ok(Array.isArray(data.groups) && data.groups.length >= 10, 'group metadata served');
+  const pub = data.publicSettings as any[];
+  assert.ok(pub.some((e) => e.group === 'branding'), 'branding is public');
+  assert.ok(!pub.some((e) => e.group === 'payments'), 'payments never public');
+  assert.ok(!pub.some((e) => e.group === 'security'), 'security never public');
+  const { token } = await registerUser('reg-nonadmin@test.com');
+  const forbidden = await fetch(`${BASE}/admin/settings/registry`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(forbidden.status, 403);
+});
+
+// ===========================================================================
+// Email template system (P0.15–P0.16)
+// ===========================================================================
+
+test('email: renderer sanitizes custom HTML and interpolates variables', async () => {
+  const { renderEmail, sanitizeEmailHtml } = await import('../src/utils/email-renderer.js');
+  const html = renderEmail({
+    blocks: [
+      { type: 'heading', text: 'Hi {{user.firstName}}' },
+      { type: 'custom', html: '<b>Bold</b><script>alert(1)</script><img src="x" onerror="alert(2)">' },
+      { type: 'text', html: '{{unknownVar}} and {{user.email}}' },
+    ],
+    data: { 'user.firstName': 'Ayesha', 'user.email': 'a@b.com' },
+  });
+  assert.ok(html.includes('Hi Ayesha'), 'variable interpolated');
+  assert.ok(!html.includes('{{unknownVar}}'), 'unknown var rendered empty');
+  assert.ok(!html.includes('unknownVar'), 'unknown var value not leaked');
+  assert.ok(!html.includes('<script>'), 'script stripped');
+  assert.ok(!html.includes('onerror'), 'event handler stripped');
+  assert.ok(html.includes('a@b.com'), 'known var interpolated');
+  const clean = sanitizeEmailHtml('<b onclick="x()">ok</b><iframe src="x"></iframe><a href="https://ok.com">link</a>');
+  assert.ok(clean.includes('<b>ok</b>'), 'allowed tag kept: ' + clean);
+  assert.ok(!clean.includes('onclick'), 'handler stripped');
+  assert.ok(!clean.includes('<iframe'), 'iframe dropped');
+  assert.ok(clean.includes('https://ok.com'), 'safe href kept');
+});
+
+test('email: admin CRUD, publish, version bump, preview, test-send, logs', async () => {
+  const admin = await adminLogin();
+  const auth = { Authorization: `Bearer ${admin}` };
+
+  // create
+  const created = await fetch(`${BASE}/admin/email/templates`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Welcome Email', category: 'transactional', subject: 'Welcome to {{platform.name}}!',
+      bodyBlocks: [{ type: 'heading', text: 'Hi {{user.firstName}}' }, { type: 'button', label: 'Start', url: 'https://medicology.com' }],
+      variables: ['user.firstName', 'platform.name'],
+    }),
+  });
+  const c = (await created.json()) as any;
+  assert.equal(created.status, 201, JSON.stringify(c).slice(0, 200));
+  assert.ok(c.template.id, 'has id');
+  assert.equal(c.template.status, 'draft');
+  assert.equal(c.template.version, 1);
+  const id = c.template.id;
+
+  // duplicate slug rejected (same name → same derived slug)
+  const dup = await fetch(`${BASE}/admin/email/templates`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Welcome Email', subject: 'x', bodyBlocks: [] }),
+  });
+  assert.equal(dup.status, 409, 'duplicate slug rejected');
+
+  // update bumps version when content changes
+  const saved = await fetch(`${BASE}/admin/email/templates/${id}`, {
+    method: 'PATCH', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subject: 'Welcome v2', bodyBlocks: [{ type: 'heading', text: 'Updated' }] }),
+  });
+  const s = (await saved.json()) as any;
+  assert.equal(saved.status, 200);
+  assert.equal(s.template.version, 2, 'version bumped');
+  assert.ok(s.template.versions.length >= 1, 'history recorded');
+
+  // publish
+  const pub = await fetch(`${BASE}/admin/email/templates/${id}/publish`, { method: 'POST', headers: auth });
+  assert.equal(pub.status, 200);
+
+  // preview renders HTML
+  const prev = await fetch(`${BASE}/admin/email/templates/${id}/preview`, { method: 'POST', headers: auth });
+  const p = (await prev.json()) as any;
+  assert.equal(prev.status, 200);
+  assert.ok(p.html.includes('<!DOCTYPE html>'), 'full document rendered');
+  assert.ok(p.html.includes('Updated'), 'current blocks rendered');
+
+  // test-send (log provider) — records a log row
+  const test = await fetch(`${BASE}/admin/email/templates/${id}/test`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to: 'qa@test.com' }),
+  });
+  const t = (await test.json()) as any;
+  assert.equal(test.status, 200, JSON.stringify(t).slice(0, 200));
+  assert.equal(t.result.status, 'sent');
+  assert.equal(t.result.provider, 'log');
+
+  const logs = await fetch(`${BASE}/admin/email/logs`, { headers: auth });
+  const l = (await logs.json()) as any;
+  assert.ok(l.logs.length >= 1, 'send logged');
+  assert.equal(l.logs[0].to, 'qa@test.com');
+
+  // variables endpoint
+  const vars = await fetch(`${BASE}/admin/email/variables`, { headers: auth });
+  const v = (await vars.json()) as any;
+  assert.ok(v.variables.includes('user.firstName'), 'variable catalog served');
+
+  // restore to version 1
+  const restored = await fetch(`${BASE}/admin/email/templates/${id}/restore`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version: 1 }),
+  });
+  const r = (await restored.json()) as any;
+  assert.equal(restored.status, 200);
+  assert.ok(r.template.subject.includes('Welcome to'), 'restored v1 subject');
+
+  // permission: content_admin cannot manage email
+  const reg = await fetch(`${BASE}/auth/register`, json({}, { name: 'Content Admin QA', email: 'content-email@test.com', password: 'Password123', college: 'UHS', year: 3 }));
+  const regData: any = await reg.json();
+  const ctoken = regData.token;
+  await fetch(`${BASE}/admin/users/${regData.user.id}/role`, {
+    method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'content_admin' }),
+  });
+  const denied = await fetch(`${BASE}/admin/email/templates`, { headers: { Authorization: `Bearer ${ctoken}` } });
+  assert.equal(denied.status, 403, 'content_admin blocked from email templates');
+
+  // email settings: SMTP password is never returned, smtpPasswordSet flips true
+  const setRes = await fetch(`${BASE}/admin/settings`, {
+    method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: { provider: 'smtp', smtpHost: 'smtp.example.com', smtpPassword: 'super-secret-pass' } }),
+  });
+  const setData: any = await setRes.json();
+  assert.equal(setRes.status, 200, JSON.stringify(setData).slice(0, 200));
+  assert.equal(setData.settings.email.provider, 'smtp', 'provider saved');
+  assert.equal(setData.settings.email.smtpPasswordSet, true, 'password set flag');
+  assert.ok(!JSON.stringify(setData).includes('super-secret-pass'), 'secret never returned');
+  const getRes = await fetch(`${BASE}/admin/settings`, { headers: auth });
+  const getData: any = await getRes.json();
+  assert.equal(getData.settings.email.smtpPasswordSet, true);
+  assert.ok(!JSON.stringify(getData).includes('super-secret-pass'), 'secret absent from GET');
+  // reset email group clears the secret
+  await fetch(`${BASE}/admin/settings/reset`, { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ group: 'email' }) });
+  const after = await fetch(`${BASE}/admin/settings`, { headers: auth });
+  const afterData: any = await after.json();
+  assert.equal(afterData.settings.email.smtpPasswordSet, false, 'reset clears secret flag');
+});
+
+// ===========================================================================
+// Account settings (P0.19) — sessions, security history, prefs, export, delete
+// ===========================================================================
+
+test('account: sessions tracked, revocable, and enforced by middleware', async () => {
+  const sessEmail = `sess-${Date.now()}@test.com`;
+  const { token } = await registerUser(sessEmail);
+
+  // Sessions list includes the login we just made
+  const list = await fetch(`${BASE}/auth/me/sessions`, { headers: { Authorization: `Bearer ${token}` } });
+  const l = (await list.json()) as any;
+  assert.equal(list.status, 200);
+  assert.ok(l.sessions.length >= 1, 'session recorded');
+  const sid = l.sessions[0].id;
+
+  // Revoke it → the token must now be rejected
+  const rev = await fetch(`${BASE}/auth/me/sessions/${sid}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(rev.status, 200);
+  const me = await fetch(`${BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(me.status, 401, 'revoked session rejected');
+
+  // Re-login twice (two devices), then revoke-all from the second device:
+  // the other device dies, the current one stays signed in.
+  const loginRes = await fetch(`${BASE}/auth/login`, json({}, { email: sessEmail, password: 'TestPass123' }));
+  assert.equal(loginRes.status, 200);
+  const l2 = (await loginRes.json()) as any;
+  const loginRes2 = await fetch(`${BASE}/auth/login`, json({}, { email: sessEmail, password: 'TestPass123' }));
+  const l3 = (await loginRes2.json()) as any;
+  const ra = await fetch(`${BASE}/auth/me/sessions`, { method: 'DELETE', headers: { Authorization: `Bearer ${l3.token}` } });
+  assert.equal(ra.status, 200);
+  // Current device survives revoke-all…
+  const me2 = await fetch(`${BASE}/auth/me`, { headers: { Authorization: `Bearer ${l3.token}` } });
+  assert.equal(me2.status, 200, 'current session survives revoke-all');
+  // …but the other device is dead.
+  const other = await fetch(`${BASE}/auth/me`, { headers: { Authorization: `Bearer ${l2.token}` } });
+  assert.equal(other.status, 401, 'revoke-all kills other sessions');
+});
+
+test('account: notification prefs, data export, deletion anonymizes', async () => {
+  const { token } = await registerUser(`acct-${Date.now()}@test.com`);
+  const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  // notification prefs
+  const prefs = await fetch(`${BASE}/auth/me/notification-prefs`, {
+    method: 'PUT', headers: auth,
+    body: JSON.stringify({ prefs: { email: { announcements: false, results: true } } }),
+  });
+  const p = (await prefs.json()) as any;
+  assert.equal(prefs.status, 200);
+  assert.equal(p.prefs.email.announcements, false);
+
+  // data export — includes profile + prefs, excludes passwordHash
+  const data = await fetch(`${BASE}/auth/me/data`, { headers: auth });
+  const d = (await data.json()) as any;
+  assert.equal(data.status, 200);
+  assert.ok(d.profile.email.includes('@test.com'));
+  assert.ok(!JSON.stringify(d).includes('passwordHash'), 'no secrets in export');
+
+  // security events include login
+  const events = await fetch(`${BASE}/auth/me/security-events`, { headers: auth });
+  const ev = (await events.json()) as any;
+  assert.ok(ev.events.some((e: any) => e.type === 'login'), 'login history recorded');
+
+  // deletion anonymizes and revokes sessions
+  const del = await fetch(`${BASE}/auth/me`, { method: 'DELETE', headers: auth });
+  assert.equal(del.status, 200);
+  const me = await fetch(`${BASE}/auth/me`, { headers: auth });
+  assert.equal(me.status, 401, 'token dead after deletion');
+});
+
+// ===========================================================================
+// Audit viewer + settings export/import (P0.20 / P0.19)
+// ===========================================================================
+
+test('settings: export strips secrets; import validates, diffs, applies, audits', async () => {
+  const admin = await adminLogin();
+  const auth = { Authorization: `Bearer ${admin}` };
+
+  // Export — secrets never present
+  const exp = await fetch(`${BASE}/admin/settings/export`, { headers: auth });
+  const snap = (await exp.json()) as any;
+  assert.equal(exp.status, 200);
+  assert.equal(snap.version, 1);
+  assert.ok(snap.settings.general.siteName === 'Medicology', 'defaults included');
+  assert.ok(snap.settings.email && typeof snap.settings.email.smtpPassword === 'undefined', 'no smtp password in export');
+
+  // Invalid snapshot rejected
+  const bad = await fetch(`${BASE}/admin/settings/import`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ snapshot: { settings: { branding: { primaryColor: 'not-a-color' } } } }),
+  });
+  assert.equal(bad.status, 400, 'invalid snapshot rejected');
+
+  // Dry run preview
+  const preview = await fetch(`${BASE}/admin/settings/import?dryRun=1`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ snapshot: { settings: { general: { siteName: 'Imported Name' } } } }),
+  });
+  const pv = (await preview.json()) as any;
+  assert.equal(preview.status, 200);
+  assert.equal(pv.dryRun, true);
+  assert.ok(pv.diff.general, 'diff includes changed group');
+  assert.equal(pv.diff.general.old.siteName, 'Medicology');
+  assert.equal(pv.diff.general.new.siteName, 'Imported Name');
+
+  // Apply
+  const apply = await fetch(`${BASE}/admin/settings/import`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ snapshot: { settings: { general: { siteName: 'Imported Name' } } } }),
+  });
+  const ap = (await apply.json()) as any;
+  assert.equal(apply.status, 200);
+  assert.equal(ap.applied, 1);
+  const get = await fetch(`${BASE}/admin/settings`, { headers: auth });
+  const gd = (await get.json()) as any;
+  assert.equal(gd.settings.general.siteName, 'Imported Name', 'applied');
+
+  // Import with no changes is a no-op
+  const noop = await fetch(`${BASE}/admin/settings/import`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ snapshot: { settings: { general: { siteName: 'Imported Name' } } } }),
+  });
+  const np = (await noop.json()) as any;
+  assert.equal(np.applied, 0);
+
+  // Audit log records the import
+  const logs = await fetch(`${BASE}/admin/audit-logs?action=settings.import`, { headers: auth });
+  const ld = (await logs.json()) as any;
+  assert.ok(ld.logs.length >= 1, 'import audited');
+
+  // Reset for test isolation
+  await fetch(`${BASE}/admin/settings/reset`, { method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ group: 'general' }) });
+});
+
+test('audit: logs are permission-gated (audit.view)', async () => {
+  const admin = await adminLogin();
+  const auth = { Authorization: `Bearer ${admin}` };
+  // Admin sees logs
+  const ok = await fetch(`${BASE}/admin/audit-logs`, { headers: auth });
+  assert.equal(ok.status, 200);
+  // content_admin has no audit.view → 403
+  const reg = await fetch(`${BASE}/auth/register`, json({}, { name: 'Audit QA', email: `audit-${Date.now()}@test.com`, password: 'Password123', college: 'UHS', year: 3 }));
+  const regData: any = await reg.json();
+  await fetch(`${BASE}/admin/users/${regData.user.id}/role`, {
+    method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'content_admin' }),
+  });
+  const denied = await fetch(`${BASE}/admin/audit-logs`, { headers: { Authorization: `Bearer ${regData.token}` } });
+  assert.equal(denied.status, 403, 'content_admin blocked from audit logs');
+});

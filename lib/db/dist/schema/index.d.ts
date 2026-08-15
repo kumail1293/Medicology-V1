@@ -27,4 +27,6 @@ export * from "./flashcards.js";
 export * from "./app_settings.js";
 export * from "./settings_overrides.js";
 export * from "./coming_soon.js";
+export * from "./email_templates.js";
+export * from "./user_sessions.js";
 //# sourceMappingURL=index.d.ts.map

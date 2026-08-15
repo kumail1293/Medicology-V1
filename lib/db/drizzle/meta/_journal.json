@@ -64,6 +64,20 @@
       "when": 1786790183576,
       "tag": "0008_coming_soon",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786793394023,
+      "tag": "0009_kind_strong_guy",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786794389477,
+      "tag": "0010_damp_firestar",
+      "breakpoints": true
     }
   ]
 }

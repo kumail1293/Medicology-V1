@@ -2,10 +2,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Link, useLocation } from 'wouter';
 import { motion } from 'framer-motion';
-import { Mail, Lock, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Lock, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeInput, clientRateLimit } from '@/lib/security';
 import { mockAuthService } from '@/lib/mockAuth';
+import { usePlatformConfig } from '@/lib/platformConfig';
+import { Instagram, Facebook, Twitter, Linkedin, Youtube, Globe, Mail, HelpCircle } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('test@college.edu');
@@ -19,8 +21,16 @@ export default function Login() {
   const { login } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const config = usePlatformConfig();
+  const { footer } = config;
   const mountTime = useRef(Date.now());
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const socialIcons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+    instagram: Instagram, facebook: Facebook, x: Twitter, twitter: Twitter,
+    linkedin: Linkedin, youtube: Youtube, website: Globe, support: HelpCircle,
+  };
+  const footerSocials = Array.isArray(footer?.socials) ? footer.socials : [];
 
   const startLockout = (seconds: number) => {
     const until = Date.now() + seconds * 1000;
@@ -195,6 +205,33 @@ export default function Login() {
               Don't have an account? <Link href="/register" className="text-primary font-semibold hover:underline">Create one</Link>
             </p>
           </div>
+
+          {(footer?.footerText || footer?.copyright || footerSocials.length > 0) && (
+            <div className="mt-10 pt-6 border-t border-border text-center">
+              {footerSocials.length > 0 && (
+                <div className="flex items-center justify-center gap-3 mb-4">
+                  {footerSocials.map((s, i) => {
+                    const Icon = socialIcons[s.platform?.toLowerCase()] ?? Globe;
+                    return (
+                      <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                        className="p-2 rounded-full border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+                        aria-label={s.platform}
+                      >
+                        <Icon size={16} />
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+              {footer?.footerText && <p className="text-xs text-muted-foreground mb-1">{footer.footerText}</p>}
+              <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+                {footer?.supportLink && <a href={footer.supportLink} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Support</a>}
+                {footer?.privacyLink && <a href={footer.privacyLink} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Privacy</a>}
+                {footer?.termsLink && <a href={footer.termsLink} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Terms</a>}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">{footer?.copyright || `© ${new Date().getFullYear()} ${config.general?.siteName || "Medicology"}`}</p>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

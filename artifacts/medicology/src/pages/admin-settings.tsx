@@ -4,7 +4,7 @@ import {
   Settings, Palette, BookOpen, UserPlus, Bell, Shield, CreditCard,
   Database, Plug, Save, RotateCcw, Loader2, ChevronRight, Globe, LayoutDashboard,
   FileText, Type, Ruler, Flag, History, Sparkles, Play, Pause, Timer, GitBranch,
-  Trash2, Plus, X, Upload,
+  Trash2, Plus, X, Upload, Search, Link2, Mail, Download, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -115,6 +115,9 @@ const GROUPS: { id: SettingsGroup | "history" | "overrides"; label: string; icon
   { id: "payments", label: "Payments", icon: CreditCard, blurb: "Currency, provider and pricing policy." },
   { id: "storage", label: "Storage & Uploads", icon: Database, blurb: "Upload limits and allowed file types." },
   { id: "integrations", label: "Integrations", icon: Plug, blurb: "Analytics, SEO meta and custom head code." },
+  { id: "seo", label: "SEO", icon: Search, blurb: "Site title, meta, Open Graph, Twitter cards and robots." },
+  { id: "footer", label: "Footer & Social", icon: Link2, blurb: "Footer text, legal links and social platform links." },
+  { id: "email", label: "Email", icon: Mail, blurb: "SMTP provider, sender identity and delivery policy." },
   { id: "animations", label: "Animations", icon: Sparkles, blurb: "Platform-wide motion — always respects prefers-reduced-motion." },
   { id: "featureFlags", label: "Feature Flags", icon: Flag, blurb: "Toggle protected capabilities platform-wide (enforced server-side)." },
   { id: "examSettings", label: "Exam & QBank Defaults", icon: Timer, blurb: "Platform-wide exam behavior — question count, timing, marking, navigation." },
@@ -956,6 +959,155 @@ function StorageSection({ draft, set }: { draft: PlatformSettings; set: (patch: 
   );
 }
 
+function SeoSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["seo"]>) => void }) {
+  const s = draft.seo;
+  return (
+    <Card title="SEO" description="Search-engine and social-share metadata. Public and safe — no secrets.">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Site title" hint="Browser tab + search result title.">
+          <TextInput value={s.siteTitle} onChange={(v) => set({ siteTitle: v })} />
+        </Field>
+        <Field label="Canonical URL">
+          <TextInput value={s.canonicalUrl} onChange={(v) => set({ canonicalUrl: v })} placeholder="https://medicology.com/" />
+        </Field>
+      </div>
+      <Field label="Meta description" hint="Search result snippet.">
+        <textarea value={s.metaDescription} onChange={(e) => set({ metaDescription: e.target.value })} rows={3}
+          className="w-full rounded-lg border border-border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+      </Field>
+      <Field label="Keywords" hint="Comma separated.">
+        <TextInput value={s.keywords.join(', ')} onChange={(v) => set({ keywords: v.split(',').map((k) => k.trim()).filter(Boolean) })} />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="OG title">
+          <TextInput value={s.ogTitle} onChange={(v) => set({ ogTitle: v })} />
+        </Field>
+        <Field label="OG image URL">
+          <TextInput value={s.ogImage} onChange={(v) => set({ ogImage: v })} />
+        </Field>
+      </div>
+      <Field label="OG description">
+        <textarea value={s.ogDescription} onChange={(e) => set({ ogDescription: e.target.value })} rows={2}
+          className="w-full rounded-lg border border-border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Twitter card">
+          <SelectInput value={s.twitterCard} onChange={(v) => set({ twitterCard: v as any })}
+            options={[{ value: 'summary', label: 'Summary' }, { value: 'summary_large_image', label: 'Summary — large image' }]} />
+        </Field>
+        <Field label="Robots">
+          <SelectInput value={s.robots} onChange={(v) => set({ robots: v as any })}
+            options={[{ value: 'index,follow', label: 'Index + follow' }, { value: 'noindex,nofollow', label: 'No index' }]} />
+        </Field>
+      </div>
+    </Card>
+  );
+}
+
+function FooterSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["footer"]>) => void }) {
+  const f = draft.footer;
+  const setSocial = (i: number, patch: Partial<{ platform: string; url: string }>) => {
+    const socials = f.socials.map((s, idx) => (idx === i ? { ...s, ...patch } : s));
+    set({ socials });
+  };
+  return (
+    <Card title="Footer & Social" description="Footer text, legal links and social links. Only configured platforms render.">
+      <Field label="Footer text">
+        <TextInput value={f.footerText} onChange={(v) => set({ footerText: v })} />
+      </Field>
+      <Field label="Copyright">
+        <TextInput value={f.copyright} onChange={(v) => set({ copyright: v })} />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Support link"><TextInput value={f.supportLink} onChange={(v) => set({ supportLink: v })} /></Field>
+        <Field label="Privacy link"><TextInput value={f.privacyLink} onChange={(v) => set({ privacyLink: v })} /></Field>
+        <Field label="Terms link"><TextInput value={f.termsLink} onChange={(v) => set({ termsLink: v })} /></Field>
+        <Field label="Refund link"><TextInput value={f.refundLink} onChange={(v) => set({ refundLink: v })} /></Field>
+      </div>
+      <div className="pt-2">
+        <p className="mb-2 text-sm font-medium">Social links</p>
+        {f.socials.map((s, i) => (
+          <div key={i} className="mb-2 flex items-center gap-2">
+            <input className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm" value={s.platform} placeholder="instagram"
+              onChange={(e) => setSocial(i, { platform: e.target.value })} />
+            <input className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm" value={s.url} placeholder="https://…"
+              onChange={(e) => setSocial(i, { url: e.target.value })} />
+            <button onClick={() => set({ socials: f.socials.filter((_, idx) => idx !== i) })}
+              className="rounded-lg border border-border px-2 py-1.5 text-xs text-red-600">Remove</button>
+          </div>
+        ))}
+        <button onClick={() => set({ socials: [...f.socials, { platform: '', url: '' }] })}
+          className="mt-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:border-primary/40">
+          + Add social link
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+function EmailSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["email"]>) => void }) {
+  const e = draft.email;
+  return (
+    <Card title="Email" description="Sender identity, SMTP delivery and email policy. Secrets are never returned by the API.">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Delivery provider">
+          <select value={e.provider} onChange={(ev) => set({ provider: ev.target.value as any })}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="log">Log (dev — prints to console)</option>
+            <option value="smtp">SMTP</option>
+          </select>
+        </Field>
+        <Field label="Retry policy">
+          <select value={e.retryPolicy} onChange={(ev) => set({ retryPolicy: ev.target.value as any })}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="none">No retries</option>
+            <option value="once">Retry once</option>
+            <option value="thrice">Retry three times</option>
+          </select>
+        </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Sender name"><TextInput value={e.fromName} onChange={(v) => set({ fromName: v })} /></Field>
+        <Field label="Sender email"><TextInput value={e.fromEmail} onChange={(v) => set({ fromEmail: v })} /></Field>
+        <Field label="Reply-to"><TextInput value={e.replyTo} onChange={(v) => set({ replyTo: v })} /></Field>
+        <Field label="Email footer text"><TextInput value={e.footerText} onChange={(v) => set({ footerText: v })} /></Field>
+      </div>
+      {e.provider === "smtp" && (
+        <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4">
+          <p className="mb-3 text-sm font-semibold">SMTP server</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Host"><TextInput value={e.smtpHost} onChange={(v) => set({ smtpHost: v })} placeholder="smtp.example.com" /></Field>
+            <Field label="Port"><TextInput value={String(e.smtpPort)} onChange={(v) => set({ smtpPort: Number(v) || 587 })} /></Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Username"><TextInput value={e.smtpUser} onChange={(v) => set({ smtpUser: v })} /></Field>
+            <Field label="Password" hint={e.smtpPasswordSet ? "A password is configured. Leave blank to keep it." : "Not configured yet."}>
+              <TextInput type="password" value={e.smtpPassword ?? ""} onChange={(v) => set({ smtpPassword: v })} placeholder={e.smtpPasswordSet ? "••••••••" : "SMTP password"} />
+            </Field>
+          </div>
+          <label className="mt-2 inline-flex items-center gap-2 text-sm text-muted-foreground">
+            <input type="checkbox" checked={e.smtpSecure} onChange={(ev) => set({ smtpSecure: ev.target.checked })}
+              className="form-checkbox h-4 w-4 rounded border-border text-primary focus:ring-primary" />
+            Use TLS (SMTPS)
+          </label>
+        </div>
+      )}
+      <div className="mt-4 flex flex-wrap gap-6">
+        <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={e.unsubscribeEnabled} onChange={(ev) => set({ unsubscribeEnabled: ev.target.checked })}
+            className="form-checkbox h-4 w-4 rounded border-border text-primary focus:ring-primary" />
+          Append unsubscribe link
+        </label>
+        <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={e.trackingEnabled} onChange={(ev) => set({ trackingEnabled: ev.target.checked })}
+            className="form-checkbox h-4 w-4 rounded border-border text-primary focus:ring-primary" />
+          Open tracking
+        </label>
+      </div>
+    </Card>
+  );
+}
+
 function IntegrationsSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["integrations"]>) => void }) {
   const i = draft.integrations;
   return (
@@ -991,6 +1143,9 @@ function ActiveSection({ active, draft, setGroup }: {
     case "payments": return <PaymentsSection draft={draft} set={setGroup as any} />;
     case "storage": return <StorageSection draft={draft} set={setGroup as any} />;
     case "integrations": return <IntegrationsSection draft={draft} set={setGroup as any} />;
+    case "seo": return <SeoSection draft={draft} set={setGroup as any} />;
+    case "footer": return <FooterSection draft={draft} set={setGroup as any} />;
+    case "email": return <EmailSection draft={draft} set={setGroup as any} />;
     case "animations": return <AnimationsSection draft={draft} set={setGroup as any} />;
     case "featureFlags": return <FeatureFlagsSection draft={draft} set={setGroup as any} />;
     case "examSettings": return <ExamSettingsSection draft={draft} set={setGroup as any} />;
@@ -1012,6 +1167,70 @@ export default function AdminSettingsPage() {
   const [active, setActive] = useState<string>("general");
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importDiff, setImportDiff] = useState<Record<string, { old: any; new: any }> | null>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  const exportSettings = async () => {
+    try {
+      const res = await apiFetch("/api/admin/settings/export");
+      if (!res.ok) throw new Error("Export failed");
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `medicology-settings-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Exported", description: "Configuration snapshot downloaded (secrets excluded)." });
+    } catch (err) {
+      toast({ title: "Export failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    }
+  };
+
+  const onImportFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const snapshot = JSON.parse(text);
+      if (!snapshot?.settings) throw new Error("Not a Medicology settings snapshot");
+      const res = await apiFetch("/api/admin/settings/import?dryRun=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ snapshot }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Validation failed");
+      setImportDiff(data.diff ?? {});
+    } catch (err) {
+      toast({ title: "Import preview failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    }
+  };
+
+  const applyImport = async () => {
+    if (!importDiff || Object.keys(importDiff).length === 0) return;
+    setImporting(true);
+    try {
+      const file = fileRef.current?.files?.[0];
+      if (!file) throw new Error("File not found");
+      const snapshot = JSON.parse(await file.text());
+      const res = await apiFetch("/api/admin/settings/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ snapshot }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Import failed");
+      toast({ title: "Imported", description: `${data.applied} group(s) updated.` });
+      setImportDiff(null);
+      if (fileRef.current) fileRef.current.value = "";
+      await load();
+    } catch (err) {
+      toast({ title: "Import failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const load = async () => {
     try {
@@ -1120,6 +1339,16 @@ export default function AdminSettingsPage() {
               <p className="text-sm text-muted-foreground">{GROUPS.find((g) => g.id === active)?.blurb}</p>
             </div>
             <div className="flex shrink-0 gap-2">
+              <button onClick={() => void exportSettings()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50">
+                <Download size={14} /> Export
+              </button>
+              <button onClick={() => fileRef.current?.click()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50">
+                <Upload size={14} /> Import
+              </button>
+              <input ref={fileRef} type="file" accept=".json,application/json" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void onImportFile(f); }} />
               {active !== "history" && active !== "overrides" && (
                 <button onClick={() => void reset()} disabled={resetting}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 disabled:opacity-50">
@@ -1144,6 +1373,51 @@ export default function AdminSettingsPage() {
           )}
         </div>
       </div>
+
+      {/* Import confirmation with diff preview */}
+      {importDiff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setImportDiff(null)}>
+          <div className="w-full max-w-2xl max-h-[85vh] rounded-2xl bg-card shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div>
+                <p className="font-bold">Import configuration</p>
+                <p className="text-xs text-muted-foreground">Review what will change. Secrets are never imported.</p>
+              </div>
+              <button onClick={() => setImportDiff(null)} className="p-1.5 rounded-lg hover:bg-muted"><X size={16} /></button>
+            </div>
+            <div className="p-5 overflow-y-auto custom-scrollbar">
+              {Object.keys(importDiff).length === 0 ? (
+                <p className="text-sm text-muted-foreground">No changes — the snapshot matches current settings.</p>
+              ) : (
+                <div className="space-y-3">
+                  {Object.entries(importDiff).map(([group, d]) => (
+                    <div key={group} className="rounded-xl border border-border overflow-hidden">
+                      <p className="px-4 py-2 bg-muted/40 text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border">{group}</p>
+                      <div className="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
+                        <div className="p-3">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-red-500 mb-1">Current</p>
+                          <pre className="text-xs whitespace-pre-wrap break-all text-muted-foreground max-h-48 overflow-y-auto">{JSON.stringify(d.old, null, 2)}</pre>
+                        </div>
+                        <div className="p-3">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-green-600 mb-1">Imported</p>
+                          <pre className="text-xs whitespace-pre-wrap break-all text-muted-foreground max-h-48 overflow-y-auto">{JSON.stringify(d.new, null, 2)}</pre>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+              <button onClick={() => setImportDiff(null)} className="rounded-xl border border-border px-4 py-2 text-sm font-semibold">Cancel</button>
+              <button onClick={() => void applyImport()} disabled={importing || Object.keys(importDiff).length === 0}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-4 py-2 text-sm font-bold disabled:opacity-50">
+                {importing ? <Loader2 size={14} className="animate-spin" /> : <Check size={15} />} Apply import
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
