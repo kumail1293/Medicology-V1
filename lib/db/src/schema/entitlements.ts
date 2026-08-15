@@ -53,6 +53,10 @@ export const entitlementsTable = pgTable(
     orderRef: text("order_ref"),
     grantedBy: integer("granted_by").references(() => usersTable.id),
     metadata: jsonb("metadata").$type<Record<string, any>>(),
+    // Expiry-notification bookkeeping: the sweeper marks these so each user
+    // receives at most one expiring-reminder and one expired notice per grant.
+    expiringNotifiedAt: timestamp("expiring_notified_at"),
+    expiredNotifiedAt: timestamp("expired_notified_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [

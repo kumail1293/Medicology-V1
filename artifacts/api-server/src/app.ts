@@ -26,6 +26,8 @@ import { importRouter } from './routes/import.js';
 import { paymentsRouter } from './routes/payments.js';
 import { comingSoonRouter, comingSoonAdminRouter } from './routes/coming-soon.js';
 import { emailRouter } from './routes/email.js';
+import { seedEmailTemplates } from './utils/seed-email-templates.js';
+import { startEntitlementSweeper } from './utils/entitlement-sweeper.js';
 import { testConnection } from './db.js';
 import { errorHandler } from './utils/errors.js';
 import { rateLimit, startRateLimitCleanup } from './middleware/rateLimit.js';
@@ -101,8 +103,15 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting
-app.use(rateLimit(100, 15 * 60 * 1000)); // 100 requests per 15 minutes
+// Rate limiting — 100 requests per 15 minutes per path. The public settings
+// endpoint is whitelisted data fetched on every page mount (cached server-side),
+// so it gets a much higher allowance.
+const strictLimiter = rateLimit(100, 15 * 60 * 1000);
+const publicSettingsLimiter = rateLimit(1000, 15 * 60 * 1000);
+app.use((req: any, res: any, next: any) => {
+  if (req.path === '/api/settings/public') return publicSettingsLimiter(req, res, next);
+  return strictLimiter(req, res, next);
+});
 startRateLimitCleanup();
 
 // Health check
@@ -153,14 +162,26 @@ app.use((req: any, res: any) => {
 // Global error handling middleware (must be last)
 app.use(errorHandler as any);
 
+// Seed the default email template library on first boot (idempotent) and
+// start the entitlement-expiry notification sweeper.
 if (!process.env.VERCEL) {
-  testConnection().then(() => {
+  testConnection().then(async () => {
+    try {
+      const seeded = await seedEmailTemplates();
+      if (seeded > 0) console.log(`📧 Seeded ${seeded} default email templates`);
+    } catch (err: any) {
+      console.warn('Email template seeding skipped:', err.message);
+    }
+    startEntitlementSweeper();
     app.listen(PORT, () => {
       console.log(`✅ Medicology API running at http://localhost:${PORT}/api`);
     });
   });
 } else {
   testConnection();
+  try {
+    await seedEmailTemplates();
+  } catch { /* seeding is best-effort */ }
 }
 
 export default app;

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Megaphone, LayoutTemplate, Copy, CalendarClock } from 'lucide-react';
+import { Plus, Pencil, Trash2, Megaphone, LayoutTemplate, Copy, CalendarClock, Send } from 'lucide-react';
 import RichTextEditor from '@/components/RichTextEditor';
 
 interface AnnouncementItem {
@@ -218,6 +218,18 @@ export default function AdminAnnouncementsPage() {
     }
   };
 
+  const handleEmail = async (announcement: AnnouncementItem) => {
+    if (!window.confirm(`Email \"${announcement.title}\" to its audience? Sends use the announcement email template.`)) return;
+    try {
+      const response = await fetch(`/api/announcements/${announcement.id}/email`, { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to email announcement');
+      toast({ title: 'Email sent', description: `Queued for ${data.recipients} recipient(s). Check Send Logs under Email Templates.` });
+    } catch (error) {
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to email announcement', variant: 'destructive' });
+    }
+  };
+
   const handleDelete = async (announcementId: number) => {
     if (!window.confirm('Delete this announcement?')) return;
     try {
@@ -366,8 +378,9 @@ export default function AdminAnnouncementsPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => openEdit(announcement)} className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground"><Pencil size={16} /></button>
-                  <button onClick={() => void handleDelete(announcement.id)} className="rounded-lg border border-border p-2 text-muted-foreground hover:text-destructive"><Trash2 size={16} /></button>
+                  <button onClick={() => openEdit(announcement)} className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground" title="Edit"><Pencil size={16} /></button>
+                  <button onClick={() => void handleEmail(announcement)} className="rounded-lg border border-border p-2 text-muted-foreground hover:text-primary" title="Email to audience"><Send size={16} /></button>
+                  <button onClick={() => void handleDelete(announcement.id)} className="rounded-lg border border-border p-2 text-muted-foreground hover:text-destructive" title="Delete"><Trash2 size={16} /></button>
                 </div>
               </div>
             ))}

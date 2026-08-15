@@ -78,6 +78,13 @@
       "when": 1786794389477,
       "tag": "0010_damp_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786797234746,
+      "tag": "0011_round_cammi",
+      "breakpoints": true
     }
   ]
 }

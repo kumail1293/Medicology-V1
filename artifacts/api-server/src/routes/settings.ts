@@ -38,6 +38,29 @@ async function loadStored(): Promise<Record<string, any>> {
   return map;
 }
 
+// Short-TTL cache for the public config endpoint. The frontend fetches it on
+// every page mount, so without a cache the DB + rate limiter get hammered.
+// Public settings are whitelisted values only — safe to serve from cache.
+let publicCache: { payload: any; at: number } | null = null;
+const PUBLIC_CACHE_TTL_MS = 15_000;
+
+export function invalidatePublicSettingsCache() {
+  publicCache = null;
+}
+
+async function getPublicPayload() {
+  const now = Date.now();
+  if (publicCache && now - publicCache.at < PUBLIC_CACHE_TTL_MS) return publicCache.payload;
+  const stored = await loadStored();
+  const merged = mergeSettings(stored);
+  const payload = {
+    settings: publicSettings(merged),
+    maintenance: { enabled: !!(merged as any).security?.maintenanceMode },
+  };
+  publicCache = { payload, at: now };
+  return payload;
+}
+
 // GET /api/admin/settings — merged settings + defaults (for reset UI).
 settingsRouter.get('/admin/settings', authenticate, requireAdmin, async (req: any, res: any) => {
   try {
@@ -107,6 +130,7 @@ settingsRouter.put('/admin/settings', authenticate, requireAdmin, requirePermiss
     // Feature flags + maintenance mode gate live routes — drop their caches.
     invalidateFeatureFlagsCache();
     invalidateMaintenanceCache();
+    invalidatePublicSettingsCache();
 
     if (changed.length > 0) {
       await recordAudit({
@@ -217,6 +241,35 @@ settingsRouter.post('/admin/settings/import', authenticate, requireAdmin, requir
     invalidateFeatureFlagsCache();
     invalidateMaintenanceCache();
     res.json({ ok: true, applied: Object.keys(diff).length, groups: Object.keys(diff) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/settings/email/test — send a test email through the full
+// configured pipeline (SMTP or log provider) using the welcome template.
+settingsRouter.post('/admin/settings/email/test', authenticate, requireAdmin, requirePermission('settings.manage'), validateBody(z.object({ to: z.string().email().optional() })), async (req: any, res: any) => {
+  try {
+    const { sendTransactional } = await import('../utils/transactional-email.js');
+    const to = (req.validatedBody as any).to || 'test@medicology.local';
+    const result = await sendTransactional({
+      to,
+      slug: 'welcome',
+      data: {
+        'user.firstName': 'Test',
+        'user.name': 'Test User',
+        'platform.name': 'Medicology',
+        'platform.siteUrl': process.env.APP_BASE_URL || 'https://medicology.com',
+        'platform.supportEmail': 'support@medicology.com',
+        'currentDate': new Date().toLocaleDateString(),
+      },
+    });
+    await recordAudit({
+      actor: { id: req.user?.id, name: req.user?.name, email: req.user?.email },
+      action: 'settings.email_test', entityType: 'email_settings', entityId: 0, entityLabel: 'email',
+      summary: `Sent test email → ${to} (${result.status})`, ip: req.ip,
+    });
+    res.json({ result });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -585,12 +638,7 @@ settingsRouter.patch('/admin/settings/:section', authenticate, requireAdmin, req
 
 settingsRouter.get('/settings/public', async (_req: any, res: any) => {
   try {
-    const stored = await loadStored();
-    const merged = mergeSettings(stored);
-    res.json({
-      settings: publicSettings(merged),
-      maintenance: { enabled: !!(merged as any).security?.maintenanceMode },
-    });
+    res.json(await getPublicPayload());
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

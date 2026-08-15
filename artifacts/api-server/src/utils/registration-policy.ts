@@ -20,6 +20,7 @@ export interface RegistrationPolicyResult {
   ok: boolean;
   error?: string;
   status: number;
+  verificationRequired?: boolean;
 }
 
 export interface RegisterAttempt {
@@ -82,5 +83,5 @@ export async function checkRegistrationPolicy(attempt: RegisterAttempt): Promise
     }
   }
 
-  return { ok: true, status: 200 };
+  return { ok: true, status: 200, verificationRequired: Boolean(settings.registration.requireEmailVerification) };
 }

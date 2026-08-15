@@ -172,8 +172,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       provider: result.provider,
       error: result.error ?? null,
       requestedById: input.requestedById ?? null,
-    });
-    result.logId = Array.isArray(inserted) ? (inserted[0] as any)?.id : (inserted as any)?.id;
+    }).returning();
+    result.logId = (inserted[0] as any)?.id;
   } catch (err: any) {
     console.error('Failed to persist email log:', err.message);
   }

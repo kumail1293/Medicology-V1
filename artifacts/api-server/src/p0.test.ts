@@ -1394,7 +1394,7 @@ test('email: admin CRUD, publish, version bump, preview, test-send, logs', async
   const logs = await fetch(`${BASE}/admin/email/logs`, { headers: auth });
   const l = (await logs.json()) as any;
   assert.ok(l.logs.length >= 1, 'send logged');
-  assert.equal(l.logs[0].to, 'qa@test.com');
+  assert.ok(l.logs.some((row: any) => row.to === 'qa@test.com'), 'test send appears in logs');
 
   // variables endpoint
   const vars = await fetch(`${BASE}/admin/email/variables`, { headers: auth });
@@ -1591,4 +1591,100 @@ test('audit: logs are permission-gated (audit.view)', async () => {
   });
   const denied = await fetch(`${BASE}/admin/audit-logs`, { headers: { Authorization: `Bearer ${regData.token}` } });
   assert.equal(denied.status, 403, 'content_admin blocked from audit logs');
+});
+
+// ===========================================================================
+// Transactional email sends + seeded template library
+// ===========================================================================
+
+test('email: default template library seeds on boot and restores via API', async () => {
+  const admin = await adminLogin();
+  const auth = { Authorization: `Bearer ${admin}` };
+  const list = await fetch(`${BASE}/admin/email/templates`, { headers: auth });
+  const ld = (await list.json()) as any;
+  const slugs = (ld.templates ?? []).map((t: any) => t.slug);
+  for (const expected of ['welcome', 'password_reset', 'purchase_confirmation', 'entitlement_expiring', 'entitlement_expired', 'announcement', 'exam_result', 'security_alert']) {
+    assert.ok(slugs.includes(expected), `seeded template "${expected}" present`);
+  }
+  const seeded = ld.templates.find((t: any) => t.slug === 'welcome');
+  assert.equal(seeded.status, 'published', 'seeded templates are published');
+  assert.ok(Array.isArray(seeded.bodyBlocks) && seeded.bodyBlocks.length >= 3, 'welcome has a block body');
+  // Idempotent re-seed adds nothing new
+  const reseed = await fetch(`${BASE}/admin/email/templates/seed`, { method: 'POST', headers: auth });
+  const rs = (await reseed.json()) as any;
+  assert.equal(reseed.status, 200);
+  assert.equal(rs.created, 0, 're-seed is idempotent');
+  assert.ok(rs.total >= 15, 'library is comprehensive');
+});
+
+test('email: registration sends welcome + forgot-password mails reset link and resets password', async () => {
+  const email = `tx-${Date.now()}@test.com`;
+  await registerUser(email);
+  // Welcome email logged
+  const admin = await adminLogin();
+  const logs = await fetch(`${BASE}/admin/email/logs?limit=100`, { headers: { Authorization: `Bearer ${admin}` } });
+  const ld = (await logs.json()) as any;
+  const welcome = ld.logs.find((l: any) => l.to === email && String(l.subject).includes('Welcome'));
+  assert.ok(welcome, 'welcome email sent to new user');
+  assert.equal(welcome.status, 'sent');
+
+  // Forgot password → reset link emailed
+  const forgot = await fetch(`${BASE}/auth/forgot-password`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  assert.equal(forgot.status, 200);
+  // Unknown email: same 200 (no account enumeration)
+  const ghost = await fetch(`${BASE}/auth/forgot-password`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'nobody-' + Date.now() + '@test.com' }),
+  });
+  assert.equal(ghost.status, 200);
+
+  const logs2 = await fetch(`${BASE}/admin/email/logs?limit=100`, { headers: { Authorization: `Bearer ${admin}` } });
+  const ld2 = (await logs2.json()) as any;
+  const resetMail = ld2.logs.find((l: any) => l.to === email && String(l.subject).includes('Reset your password'));
+  assert.ok(resetMail, 'password reset email sent');
+
+  // Extract the token from the logged subject/body is not available; instead
+  // generate one directly through the same path used by the route.
+  const { db } = await import('../src/db.js');
+  const { passwordResetTokensTable, usersTable } = await import('@workspace/db');
+  const { eq } = await import('../src/utils/drizzle.js');
+  const users = await db.select().from(usersTable).where(eq(usersTable.email, email));
+  assert.ok(users.length === 1);
+  const tokens = await db.select().from(passwordResetTokensTable);
+  const myToken = (tokens as any[]).filter((t: any) => t.userId === users[0].id).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  assert.ok(myToken, 'reset token row created');
+
+  // Reset with the token works; bad token rejected
+  const reset = await fetch(`${BASE}/auth/reset-password`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: myToken.token, newPassword: 'NewPass123' }),
+  });
+  assert.equal(reset.status, 200, 'password reset succeeds');
+  const reuse = await fetch(`${BASE}/auth/reset-password`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: myToken.token, newPassword: 'NewPass456' }),
+  });
+  assert.equal(reuse.status, 400, 'reset token cannot be reused');
+  const loginOld = await fetch(`${BASE}/auth/login`, json({}, { email, password: 'TestPass123' }));
+  assert.equal(loginOld.status, 401, 'old password no longer works');
+  const loginNew = await fetch(`${BASE}/auth/login`, json({}, { email, password: 'NewPass123' }));
+  assert.equal(loginNew.status, 200, 'new password works');
+});
+
+test('email: announcement can be emailed to its audience', async () => {
+  const admin = await adminLogin();
+  const auth = { Authorization: `Bearer ${admin}` };
+  const created = await fetch(`${BASE}/announcements`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'banner', title: 'QA Exam Notice', content: '<p>Mock exams are live.</p>', targetRoles: 'all', isActive: true }),
+  });
+  const ann = (await created.json()) as any;
+  assert.equal(created.status, 201, JSON.stringify(ann).slice(0, 150));
+  const sent = await fetch(`${BASE}/announcements/${ann.id}/email`, { method: 'POST', headers: auth });
+  const sd = (await sent.json()) as any;
+  assert.equal(sent.status, 200, JSON.stringify(sd).slice(0, 150));
+  assert.ok(sd.recipients >= 1, 'announcement emailed to audience');
 });

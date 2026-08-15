@@ -4,7 +4,7 @@ import {
   Settings, Palette, BookOpen, UserPlus, Bell, Shield, CreditCard,
   Database, Plug, Save, RotateCcw, Loader2, ChevronRight, Globe, LayoutDashboard,
   FileText, Type, Ruler, Flag, History, Sparkles, Play, Pause, Timer, GitBranch,
-  Trash2, Plus, X, Upload, Search, Link2, Mail, Download, Check,
+  Trash2, Plus, X, Upload, Search, Link2, Mail, Download, Check, Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -1047,6 +1047,27 @@ function FooterSection({ draft, set }: { draft: PlatformSettings; set: (patch: P
 
 function EmailSection({ draft, set }: { draft: PlatformSettings; set: (patch: Partial<PlatformSettings["email"]>) => void }) {
   const e = draft.email;
+  const { toast } = useToast();
+  const [testTo, setTestTo] = useState("");
+  const [testing, setTesting] = useState(false);
+  const sendTest = async () => {
+    if (!testTo.includes("@")) { toast({ title: "Enter a valid email", variant: "destructive" }); return; }
+    setTesting(true);
+    try {
+      const res = await apiFetch("/api/admin/settings/email/test", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testTo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Test send failed");
+      toast({ title: data.result.status === "sent" ? "Test email sent" : "Send failed",
+        description: data.result.reason ?? `Provider: ${data.result.status}` });
+    } catch (err: any) {
+      toast({ title: "Test failed", description: err.message, variant: "destructive" });
+    } finally {
+      setTesting(false);
+    }
+  };
   return (
     <Card title="Email" description="Sender identity, SMTP delivery and email policy. Secrets are never returned by the API.">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -1103,6 +1124,17 @@ function EmailSection({ draft, set }: { draft: PlatformSettings; set: (patch: Pa
             className="form-checkbox h-4 w-4 rounded border-border text-primary focus:ring-primary" />
           Open tracking
         </label>
+      </div>
+      <div className="mt-5 rounded-xl border border-border bg-muted/30 p-4">
+        <p className="mb-1 text-sm font-semibold">Send a test email</p>
+        <p className="mb-3 text-xs text-muted-foreground">Verifies the full pipeline (template → renderer → {e.provider === "smtp" ? "SMTP" : "log provider"}). Uses the Welcome template.</p>
+        <div className="flex max-w-md gap-2">
+          <TextInput value={testTo} onChange={setTestTo} placeholder="you@example.com" />
+          <button onClick={() => void sendTest()} disabled={testing}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+            {testing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send test
+          </button>
+        </div>
       </div>
     </Card>
   );

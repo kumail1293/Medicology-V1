@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Mail, ArrowLeft, Plus, Trash2, Copy, ChevronUp, ChevronDown, Monitor, Tablet, Smartphone,
-  Save, Send, Eye, Rocket, Loader2, Search, X, Clock, FileText,
+  Save, Send, Eye, Rocket, Loader2, Search, X, Clock, FileText, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   fetchEmailTemplates, createEmailTemplate, updateEmailTemplate, setTemplateStatus,
   restoreTemplateVersion, renderTemplatePreview, sendTestEmail, fetchEmailVariables,
-  fetchEmailLogs, blankBlock, BLOCK_PALETTE, uid,
+  fetchEmailLogs, seedEmailTemplates, blankBlock, BLOCK_PALETTE, uid,
   EmailBlock, EmailTemplate,
 } from "@/lib/emailTemplates";
 
@@ -44,6 +44,17 @@ export default function AdminEmail() {
     [templates, search]
   );
 
+  const handleRestore = async () => {
+    if (!window.confirm("Restore the default template library? Existing custom templates are kept; only missing slugs are added.")) return;
+    try {
+      const r = await seedEmailTemplates();
+      toast({ title: "Templates restored", description: `${r.created} added — ${r.total} total.` });
+      await load();
+    } catch (e: any) {
+      toast({ title: "Restore failed", description: e.message, variant: "destructive" });
+    }
+  };
+
   const handleCreate = async () => {
     if (!newName.trim()) return;
     try {
@@ -76,6 +87,10 @@ export default function AdminEmail() {
           <p className="text-sm text-muted-foreground mt-1">Visual block builder — draft, preview, test and publish.</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={handleRestore}
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold hover:border-primary/40 transition-colors">
+            <RotateCcw size={15} /> Restore defaults
+          </button>
           <button onClick={() => setShowLogs(!showLogs)}
             className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold hover:border-primary/40 transition-colors">
             <Clock size={15} /> Send Logs

@@ -106,6 +106,12 @@ export async function fetchEmailVariables(): Promise<{ variables: string[]; samp
   return res.json();
 }
 
+export async function seedEmailTemplates(): Promise<{ created: number; total: number }> {
+  const res = await apiFetch("/api/admin/email/templates/seed", { method: "POST" });
+  if (!res.ok) throw new Error("Failed to restore templates");
+  return res.json();
+}
+
 export async function fetchEmailLogs(limit = 50): Promise<any[]> {
   const res = await apiFetch(`/api/admin/email/logs?limit=${limit}`);
   if (!res.ok) return [];

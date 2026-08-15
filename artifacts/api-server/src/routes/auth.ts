@@ -6,7 +6,8 @@ import { eq } from '../utils/drizzle.js';
 import { generateToken, authenticate, AuthRequest } from '../middleware/auth.js';
 import { checkRegistrationPolicy } from '../utils/registration-policy.js';
 import { createSession, listSessions, revokeSession, revokeAllSessions, loginHistory } from '../utils/sessions.js';
-import { securityEventsTable } from '@workspace/db';
+import { queueTransactional } from '../utils/transactional-email.js';
+import { securityEventsTable, passwordResetTokensTable } from '@workspace/db';
 
 export const authRouter = Router();
 
@@ -53,6 +54,36 @@ authRouter.post('/register', async (req, res: any) => {
     console.log('User created:', user);
     const token = generateToken({ id: user.id, email: user.email, isAdmin: user.isAdmin, role: user.role });
     await createSession({ userId: user.id, token, userAgent: req.headers['user-agent'], ip: req.ip });
+
+    // Welcome email (transactional, best-effort) + verification email when
+    // the platform requires email verification.
+    queueTransactional({
+      to: user.email,
+      slug: 'welcome',
+      userId: user.id,
+      data: {
+        'user.firstName': String(user.name).split(' ')[0],
+        'user.name': user.name,
+        'platform.name': 'Medicology',
+        'platform.siteUrl': process.env.APP_BASE_URL || 'https://medicology.com',
+        'platform.supportEmail': 'support@medicology.com',
+        'currentDate': new Date().toLocaleDateString(),
+      },
+    });
+    if (policy.verificationRequired) {
+      queueTransactional({
+        to: user.email,
+        slug: 'email_verification',
+        userId: user.id,
+        data: {
+          'user.firstName': String(user.name).split(' ')[0],
+          'user.email': user.email,
+          'verificationUrl': `${process.env.APP_BASE_URL || 'https://medicology.com'}/verify-email?userId=${user.id}`,
+          'platform.name': 'Medicology',
+        },
+      });
+    }
+
     return res.status(201).json({ token, user: { ...user, passwordHash: undefined } });
   } catch (err: any) {
     console.error('Error in register:', err);
@@ -150,6 +181,74 @@ authRouter.put('/me/password', authenticate, async (req: AuthRequest, res: any) 
     return res.status(500).json({ error: err.message });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Password reset — implements the endpoints the frontend already calls.
+// The reset link is emailed via the password_reset template.
+// ---------------------------------------------------------------------------
+
+// POST /api/auth/forgot-password
+async function generateResetToken(userId: number): Promise<string> {
+  const { randomBytes } = await import('node:crypto');
+  const token = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 min
+  await db.insert(passwordResetTokensTable).values({ userId, token, expiresAt });
+  return token;
+}
+
+authRouter.post('/forgot-password', async (req: any, res: any) => {
+  try {
+    const email = String(req.body?.email ?? '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
+    if (!user) {
+      // Never reveal whether an account exists.
+      return res.json({ success: true });
+    }
+    const token = await generateResetToken(user.id);
+    const baseUrl = process.env.APP_BASE_URL || 'https://medicology.com';
+    queueTransactional({
+      to: user.email,
+      slug: 'password_reset',
+      userId: user.id,
+      data: {
+        'user.firstName': String(user.name).split(' ')[0],
+        'user.email': user.email,
+        'resetUrl': `${baseUrl}/reset-password?token=${token}`,
+        'platform.name': 'Medicology',
+        'platform.supportEmail': 'support@medicology.com',
+      },
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/reset-password
+async function resetPassword(req: any, res: any) {
+  const { token, newPassword } = req.body ?? {};
+  if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
+  if (String(newPassword).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const [row] = await db.select().from(passwordResetTokensTable).where(eq(passwordResetTokensTable.token, token));
+  if (!row) return res.status(400).json({ error: 'Invalid or expired reset token' });
+  if ((row as any).used) return res.status(400).json({ error: 'This reset link has already been used' });
+  if (new Date((row as any).expiresAt).getTime() < Date.now()) {
+    return res.status(400).json({ error: 'This reset link has expired — please request a new one' });
+  }
+  const passwordHash = await bcrypt.hash(String(newPassword), 10);
+  await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, (row as any).userId));
+  await db.update(passwordResetTokensTable).set({ used: true }).where(eq(passwordResetTokensTable.id, row.id));
+  // Revoke every session so old tokens die.
+  const { revokeAllSessions: revokeAll } = await import('../utils/sessions.js');
+  await revokeAll((row as any).userId);
+  try {
+    await db.insert(securityEventsTable).values({ userId: (row as any).userId, type: 'password_reset', userAgent: req.headers['user-agent'] ?? null, metadata: { ip: req.ip ?? null } });
+  } catch { /* best-effort */ }
+  res.json({ success: true });
+}
+
+authRouter.post('/reset-password', resetPassword);
 
 // ---------------------------------------------------------------------------
 // Account settings (P0.19) — sessions, security history, prefs, data export,

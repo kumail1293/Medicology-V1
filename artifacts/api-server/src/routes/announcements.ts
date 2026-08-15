@@ -3,6 +3,8 @@ import { db } from '../db.js';
 import { announcementsTable, announcementTemplatesTable } from '@workspace/db';
 import { eq, desc } from '../utils/drizzle.js';
 import { authenticate, requireAdmin, requirePermission, AuthRequest } from '../middleware/auth.js';
+import { queueTransactional } from '../utils/transactional-email.js';
+import { usersTable } from '@workspace/db';
 import { recordAudit } from '../utils/audit.js';
 
 export const announcementsRouter = Router();
@@ -279,6 +281,53 @@ announcementsRouter.put('/:id', authenticate, requireAdmin, requirePermission('a
       ip: req.ip,
     });
     res.json({ ...announcement });
+  } catch (err: any) { return res.status(500).json({ error: err.message }); }
+});
+
+// Admin: email an announcement to its audience using the `announcement`
+// email template. Bounded to the first 500 matching users; best-effort sends.
+announcementsRouter.post('/:id/email', authenticate, requireAdmin, requirePermission('announcements.manage'), async (req, res: any) => {
+  try {
+    const [announcement] = await db.select().from(announcementsTable).where(eq(announcementsTable.id, Number(req.params.id)));
+    if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
+
+    const all = await db.select().from(usersTable);
+    const roles = announcement.targetRoles === 'all' ? null : String(announcement.targetRoles).split(',').map((r) => r.trim());
+    const recipients = (all as any[])
+      .filter((u) => !u.deletedAt && (roles === null || roles.includes(u.role)))
+      .slice(0, 500);
+
+    const baseUrl = process.env.APP_BASE_URL || 'https://medicology.com';
+    for (const user of recipients) {
+      queueTransactional({
+        to: user.email,
+        slug: 'announcement',
+        userId: user.id,
+        data: {
+          'user.firstName': String(user.name).split(' ')[0],
+          'announcement.title': announcement.title,
+          'announcement.subtitle': announcement.buttonText ?? 'New update from Medicology',
+          'announcement.body': String(announcement.content).replace(/<[^>]+>/g, ' ').slice(0, 600),
+          'announcement.ctaLabel': announcement.buttonText ?? 'Learn more',
+          'announcement.ctaUrl': announcement.buttonUrl ?? baseUrl,
+          'platform.name': 'Medicology',
+          'platform.siteUrl': baseUrl,
+        },
+      });
+    }
+
+    await recordAudit({
+      actor: actorOf(req),
+      action: 'announcement.email',
+      entityType: 'announcement',
+      entityId: announcement.id,
+      entityLabel: announcement.title,
+      summary: `Emailed announcement "${announcement.title}" to ${recipients.length} recipient(s)`,
+      newValues: { recipients: recipients.length },
+      ip: req.ip,
+    });
+
+    res.json({ success: true, recipients: recipients.length });
   } catch (err: any) { return res.status(500).json({ error: err.message }); }
 });
 

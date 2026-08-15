@@ -63,7 +63,7 @@ tests) — see commit history for the audit trail:
 | Audit logging + viewer | `[COMPLETED]` | actor, action, entity, old/new diff, IP; secrets never logged; Admin → Audit Logs viewer with filters + diff |
 | Granular RBAC | `[COMPLETED]` | role → permission matrix, `requirePermission` on sensitive routes, permission-aware nav |
 | Configuration registry (per-key metadata) | `[COMPLETED]` | per-key metadata (group/type/default/validation/scopes/public/audit) + `/admin/settings/registry` |
-| Email infrastructure + template builder | `[COMPLETED]` | SMTP/log mailer, secret-safe storage, DB templates with versions, visual block builder, device preview, test-send, send logs |
+| Email infrastructure + template builder | `[COMPLETED]` | SMTP/log mailer, secret-safe storage, DB templates with versions, visual block builder, device preview, test-send, send logs, **transactional sends** (welcome, verification, password reset, purchase, entitlement expiry, announcements) + 17 seeded templates |
 | Account configuration | `[COMPLETED]` | profile, password, sessions (track/revoke/revoke-all, middleware-enforced), login history, notification prefs, data export, deletion |
 | Registration enforcement audit | `[COMPLETED]` | open/closed, allowed domains, invite-only, password policy — enforced server-side on register |
 | SEO / footer-social groups | `[COMPLETED]` | dedicated groups, public exposure, applied via `usePlatformConfig` (SEO meta + footer/socials) |
@@ -75,12 +75,14 @@ Database migrations (all additive, backward compatible):
 `0002` flashcard decks+cards · `0003` app_settings · `0004` question
 types + structured explanations · `0005` announcement templates ·
 `0006` media library · `0007` settings overrides · `0008` coming soon ·
-`0009` email templates + logs · `0010` user sessions + notification prefs.
+`0009` email templates + logs · `0010` user sessions + notification
+prefs · `0011` entitlement `emailNotifiedAt` (transactional expiry emails).
 
-Tests: 36 integration tests (settings precedence, overrides, imports,
+Tests: 39 integration tests (settings precedence, overrides, imports,
 media, coming soon, RBAC, email templates/renderer/secret handling,
-sessions/revocation, export/import, audit gating), backend + frontend
-typecheck, production build, 12-check browser QA — all green.
+sessions/revocation, export/import, audit gating, transactional sends,
+template seeding, forgot/reset password, announcement email), backend +
+frontend typecheck, production build, 9-check browser QA — all green.
 
 ------------------------------------------------------------------------
 
@@ -198,21 +200,32 @@ Configuration registry `[IN PROGRESS]` (Phase 1):
     controls, component styles (radius/shadow/button/card), favicon/OG
     image upload, and a live branding preview panel.
 
-## P0.15 Email infrastructure `[PLANNED]`
+## P0.15 Email infrastructure `[COMPLETED]`
 
--   SMTP/provider configuration, sender/reply-to, domain, footer,
-    unsubscribe, tracking, test email, queue, delivery status, retry
-    policy.
--   Secrets encrypted and never returned to the UI.
+-   SMTP/log provider configuration, sender/reply-to, footer,
+    unsubscribe, tracking, retry policy, test email.
+-   SMTP password stored under a secret key, never returned by the API
+    (only an `smtpPasswordSet` flag) — no secrets in the UI.
+-   Mailer (`mailer.ts`) reads effective settings + secret; `email_logs`
+    records every send (template, recipient, status, provider response).
+-   **Transactional sends wired** (best-effort, non-blocking queue):
+    welcome + verification on register, forgot/reset password (new
+    endpoints), purchase confirmation on payment, entitlement expiring /
+    expired sweeper (hourly + on-boot), announcement → email broadcast.
+-   **17 seeded templates** (`seed-email-templates.ts`) covering every
+    scenario; Admin → Email Templates → Restore defaults re-seeds.
 
-## P0.16 Email template builder `[PLANNED]`
+## P0.16 Email template builder `[COMPLETED]`
 
 -   DB-driven templates (welcome, verification, password reset, purchase,
     entitlement events, waitlist, results, announcements, security,
     custom) with subject/preheader/body/version/audience/language.
--   Visual drag-and-drop block editor with desktop/tablet/mobile preview;
-    sanitized HTML output; variable picker with validation; draft/
-    published/archived + version compare/restore.
+-   Visual block editor (palette → canvas → properties; 13 block types:
+    heading, text, image, button, divider, spacer, columns, social links,
+    QBank card, result summary, footer, unsubscribe, custom HTML) with
+    desktop/tablet/mobile preview; strict sanitized HTML output;
+    variable picker (`{{user.name}}` etc., unknown vars render empty);
+    draft/published/archived + version history/compare/restore.
 
 ## P0.17 Announcement builder `[COMPLETED]`
 
@@ -230,20 +243,24 @@ Configuration registry `[IN PROGRESS]` (Phase 1):
 -   Scope-aware (platform/country/exam/program/university/year/subject/
     qbank/user) via the overrides engine; audited.
 
-## P0.19 Account configuration `[PLANNED]`
+## P0.19 Account configuration `[COMPLETED]`
 
--   Student-facing: profile, security, password, email, sessions,
-    devices, notifications, appearance, language, study/exam
-    preferences, privacy, data export, account deletion.
--   Security: active sessions, revoke, login history, suspicious-login
-    notifications. Never expose sensitive auth data.
+-   Student-facing `/settings`: Appearance | Profile | Security |
+    Notifications | Privacy & Data tabs.
+-   Security: per-login sessions tracked (unique `jti` per token),
+    listed, individually revoked or revoke-all (current session kept),
+    **enforced in the auth middleware** — a revoked token 401s
+    everywhere; login history from `security_events`; JSON data export;
+    anonymizing account deletion; server-backed notification prefs.
 
-## P0.20 Registration controls `[PARTIAL]`
+## P0.20 Registration controls `[COMPLETED]`
 
--   Settings exist (enabled, email verification, allowed domains,
-    password policy, invite-only, maintenance restrictions).
--   Remaining: complete server-side enforcement of every rule +
-    student verification + duplicate-account policy.
+-   `registration-policy.ts` enforced server-side on `/auth/register`:
+    open/closed, allowed email domains, invite-only mode, password
+    policy — never trust the frontend.
+-   Email verification flow (when enabled) sends a verification email;
+    `forgot-password` / `reset-password` endpoints implemented with
+    email delivery.
 
 ## P0.21 Maintenance mode `[COMPLETED]`
 
@@ -251,25 +268,29 @@ Configuration registry `[IN PROGRESS]` (Phase 1):
     maintenance page; configurable title/message/image/ETA/support
     contact.
 
-## P0.22 Notification configuration `[PARTIAL]`
+## P0.22 Notification configuration `[COMPLETED]`
 
--   Settings group exists (in-app/email defaults).
--   Remaining (Phase 21): per-user notification preferences, event →
-    channel routing, future push/SMS.
+-   Settings group exists (in-app/email defaults) + per-user
+    notification preferences (server-backed, saved on the user row).
+-   Event → email channel routing live via transactional emails
+    (welcome, verification, password reset, purchase, entitlement
+    expiring/expired, announcements). Future push/SMS: P7.
 
-## P0.23 SEO `[PARTIAL]`
+## P0.23 SEO `[COMPLETED]`
 
--   Title/description/OG basics in the general group.
--   Remaining (Phase 22): dedicated SEO group (OG image, Twitter cards,
-    robots, canonical, structured data) with safe injection rules.
+-   Dedicated SEO group (site title, meta description, keywords, OG
+    title/description/image, robots, canonical URL) exposed publicly and
+    applied to the document via `usePlatformConfig`; footer/social group
+    renders only configured links.
 
-## P0.24 Audit & security `[PARTIAL]`
+## P0.24 Audit & security `[COMPLETED]`
 
--   Audit logging `[COMPLETED]` (actor, entity, diff, IP; secrets never
-    logged).
--   Remaining: admin audit viewer (filters: date/actor/entity/action/
-    scope), configuration history UI with diff + restore, and a formal
-    security audit pass (Phase 27).
+-   Audit logging (actor, entity, diff, IP; secrets never logged) +
+    Admin → Audit Logs viewer (`audit.view`-gated) with action/entity
+    filters and before/after diff.
+-   Settings export (secrets stripped) + validated import with dry-run
+    diff preview, all audited; admin Ctrl+K command palette.
+-   Formal security audit pass remains a standing Phase 27 item.
 
 ## P0.25 Testing `[PARTIAL]`
 

@@ -181,6 +181,40 @@ export declare const entitlementsTable: import("drizzle-orm/pg-core").PgTableWit
         }, {}, {
             $type: Record<string, any>;
         }>;
+        expiringNotifiedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "expiring_notified_at";
+            tableName: "entitlements";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        expiredNotifiedAt: import("drizzle-orm/pg-core").PgColumn<{
+            name: "expired_notified_at";
+            tableName: "entitlements";
+            dataType: "date";
+            columnType: "PgTimestamp";
+            data: Date;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createdAt: import("drizzle-orm/pg-core").PgColumn<{
             name: "created_at";
             tableName: "entitlements";

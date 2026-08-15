@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { db } from '../db.js';
-import { paymentOrdersTable } from '@workspace/db';
+import { paymentOrdersTable, usersTable } from '@workspace/db';
 import { eq, and } from '../utils/drizzle.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { findQbankBySlug, grantEntitlement } from '../utils/entitlements.js';
 import { getPaymentProvider } from '../lib/payment-providers.js';
 import { recordAudit } from '../utils/audit.js';
+import { queueTransactional } from '../utils/transactional-email.js';
 import { requireFeature } from '../utils/feature-flags.js';
 
 export const paymentsRouter = Router();
@@ -205,6 +206,46 @@ paymentsRouter.post('/verify', authenticate, async (req: AuthRequest, res: any) 
       newValues: { status: 'paid', qbankSlug: qbank.slug, entitlementId: entitlement.id },
       ip: req.ip,
     });
+
+    // Transactional emails — purchase confirmation + entitlement activated.
+    if (created) {
+      const buyer = await db.select().from(usersTable).where(eq(usersTable.id, order.userId));
+      const firstName = buyer[0]?.name ? String(buyer[0].name).split(' ')[0] : 'there';
+      const buyerEmail = buyer[0]?.email;
+      if (buyerEmail) {
+        queueTransactional({
+          to: buyerEmail,
+          slug: 'purchase_confirmation',
+          userId: order.userId,
+          data: {
+            'user.firstName': firstName,
+            'qbank.name': qbank.name,
+            'qbank.price': qbank.price ? String(qbank.price) : '',
+            'order.id': orderId,
+            'order.amount': qbank.price ? String(qbank.price) : '',
+            'entitlement.expiryDate': entitlement.expiresAt
+              ? new Date(entitlement.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+              : 'Lifetime access',
+            'platform.name': 'Medicology',
+            'platform.siteUrl': process.env.APP_BASE_URL || 'https://medicology.com',
+          },
+        });
+        queueTransactional({
+          to: buyerEmail,
+          slug: 'entitlement_activated',
+          userId: order.userId,
+          data: {
+            'user.firstName': firstName,
+            'qbank.name': qbank.name,
+            'entitlement.expiryDate': entitlement.expiresAt
+              ? new Date(entitlement.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+              : 'Lifetime access',
+            'platform.name': 'Medicology',
+            'platform.siteUrl': process.env.APP_BASE_URL || 'https://medicology.com',
+          },
+        });
+      }
+    }
 
     res.json({
       verified: true,

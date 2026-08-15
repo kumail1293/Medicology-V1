@@ -7,6 +7,7 @@ import { validateBody } from '../middleware/validation.js';
 import { z } from 'zod';
 import { EMAIL_VARIABLES, renderEmail, type EmailBlock } from '../utils/email-renderer.js';
 import { sendEmail, getEmailLogs } from '../utils/mailer.js';
+import { seedEmailTemplates } from '../utils/seed-email-templates.js';
 import { recordAudit } from '../utils/audit.js';
 
 export const emailRouter = Router();
@@ -66,8 +67,8 @@ emailRouter.post('/templates', authenticate, requireAdmin, requirePermission('em
       versions: [],
       createdById: req.user?.id ?? null,
       updatedById: req.user?.id ?? null,
-    });
-    const id = Array.isArray(inserted) ? (inserted[0] as any)?.id : (inserted as any)?.id;
+    }).returning();
+    const id = (inserted[0] as any)?.id;
     const row = await db.select().from(emailTemplatesTable).where(eq(emailTemplatesTable.id, id));
     await recordAudit({
       actor: actorOf(req), action: 'email_template.create', entityType: 'email_template',
@@ -248,6 +249,24 @@ emailRouter.post('/templates/:id/test', authenticate, requireAdmin, requirePermi
       ip: req.ip,
     });
     res.json({ result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/email/templates/seed — restore the default library
+// (idempotent: only missing slugs are inserted unless ?force=1).
+emailRouter.post('/templates/seed', authenticate, requireAdmin, requirePermission('email.manage'), async (req: any, res: any) => {
+  try {
+    const force = String(req.query.force) === '1';
+    const created = await seedEmailTemplates(force);
+    const rows = await db.select().from(emailTemplatesTable);
+    await recordAudit({
+      actor: actorOf(req), action: 'email_template.seed', entityType: 'email_template',
+      entityId: 0, entityLabel: 'library',
+      summary: `Restored email template library (${created} added, ${rows.length} total)`, ip: req.ip,
+    });
+    res.json({ created, total: rows.length });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
