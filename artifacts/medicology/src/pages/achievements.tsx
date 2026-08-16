@@ -147,7 +147,7 @@ function ShareModal({ achievement, onClose }: { achievement: Achievement; onClos
           <div className="font-extrabold text-lg">{achievement.title}</div>
           <div className="text-sm text-muted-foreground mt-0.5">{achievement.description}</div>
           {achievement.value && <div className="text-xs font-semibold mt-2 opacity-70">{achievement.value}</div>}
-          <div className="text-xs text-primary font-bold mt-3">medicology.pk</div>
+          <div className="text-xs text-primary font-bold mt-3">medicology.net</div>
         </div>
 
         {/* Share text */}
@@ -174,7 +174,7 @@ function ShareModal({ achievement, onClose }: { achievement: Achievement; onClos
             <MessageCircle size={15} /> WhatsApp
           </a>
           <a
-            href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://medicology.pk")}&summary=${encoded}`}
+            href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent("https://medicology.net")}&summary=${encoded}`}
             target="_blank"
             rel="noreferrer"
             className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#0A66C2]/10 text-[#0A66C2] hover:bg-[#0A66C2]/20 text-sm font-semibold transition-colors border border-[#0A66C2]/30"

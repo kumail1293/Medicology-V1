@@ -24,7 +24,6 @@ import {
   Eye,
   BookOpen,
   Calendar,
-  ExternalLink,
   CreditCard,
   Command,
   User,
@@ -43,137 +42,11 @@ export const PageTransition = ({ children, className = "" }: { children: React.R
   </motion.div>
 );
 
-interface Announcement {
-  id: number;
-  type: 'popup' | 'banner' | 'ticker';
-  title: string;
-  content: string;
-  buttonText?: string | null;
-  buttonUrl?: string | null;
-}
-
-function useAnnouncements() {
-  const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
-  React.useEffect(() => {
-    const token = localStorage.getItem('medicology_token');
-    if (!token) return;
-    fetch('/api/announcements/active', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.announcements) setAnnouncements(d.announcements); })
-      .catch(() => {});
-  }, []);
-  return announcements;
-}
-
-function PopupAnnouncement({ ann, onClose }: { ann: Announcement; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <motion.div
-        initial={{ scale: 0.85, opacity: 0, y: 30 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.85, opacity: 0, y: 30 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className="bg-card border border-border/50 rounded-3xl shadow-lg max-w-md w-full p-8"
-      >
-        <div className="flex items-start justify-between mb-4">
-          <h2 className="text-lg font-bold text-foreground pr-4 leading-tight">{ann.title}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg p-1.5 shrink-0 transition-all duration-200">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="text-sm text-muted-foreground leading-relaxed mb-6">{ann.content}</p>
-        <div className="flex gap-3">
-          {ann.buttonText && ann.buttonUrl && (
-            <a
-              href={ann.buttonUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground py-2.5 rounded-xl text-sm font-bold hover:shadow-lg transition-all duration-200 btn-press"
-            >
-              {ann.buttonText} <ExternalLink size={14} />
-            </a>
-          )}
-          <button
-            onClick={onClose}
-            className="flex-1 bg-muted/80 text-foreground py-2.5 rounded-xl text-sm font-semibold hover:bg-muted transition-colors duration-200 btn-press"
-          >
-            Dismiss
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-function BannerAnnouncement({ ann, onClose }: { ann: Announcement; onClose: () => void }) {
-  return (
-    <div className="bg-gradient-to-r from-primary to-primary/90 text-primary-foreground px-4 py-3 flex items-center justify-between gap-4 text-sm shadow-md border-b border-primary/30">
-      <div className="flex-1 min-w-0">
-        <span className="font-bold mr-2">{ann.title}</span>
-        <span className="opacity-95 text-xs">{ann.content}</span>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {ann.buttonText && ann.buttonUrl && (
-          <a
-            href={ann.buttonUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-primary-foreground/20 hover:bg-primary-foreground/30 text-primary-foreground px-3 py-1 rounded-lg text-xs font-bold transition-all duration-200 btn-press whitespace-nowrap"
-          >
-            {ann.buttonText}
-          </a>
-        )}
-        <button onClick={onClose} className="opacity-80 hover:opacity-100 transition-opacity rounded-lg p-1 hover:bg-primary-foreground/10 duration-200">
-          <X size={16} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function TickerBar({ tickers }: { tickers: Announcement[] }) {
-  if (tickers.length === 0) return null;
-  const text = tickers.map(t => `\u2022 ${t.title}: ${t.content}`).join('   ');
-  return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-muted border-t border-border overflow-hidden h-8 flex items-center">
-      <motion.div
-        className="whitespace-nowrap text-xs text-muted-foreground font-medium"
-        animate={{ x: ['100vw', '-100%'] }}
-        transition={{ duration: Math.max(20, text.length * 0.12), repeat: Infinity, ease: 'linear' }}
-      >
-        {text}
-      </motion.div>
-    </div>
-  );
-}
-
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { settings, update } = useSettings();
   const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
-
-  const announcements = useAnnouncements();
-  const [dismissedIds, setDismissedIds] = React.useState<Set<number>>(() => {
-    try {
-      const stored = sessionStorage.getItem('medicology_dismissed_announcements');
-      return new Set(stored ? JSON.parse(stored) : []);
-    } catch { return new Set(); }
-  });
-
-  const dismiss = (id: number) => {
-    setDismissedIds(prev => {
-      const next = new Set(prev);
-      next.add(id);
-      try { sessionStorage.setItem('medicology_dismissed_announcements', JSON.stringify([...next])); } catch {}
-      return next;
-    });
-  };
-
-  const active = announcements.filter(a => !dismissedIds.has(a.id));
-  const popupAnn = active.find(a => a.type === 'popup');
-  const banners = active.filter(a => a.type === 'banner');
-  const tickers = active.filter(a => a.type === 'ticker');
 
   const [paletteOpen, setPaletteOpen] = React.useState(false);
 
@@ -210,10 +83,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     navItems.push({ name: "Admin Panel", href: "/admin", icon: ShieldAlert });
   }
 
-  if (user?.isAdmin) {
-    navItems.push({ name: "Admin Panel", href: "/admin", icon: ShieldAlert });
-  }
-
   const handleLogout = () => {
     logout();
     setLocation("/login");
@@ -243,16 +112,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }, [setLocation]);
 
   return (
-    <div className={clsx("min-h-screen bg-background flex flex-col md:flex-row", tickers.length > 0 && "pb-8")}>
-      {/* Popup Announcement */}
-      <AnimatePresence>
-        {popupAnn && (
-          <PopupAnnouncement key={popupAnn.id} ann={popupAnn} onClose={() => dismiss(popupAnn.id)} />
-        )}
-      </AnimatePresence>
-
-      {/* Ticker */}
-      <TickerBar tickers={tickers} />
+    <div className="min-h-screen bg-background flex flex-col md:flex-row">
 
       {/* Quick action palette */}
       <AnimatePresence>
@@ -429,21 +289,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-x-hidden min-w-0 flex flex-col">
-        {/* Banner Announcements */}
-        <AnimatePresence>
-          {banners.map(ann => (
-            <motion.div
-              key={ann.id}
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden"
-            >
-              <BannerAnnouncement ann={ann} onClose={() => dismiss(ann.id)} />
-            </motion.div>
-          ))}
-        </AnimatePresence>
         <div className="anim flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           {children}
         </div>

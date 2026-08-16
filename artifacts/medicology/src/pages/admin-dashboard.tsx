@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation } from 'wouter';
 import {
   BarChart3,
   Users,
@@ -95,6 +96,13 @@ function RecentActivityCard() {
 }
 
 function QuickActionsCard() {
+  const [, setLocation] = useLocation();
+  const actions = [
+    { label: 'Create New User', icon: <Users size={15} />, path: '/admin/users' },
+    { label: 'Upload Questions', icon: <BookOpen size={15} />, path: '/admin/import' },
+    { label: 'Review Queue', icon: <AlertCircle size={15} />, path: '/admin/review' },
+    { label: 'System Settings', icon: <Zap size={15} />, path: '/admin/settings' },
+  ];
   return (
     <div className="bg-card border border-border rounded-lg p-6">
       <div className="flex items-center gap-2 mb-6">
@@ -102,18 +110,15 @@ function QuickActionsCard() {
         <h3 className="font-semibold text-lg">Quick Actions</h3>
       </div>
       <div className="grid gap-3">
-        <button className="w-full px-4 py-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg font-medium text-sm transition-colors">
-          Create New User
-        </button>
-        <button className="w-full px-4 py-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg font-medium text-sm transition-colors">
-          Upload Questions
-        </button>
-        <button className="w-full px-4 py-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg font-medium text-sm transition-colors">
-          View Reports
-        </button>
-        <button className="w-full px-4 py-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg font-medium text-sm transition-colors">
-          System Settings
-        </button>
+        {actions.map((a) => (
+          <button
+            key={a.label}
+            onClick={() => setLocation(a.path)}
+            className="w-full flex items-center gap-2 px-4 py-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg font-medium text-sm transition-colors"
+          >
+            {a.icon} {a.label}
+          </button>
+        ))}
       </div>
     </div>
   );

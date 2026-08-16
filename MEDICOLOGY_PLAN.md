@@ -234,6 +234,12 @@ Database-driven, layered authorization replacing the flat role-string model:
 -   **Remaining (next phases):** team-scoped assignment UI, permission preview
     for arbitrary role combos, 2FA readiness, configuration snapshots/import-export
     polish, system health page.
+-   **UI/UX bug-fix pass:** removed the duplicate "Admin Panel" nav item;
+    removed the legacy raw-HTML announcement renderer from the student layout
+    (announcements now render exclusively through `AnnouncementDisplay` with
+    sanitized RichText); admin announcement/template previews use
+    `richTextToPlain`; wired the admin dashboard Quick Actions to their real
+    pages; corrected stale `medicology.pk` → `medicology.net` share links.
 
 ## P0.14 Branding `[PARTIAL]`
 

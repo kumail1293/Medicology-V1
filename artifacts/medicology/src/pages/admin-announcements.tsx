@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Megaphone, LayoutTemplate, Copy, CalendarClock, Send } from 'lucide-react';
 import RichTextEditor from '@/components/RichTextEditor';
+import { richTextToPlain } from '@/lib/richText';
 
 interface AnnouncementItem {
   id: number;
@@ -346,7 +347,7 @@ export default function AdminAnnouncementsPage() {
                     <Copy size={13} />
                   </button>
                 </div>
-                <p className="line-clamp-2 text-xs text-muted-foreground">{t.content.replace(/<[^>]+>/g, '')}</p>
+                <p className="line-clamp-2 text-xs text-muted-foreground">{richTextToPlain(t.content)}</p>
                 <div className="mt-auto flex gap-1.5">
                   <button onClick={() => openTemplateEdit(t)} className="rounded-md border border-border p-1 text-muted-foreground hover:text-foreground"><Pencil size={13} /></button>
                   <button onClick={() => void handleTemplateDelete(t.id)} className="rounded-md border border-border p-1 text-muted-foreground hover:text-destructive"><Trash2 size={13} /></button>
@@ -372,7 +373,7 @@ export default function AdminAnnouncementsPage() {
                     <Megaphone size={16} className="text-primary" />
                     <span className="font-semibold">{announcement.title}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">{announcement.content.replace(/<[^>]+>/g, '')}</p>
+                  <p className="text-sm text-muted-foreground">{richTextToPlain(announcement.content)}</p>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span className="rounded-full bg-muted px-2 py-1">{TYPE_LABELS[announcement.type] || announcement.type}</span>
                     <span className="rounded-full bg-muted px-2 py-1">{(announcement.theme || 'info').toUpperCase()}</span>
