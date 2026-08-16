@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { db } from '../db.js';
 import { flashcardDecksTable, flashcardsTable } from '@workspace/db';
 import { eq, and, sql } from '../utils/drizzle.js';
@@ -21,6 +22,11 @@ import type {
 } from './schemas.js';
 import { recordAudit } from '../utils/audit.js';
 import { requireFeature } from '../utils/feature-flags.js';
+import {
+  buildFlashcardImportPreview,
+  executeFlashcardImport,
+} from '../utils/flashcard-importer.js';
+import { buildFlashcardTemplateWorkbook } from '../utils/flashcard-templates.js';
 
 export const flashcardsRouter = Router();
 
@@ -142,6 +148,80 @@ flashcardsRouter.delete('/admin/decks/:id', authenticate, requirePermission('fla
     res.json({ success: true, deck });
   } catch (err: any) {
     console.error('Error in admin archive flashcard deck:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Bulk deck import (admin) — template download + preview + execute.
+// ---------------------------------------------------------------------------
+
+// Downloadable deck template (.xlsx or .csv) with deck-metadata block, example
+// card row and a Guide sheet. Cards map onto the flashcard taxonomy.
+flashcardsRouter.get('/admin/decks/template', authenticate, requirePermission('flashcards.manage'), async (req: any, res: any) => {
+  try {
+    const format = req.query.format === 'csv' ? 'csv' : 'xlsx';
+    const buffer = buildFlashcardTemplateWorkbook(format);
+    const ext = format === 'csv' ? 'csv' : 'xlsx';
+    res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="medicology-flashcard-deck-template.${ext}"`);
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const deckUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const name = (file.originalname || '').toLowerCase();
+    const ok = /(\.xlsx|\.xls|\.csv|\.tsv|\.txt)$/.test(name);
+    if (ok) cb(null, true);
+    else cb(new Error('Only .xlsx, .xls, .csv, .tsv or .txt (Anki text) files are supported'));
+  },
+});
+
+// Step 1: upload + parse + validate + resolve taxonomy.
+flashcardsRouter.post('/admin/decks/import/preview', authenticate, requirePermission('flashcards.manage'), (req: any, res: any) => {
+  deckUpload.single('file')(req, res, async (err: any) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    try {
+      const preview = await buildFlashcardImportPreview(req.file.buffer, req.file.originalname);
+      res.json(preview);
+    } catch (parseErr: any) {
+      res.status(400).json({ error: parseErr.message });
+    }
+  });
+});
+
+// Step 2: create the deck + insert the validated cards.
+flashcardsRouter.post('/admin/decks/import/execute', authenticate, requirePermission('flashcards.manage'), async (req: any, res: any) => {
+  try {
+    const { rows, deck, createMissingTaxonomy } = req.body ?? {};
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'No card rows provided to import' });
+    }
+    const result = await executeFlashcardImport({
+      rows,
+      deck: deck ?? undefined,
+      createMissingTaxonomy: Boolean(createMissingTaxonomy),
+      userId: req.user?.id,
+    });
+    await recordAudit({
+      actor: { id: req.user?.id, name: req.user?.name, email: req.user?.email },
+      action: 'flashcard.decks.bulk_import',
+      entityType: 'flashcard_deck',
+      entityId: result.deckId,
+      entityLabel: result.deck.slug,
+      summary: `Bulk deck import: ${result.inserted} card(s) inserted into "${result.deck.name}"`,
+      newValues: result,
+      ip: req.ip,
+    });
+    res.status(201).json(result);
+  } catch (err: any) {
+    console.error('Error in flashcard deck import execute:', err);
     res.status(500).json({ error: err.message });
   }
 });

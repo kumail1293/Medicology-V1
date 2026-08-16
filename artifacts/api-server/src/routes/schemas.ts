@@ -290,6 +290,45 @@ export const qbankMappingSchema = z.object({
   questionIds: z.array(z.number().int().positive()).max(10000),
 });
 
+// ---------------------------------------------------------------------------
+// Spreadsheet-style bulk editing (the in-app Excel grid).
+// ---------------------------------------------------------------------------
+
+const spreadsheetRowSchema = z.object({
+  id: z.number().int().positive(),
+  questionText: z.string().min(1, 'Question text is required').optional(),
+  questionType: z.enum(['sba', 'best_of_five', 'true_false', 'assertion_reason', 'emq', 'image_based', 'clinical_vignette', 'case_based']).optional(),
+  optionA: z.string().optional(),
+  optionB: z.string().optional(),
+  optionC: z.string().optional(),
+  optionD: z.string().optional(),
+  optionE: z.string().optional(),
+  correctAnswer: z.string().optional(),
+  explanation: z.string().optional(),
+  whyCorrect: z.string().optional(),
+  whyWrong: z.string().optional(),
+  examPearl: z.string().optional(),
+  commonTrap: z.string().optional(),
+  subject: z.string().optional(),
+  system: z.string().optional(),
+  topic: z.string().optional(),
+  subtopic: z.string().optional(),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+  status: z.enum(['draft', 'pending_review', 'under_medical_review', 'approved', 'published', 'flagged', 'errata', 'archived']).optional(),
+  tags: z.array(z.string()).optional(),
+  isFree: z.boolean().optional(),
+});
+
+export const spreadsheetSaveSchema = z.object({
+  rows: z.array(spreadsheetRowSchema).min(1).max(2000),
+});
+
+export const bulkReviewSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(2000),
+  action: reviewQuestionSchema.shape.action,
+  note: z.string().max(2000).optional(),
+});
+
 export type CreateQuestion = z.infer<typeof createQuestionSchema>;
 export type UpdateQuestion = z.infer<typeof updateQuestionSchema>;
 export type GetQuestionsQuery = z.infer<typeof getQuestionsQuerySchema>;
@@ -297,6 +336,8 @@ export type ReviewQuestion = z.infer<typeof reviewQuestionSchema>;
 export type CreateQbank = z.infer<typeof createQbankSchema>;
 export type UpdateQbank = z.infer<typeof updateQbankSchema>;
 export type QbankMapping = z.infer<typeof qbankMappingSchema>;
+export type SpreadsheetSave = z.infer<typeof spreadsheetSaveSchema>;
+export type BulkReview = z.infer<typeof bulkReviewSchema>;
 
 // ---------------------------------------------------------------------------
 // Flashcard decks & cards (admin-authored, rich HTML content).
@@ -313,6 +354,27 @@ const stripEmptyTransform = <T extends Record<string, any>>(data: T): T => {
   return out as T;
 };
 
+// Flashcard deck taxonomy — decks live in the exam/content hierarchy like
+// questions (country → exam → program → year / subject → system → topic →
+// subtopic). IDs are relational; the label columns keep lists readable.
+const flashcardTaxonomyFields = {
+  countryId: z.number().int().positive().nullable().optional(),
+  examId: z.number().int().positive().nullable().optional(),
+  programId: z.number().int().positive().nullable().optional(),
+  yearId: z.number().int().positive().nullable().optional(),
+  subjectId: z.number().int().positive().nullable().optional(),
+  systemId: z.number().int().positive().nullable().optional(),
+  topicId: z.number().int().positive().nullable().optional(),
+  subtopicId: z.number().int().positive().nullable().optional(),
+  country: z.string().max(100).nullable().optional(),
+  exam: z.string().max(100).nullable().optional(),
+  program: z.string().max(100).nullable().optional(),
+  year: z.string().max(100).nullable().optional(),
+  system: z.string().max(100).nullable().optional(),
+  topic: z.string().max(100).nullable().optional(),
+  subtopic: z.string().max(100).nullable().optional(),
+};
+
 export const createFlashcardDeckSchema = z
   .object({
     slug: z.string().min(2).max(120).regex(/^[a-z0-9-]+$/, 'slug must be lowercase letters, numbers and hyphens'),
@@ -320,6 +382,7 @@ export const createFlashcardDeckSchema = z
     subject: z.string().max(100).default('Other'),
     description: z.string().max(2000).nullable().optional(),
     status: flashcardDeckStatusEnum.default('draft'),
+    ...flashcardTaxonomyFields,
   })
   .transform((data) => stripEmptyTransform(data as Record<string, any>));
 
@@ -330,6 +393,7 @@ export const updateFlashcardDeckSchema = z
     subject: z.string().max(100).optional(),
     description: z.string().max(2000).nullable().optional(),
     status: flashcardDeckStatusEnum.optional(),
+    ...flashcardTaxonomyFields,
   })
   .transform((data) => stripEmptyTransform(data as Record<string, any>));
 

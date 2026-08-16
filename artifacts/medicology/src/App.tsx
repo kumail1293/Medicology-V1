@@ -31,6 +31,7 @@ const AdminRoles       = lazy(() => import("./pages/admin-roles"));
 const AdminUserTypes   = lazy(() => import("./pages/admin-user-types"));
 const AdminPermissions = lazy(() => import("./pages/admin-permissions"));
 const AdminQuestions   = lazy(() => import("./pages/admin-questions"));
+const AdminSpreadsheet = lazy(() => import("./pages/admin-spreadsheet"));
 const AdminAnnouncements = lazy(() => import("./pages/admin-announcements"));
 const AdminFlags       = lazy(() => import("./pages/admin-flags"));
 const AdminSettings    = lazy(() => import("./pages/admin-settings"));
@@ -165,6 +166,9 @@ function Router() {
         </Route>
         <Route path="/admin/questions">
           {() => <AdminRoute component={() => <AdminLayout><AdminQuestions /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/spreadsheet">
+          {() => <AdminRoute component={() => <AdminLayout><AdminSpreadsheet /></AdminLayout>} />}
         </Route>
         <Route path="/admin/announcements">
           {() => <AdminRoute component={() => <AdminLayout><AdminAnnouncements /></AdminLayout>} />}

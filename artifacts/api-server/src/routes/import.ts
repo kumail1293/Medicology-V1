@@ -8,14 +8,21 @@ import { recordAudit } from '../utils/audit.js';
 
 export const importRouter = Router();
 
-// GET /api/admin/import/template?type=sba — downloadable .xlsx template with
-// headers, one example row per question type, and a Guide sheet.
+// GET /api/admin/import/template?type=sba&format=csv — downloadable template
+// (xlsx by default, csv with format=csv) with headers, example rows and (for
+// xlsx) a Guide sheet.
 importRouter.get('/template', authenticate, requireAdmin, requirePermission('import.run'), async (req: any, res: any) => {
   try {
     const type = String(req.query.type ?? '');
-    const buffer = buildImportTemplateWorkbook(type || undefined);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="medicology-import-template${type ? `-${type}` : ''}.xlsx"`);
+    const format = req.query.format === 'csv' ? 'csv' : 'xlsx';
+    const buffer = buildImportTemplateWorkbook(type || undefined, format);
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="medicology-import-template${type ? `-${type}` : ''}.csv"`);
+    } else {
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="medicology-import-template${type ? `-${type}` : ''}.xlsx"`);
+    }
     res.send(buffer);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

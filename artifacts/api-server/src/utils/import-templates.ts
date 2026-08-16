@@ -136,7 +136,7 @@ const GUIDE_ROWS: [string, string][] = [
   ['10. QIDs', 'Leave blank to auto-generate. If you supply QIDs they must be unique and follow QID-MED-###########.'],
 ];
 
-export function buildImportTemplateWorkbook(type?: string): Buffer {
+export function buildImportTemplateWorkbook(type?: string, format: 'xlsx' | 'csv' = 'xlsx'): Buffer {
   const selected = type && QUESTION_TYPES.includes(type as any) ? type : undefined;
 
   const templateRows: any[] = [TEMPLATE_COLUMNS.map((c) => c.header)];
@@ -149,6 +149,17 @@ export function buildImportTemplateWorkbook(type?: string): Buffer {
   }
   // A few blank rows to fill in.
   for (let i = 0; i < 5; i++) templateRows.push(TEMPLATE_COLUMNS.map(() => ''));
+
+  if (format === 'csv') {
+    // CSV export of the template sheet (headers + example rows). The Guide
+    // content is appended as a trailing block so nothing is lost.
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(templateRows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    const csv = XLSX.write(wb, { type: 'string', bookType: 'csv' });
+    const guideCsv = GUIDE_ROWS.map(([a, b]) => `${a},${JSON.stringify(b)}`).join('\n');
+    return Buffer.from(csv + '\n\n# GUIDE\n' + guideCsv, 'utf8');
+  }
 
   const templateSheet = XLSX.utils.aoa_to_sheet(templateRows);
   templateSheet['!cols'] = TEMPLATE_COLUMNS.map((c) => ({ wch: Math.max(c.header.length + 2, 18) }));

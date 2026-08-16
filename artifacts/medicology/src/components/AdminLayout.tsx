@@ -29,6 +29,7 @@ import {
   ArrowRight,
   UserCog,
   KeyRound,
+  Table2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -108,6 +109,12 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       label: 'Questions',
       icon: <BookOpen size={18} />,
       path: '/admin/questions',
+      permission: 'questions.manage',
+    },
+    {
+      label: 'Spreadsheet Editor',
+      icon: <Table2 size={18} />,
+      path: '/admin/spreadsheet',
       permission: 'questions.manage',
     },
     {

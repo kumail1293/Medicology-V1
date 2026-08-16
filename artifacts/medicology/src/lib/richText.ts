@@ -93,9 +93,12 @@ export function isRichHtml(text: string): boolean {
 }
 
 /** Convert markdown-style image links ![alt](url) into <img> tags so pasted
- * image links render (common when content is copied from markdown editors). */
+ * image links render (common when content is copied from markdown editors).
+ * Accepts absolute https URLs and relative paths (/api/storage/...,
+ * /uploads/...) — the flashcard study session resolves relative srcs against
+ * the current origin before rendering. */
 export function markdownImagesToHtml(text: string): string {
-  return text.replace(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g, (_, alt, url) => {
+  return text.replace(/!\[([^\]]*)\]\(((?:https?:\/\/|\/)[^)\s]+)\)/g, (_, alt, url) => {
     return `<img src="${url}" alt="${alt || ""}" loading="lazy" style="max-width:100%">`;
   });
 }

@@ -83,8 +83,9 @@ bio/phone · `0014` user study aim (`studyAim` — AMBOSS-style goal) ·
 user_roles, user_permissions, organizations, teams, team_members,
 user_scopes, role_scopes) + `users.userType`.
 
-Tests: 52 integration tests (settings precedence, overrides, imports,
-media, coming soon, RBAC + Administration 2.0 + taxonomy-aware scope
+Tests: 57 integration tests (settings precedence, overrides, imports,
+bulk deck import, spreadsheet grid + bulk save, bulk review, media,
+coming soon, RBAC + Administration 2.0 + taxonomy-aware scope
 enforcement, email templates/renderer/
 secret handling, sessions/revocation, export/import, audit gating,
 transactional sends, template seeding, forgot/reset password,
@@ -132,6 +133,17 @@ build, 18-check browser QA (RBAC pages + access drawer) — all green.
     EMQ, Image-based, Vignette, Case) with a Guide sheet.
 -   Per-row editing with the full question editor before import.
 -   Never auto-publish; imports land in the Review Queue.
+-   **Template downloads in `.xlsx` and `format=csv`** (all question
+    types, Guide sheet, example rows).
+-   **Spreadsheet editor** (`/admin/spreadsheet`): Excel-style inline
+    grid over all questions (question text, options A–E, answer,
+    subject/system/topic, difficulty, status, explanation), inline cell
+    editing, dirty-cell tracking, bulk save with per-row validation,
+    version history + audit, per-row full editor, search/status
+    filters/pagination.
+-   **Bulk review** (admin Review Queue): multi-select rows →
+    approve/publish/reject/archive in one action, scope-enforced per
+    question, transition-validated, note required for rejection.
 
 ## P0.5 Review & versioning `[COMPLETED]`
 
@@ -168,6 +180,21 @@ build, 18-check browser QA (RBAC pages + access drawer) — all green.
 
 -   DB-driven decks + cards, admin deck builder, spaced-repetition
     foundation.
+-   **Decks are taxonomy-orgaized** (country/exam/program/year +
+    subject/system/topic/subtopic) — a deck taxonomy separate from the
+    MCQ taxonomy (migration `0016`); admin deck modal picks taxonomy
+    values.
+-   **Admin bulk deck import** (`/admin/flashcards`): xlsx/csv/tsv with
+    a deck-metadata block (Deck Name, Exam, Program, Year, Subject…) +
+    card rows (Front/Back/Note/Tags/Image), or plain Anki `front\tback`
+    text; preview with per-row validation, taxonomy auto-create
+    (subjects/systems/topics/subtopics), duplicate-slug handling
+    (reuses existing deck), audit-free card insert with sort order.
+-   **Deck template downloads** (`.xlsx` and `format=csv`) with example
+    rows + guide for exam-specific decks.
+-   **Card image rendering fix**: deck links now render images
+    (relative URLs resolved, markdown `![alt](path)` converted) instead
+    of the camera-emoji fallback.
 
 ## P0.11 Media library `[COMPLETED]`
 

@@ -2,6 +2,16 @@ import { pgTable, serial, text, integer, boolean, timestamp, index, jsonb } from
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users.js";
+import {
+  countriesTable,
+  examsTable,
+  programsTable,
+  academicYearsTable,
+  subjectsTable,
+  systemsTable,
+  topicsTable,
+  subtopicsTable,
+} from "./taxonomy.js";
 
 // ============================================================================
 // Admin-authored flashcard decks. Content lives in the database (source of
@@ -24,9 +34,31 @@ export const flashcardDecksTable = pgTable(
     createdBy: integer("created_by").references(() => usersTable.id),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    // Flashcard taxonomy — decks (and their cards) live in the exam/content
+    // hierarchy just like questions, so a deck can be targeted per exam,
+    // program, year, subject, system or topic.
+    countryId: integer("country_id").references(() => countriesTable.id),
+    examId: integer("exam_id").references(() => examsTable.id),
+    programId: integer("program_id").references(() => programsTable.id),
+    yearId: integer("year_id").references(() => academicYearsTable.id),
+    subjectId: integer("subject_id").references(() => subjectsTable.id),
+    systemId: integer("system_id").references(() => systemsTable.id),
+    topicId: integer("topic_id").references(() => topicsTable.id),
+    subtopicId: integer("subtopic_id").references(() => subtopicsTable.id),
+    // Denormalized taxonomy labels (kept in sync with the ids) so deck lists
+    // and templates read cleanly without joins.
+    country: text("country"),
+    exam: text("exam"),
+    program: text("program"),
+    year: text("year"),
+    system: text("system"),
+    topic: text("topic"),
+    subtopic: text("subtopic"),
   },
   (table) => [
     index("flashcard_decks_status_idx").on(table.status),
+    index("flashcard_decks_exam_idx").on(table.examId),
+    index("flashcard_decks_topic_idx").on(table.topicId),
   ]
 );
 

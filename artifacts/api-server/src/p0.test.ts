@@ -2012,3 +2012,165 @@ test('RBAC scopes: review route rejects out-of-scope questions (403) and allows 
   const body = (await outScope.json()) as any;
   assert.match(body.error, /outside your access scope/);
 });
+
+// ============================================================================
+// Bulk deck import, spreadsheet editor, bulk review (Administration 2.0).
+// ============================================================================
+
+test('flashcard deck template: xlsx and csv downloads carry headers + example rows', async () => {
+  const { db } = await import('./db.js');
+  const { usersTable } = await import('@workspace/db');
+  const { eq: drizzleEq } = await import('./utils/drizzle.js');
+  await db.update(usersTable).set({ role: 'superadmin' as any }).where(drizzleEq(usersTable.id, 1));
+
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const auth = { Authorization: `Bearer ${adminToken}` };
+
+  const xlsxRes = await fetch(`${BASE}/flashcards/admin/decks/template`, { headers: auth });
+  assert.equal(xlsxRes.status, 200);
+  assert.match(xlsxRes.headers.get('content-type') || '', /spreadsheet/);
+  const wb = XLSX.read(Buffer.from(await xlsxRes.arrayBuffer()), { type: 'buffer' });
+  assert.ok(wb.SheetNames.includes('Template'));
+  assert.ok(wb.SheetNames.includes('Guide'));
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets['Template'], { defval: '' });
+  assert.ok(rows.length >= 2, 'template has metadata + at least one card row');
+  const joined = JSON.stringify(rows);
+  assert.ok(/Front/.test(joined) && /Back/.test(joined), 'template has Front/Back columns');
+
+  const csvRes = await fetch(`${BASE}/flashcards/admin/decks/template?format=csv`, { headers: auth });
+  assert.equal(csvRes.status, 200);
+  assert.match(csvRes.headers.get('content-type') || '', /csv/);
+  const csvText = await csvRes.text();
+  assert.ok(csvText.includes('Front') && csvText.includes('Back'), 'csv template has card headers');
+
+  const qCsv = await fetch(`${BASE}/admin/import/template?format=csv`, { headers: auth });
+  assert.equal(qCsv.status, 200);
+  assert.match(qCsv.headers.get('content-type') || '', /csv/);
+  const qCsvText = await qCsv.text();
+  assert.ok(qCsvText.includes('Question') && qCsvText.includes('Correct Answer'), 'MCQ csv template has core columns');
+});
+
+test('bulk deck import: xlsx with deck metadata + cards creates deck + cards with taxonomy', async () => {
+  const { db } = await import('./db.js');
+  const { usersTable, flashcardDecksTable, flashcardsTable } = await import('@workspace/db');
+  const { eq: drizzleEq } = await import('./utils/drizzle.js');
+  await db.update(usersTable).set({ role: 'superadmin' as any }).where(drizzleEq(usersTable.id, 1));
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const auth = { Authorization: `Bearer ${adminToken}` };
+
+  // Build a small xlsx: deck metadata block + card rows (Front/Back + taxonomy).
+  const rows: any[][] = [
+    ['Deck Name', 'UHS Cardio Test Deck'],
+    ['Deck Slug', 'uhs-cardio-test-deck'],
+    ['Deck Exam', 'UHS'],
+    ['Deck Program', 'MBBS'],
+    ['', ''],
+    ['Front', 'Back', 'Subject', 'Topic', 'Exam'],
+    ['What does the RCA supply?', 'Inferior wall of the heart', 'Medicine', 'Ischemic Heart Disease', 'UHS'],
+    ['Best marker for MI?', 'Troponin', 'Medicine', 'Ischemic Heart Disease', 'UHS'],
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, 'Deck');
+  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+  const form = new FormData();
+  form.append('file', new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'uhs-cardio.xlsx');
+  const previewRes = await fetch(`${BASE}/flashcards/admin/decks/import/preview`, { method: 'POST', headers: auth, body: form });
+  const preview = (await previewRes.json()) as any;
+  assert.equal(previewRes.status, 200, JSON.stringify(preview).slice(0, 300));
+  assert.equal(preview.deck?.name, 'UHS Cardio Test Deck');
+  assert.equal(preview.stats?.valid, 2, 'both card rows valid');
+
+  const execRes = await fetch(`${BASE}/flashcards/admin/decks/import/execute`, json(auth, {
+    rows: preview.rows,
+    deck: preview.deck,
+    createMissingTaxonomy: true,
+  }, 'POST'));
+  const result = (await execRes.json()) as any;
+  assert.equal(execRes.status, 201, JSON.stringify(result).slice(0, 300));
+  assert.equal(result.inserted, 2, 'both cards inserted');
+  assert.ok(result.deckId > 0, 'deck created');
+
+  const [deck] = await db.select().from(flashcardDecksTable).where(drizzleEq(flashcardDecksTable.slug, 'uhs-cardio-test-deck'));
+  assert.ok(deck, 'deck persisted');
+  assert.equal(deck.exam, 'UHS');
+  assert.equal(deck.cardCount, 2);
+  const cards = await db.select().from(flashcardsTable).where(drizzleEq(flashcardsTable.deckId, deck.id));
+  assert.equal(cards.length, 2, 'cards persisted');
+});
+
+test('spreadsheet grid: fetch flat rows, bulk-save edits with versioning', async () => {
+  const { db } = await import('./db.js');
+  const { usersTable, questionsTable } = await import('@workspace/db');
+  const { eq: drizzleEq } = await import('./utils/drizzle.js');
+  await db.update(usersTable).set({ role: 'superadmin' as any }).where(drizzleEq(usersTable.id, 1));
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const auth = { Authorization: `Bearer ${adminToken}` };
+
+  const grid = await fetch(`${BASE}/admin/questions/spreadsheet?limit=5`, { headers: auth });
+  assert.equal(grid.status, 200);
+  const gridData = (await grid.json()) as any;
+  assert.ok(gridData.questions.length > 0, 'grid returns rows');
+  const target = gridData.questions[0];
+
+  const save = await fetch(`${BASE}/admin/questions/spreadsheet/save`, json(auth, {
+    rows: [{ id: target.id, difficulty: 'hard', topic: 'Grid Edited Topic' }],
+  }, 'POST'));
+  const saveData = (await save.json()) as any;
+  assert.equal(save.status, 200, JSON.stringify(saveData).slice(0, 300));
+  assert.equal(saveData.changed, 1, 'one row updated');
+
+  const [updated] = await db.select().from(questionsTable).where(drizzleEq(questionsTable.id, target.id));
+  assert.equal(updated.difficulty, 'hard');
+  assert.equal(updated.topic, 'Grid Edited Topic');
+});
+
+test('bulk review: approve + publish many questions at once, scoped per question', async () => {
+  const { db } = await import('./db.js');
+  const { usersTable, questionsTable } = await import('@workspace/db');
+  const { eq: drizzleEq, inArray } = await import('./utils/drizzle.js');
+  await db.update(usersTable).set({ role: 'superadmin' as any }).where(drizzleEq(usersTable.id, 1));
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const auth = { Authorization: `Bearer ${adminToken}` };
+
+  // Put three questions into pending_review.
+  for (const id of [3, 4, 5]) {
+    await db.update(questionsTable).set({ status: 'pending_review' as any }).where(drizzleEq(questionsTable.id, id));
+  }
+
+  const bulk = await fetch(`${BASE}/admin/questions/bulk-review`, json(auth, {
+    ids: [3, 4, 5],
+    action: 'approve',
+  }, 'POST'));
+  const bulkData = (await bulk.json()) as any;
+  assert.equal(bulk.status, 200, JSON.stringify(bulkData).slice(0, 300));
+  assert.equal(bulkData.changed, 3, 'all three approved');
+  assert.ok(bulkData.results.every((r: any) => r.ok), 'no per-question failures');
+
+  const approved = await db.select({ status: questionsTable.status }).from(questionsTable).where(inArray(questionsTable.id, [3, 4, 5]));
+  assert.ok(approved.every((q: any) => q.status === 'approved'), 'statuses updated to approved');
+});
+
+
+test('bulk review: reject requires a note and skips questions that cannot transition', async () => {
+  const { db } = await import('./db.js');
+  const { usersTable } = await import('@workspace/db');
+  const { eq: drizzleEq } = await import('./utils/drizzle.js');
+  await db.update(usersTable).set({ role: 'superadmin' as any }).where(drizzleEq(usersTable.id, 1));
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const auth = { Authorization: `Bearer ${adminToken}` };
+
+  const noNote = await fetch(`${BASE}/admin/questions/bulk-review`, json(auth, { ids: [6], action: 'reject' }, 'POST'));
+  assert.equal(noNote.status, 400, 'reject without note is rejected');
+
+  const withNote = await fetch(`${BASE}/admin/questions/bulk-review`, json(auth, { ids: [6], action: 'reject', note: 'Needs a better explanation' }, 'POST'));
+  const withNoteData = (await withNote.json()) as any;
+  assert.equal(withNote.status, 200);
+  assert.ok(Array.isArray(withNoteData.results), 'results array returned');
+});

@@ -250,11 +250,15 @@ export function sanitizeAnkiContent(text: string): string {
   const withImages = markdownImagesToHtml(text);
   return withImages
     .replace(/\[sound:[^\]]+\]/g, "")
+    // Rewrite relative image srcs (/api/storage/..., /uploads/...) against the
+    // current origin so they actually load in the study session — the old
+    // behaviour left them bare and the onerror fallback (camera emoji) fired.
     .replace(
-      /<img([^>]*?)src="(?!https?:\/\/)([^"]+?)"([^>]*?)>/gi,
+      /<img([^>]*?)src="((?!https?:\/\/)[^"]+)"([^>]*?)>/gi,
       (_, pre, src, post) => {
-        const name = (src.split(/[\\/]/).pop() ?? src).slice(0, 40);
-        return `<img${pre}src="${src}"${post} onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span class=\\'anki-img-missing\\'>📷 ${name}</span>');" style="max-width:100%;border-radius:8px;">`;
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const resolved = src.startsWith("/") ? `${origin}${src}` : src;
+        return `<img${pre}src="${resolved}"${post} loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span class=\\'anki-img-missing\\'>📷 ${(src.split("/").pop() ?? src).slice(0, 40)}</span>');" style="max-width:100%;border-radius:8px;">`;
       },
     )
     // External image links that fail to load get a graceful fallback instead

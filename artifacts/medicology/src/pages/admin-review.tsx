@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ChevronUp,
   BookOpen,
+  Layers,
+  Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -113,6 +115,9 @@ export default function AdminReviewPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [acting, setActing] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkActing, setBulkActing] = useState<string | null>(null);
+  const [bulkNote, setBulkNote] = useState('');
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -194,6 +199,79 @@ export default function AdminReviewPage() {
 
   const optionLetters = ['A', 'B', 'C', 'D', 'E'];
 
+  // ── Bulk selection & actions ────────────────────────────────────────
+  const toggleSelected = (id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allVisibleSelected = questions.length > 0 && questions.every((q) => selected.has(q.id));
+  const toggleAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        for (const q of questions) next.delete(q.id);
+      } else {
+        for (const q of questions) next.add(q.id);
+      }
+      return next;
+    });
+  };
+
+  // Bulk actions allowed across a mixed selection (a question that can't take
+  // the action is reported, not failed).
+  const BULK_ACTIONS: { action: string; label: string; danger?: boolean; primary?: boolean }[] = [
+    { action: 'submit', label: 'Submit for Review' },
+    { action: 'start_review', label: 'Start Medical Review' },
+    { action: 'approve', label: 'Approve' },
+    { action: 'publish', label: 'Approve & Publish', primary: true },
+    { action: 'reject', label: 'Reject', danger: true },
+    { action: 'archive', label: 'Archive' },
+    { action: 'restore', label: 'Restore' },
+  ];
+
+  const handleBulkAction = async (action: string) => {
+    if (selected.size === 0) return;
+    const note = bulkNote.trim();
+    if (action === 'reject' && !note) {
+      toast({ title: 'Note required', description: 'Type a rejection note in the bulk bar first.', variant: 'destructive' });
+      return;
+    }
+    if (action === 'reject' && !window.confirm(`Reject ${selected.size} question(s) and send them back to draft?`)) return;
+    if (action === 'archive' && !window.confirm(`Archive ${selected.size} question(s)?`)) return;
+
+    setBulkActing(action);
+    try {
+      const response = await fetch('/api/admin/questions/bulk-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selected], action, note }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || 'Bulk action failed');
+      const failed = data.results?.filter((r: any) => !r.ok)?.length ?? 0;
+      toast({
+        title: 'Bulk action complete',
+        description: `${data.changed ?? 0} question(s) updated${failed > 0 ? `, ${failed} skipped` : ''}.`,
+      });
+      setSelected(new Set());
+      setBulkNote('');
+      await Promise.all([fetchSummary(), fetchQuestions()]);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Bulk action failed',
+        variant: 'destructive',
+      });
+    } finally {
+      setBulkActing(null);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -260,6 +338,56 @@ export default function AdminReviewPage() {
         </div>
       </div>
 
+      {/* Bulk selection bar */}
+      {selected.size > 0 && (
+        <div className="sticky top-4 z-20 rounded-2xl border border-primary/30 bg-card p-4 shadow-2xl">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Layers size={16} className="text-primary" />
+              {selected.size} selected
+            </div>
+            <button
+              onClick={toggleAll}
+              className="text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              {allVisibleSelected ? 'Clear page selection' : 'Select all on page'}
+            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <input
+                value={bulkNote}
+                onChange={(e) => setBulkNote(e.target.value)}
+                placeholder="Bulk note (required to reject)…"
+                className="w-56 rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
+              />
+              {BULK_ACTIONS.map((action) => (
+                <button
+                  key={action.action}
+                  disabled={bulkActing !== null}
+                  onClick={() => void handleBulkAction(action.action)}
+                  className={clsx(
+                    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50',
+                    action.danger
+                      ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+                      : action.primary
+                        ? 'bg-primary text-white hover:bg-primary/90'
+                        : 'border border-border text-foreground hover:bg-muted/50'
+                  )}
+                >
+                  {bulkActing === action.action ? <Loader2 size={12} className="animate-spin" /> : null}
+                  {action.label}
+                </button>
+              ))}
+              <button
+                onClick={() => { setSelected(new Set()); setBulkNote(''); }}
+                className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Queue */}
       <div className="space-y-3">
         {loading ? (
@@ -276,27 +404,39 @@ export default function AdminReviewPage() {
             const actions = ACTIONS_BY_STATUS[question.status] ?? [];
             const expanded = expandedId === question.id;
             const note = notes[question.id] ?? '';
+            const isSelected = selected.has(question.id);
             return (
-              <div key={question.id} className="rounded-xl border border-border bg-card">
+              <div key={question.id} className={clsx('rounded-xl border bg-card', isSelected ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border')}>
                 <button
                   onClick={() => setExpandedId(expanded ? null : question.id)}
                   className="flex w-full flex-col gap-2 p-4 text-left md:flex-row md:items-start md:justify-between"
                 >
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {question.qid && (
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-xs font-medium text-primary">
-                          {question.qid}
-                        </span>
+                  <div className="flex items-start gap-2">
+                    <span
+                      onClick={(e) => { e.stopPropagation(); toggleSelected(question.id); }}
+                      className={clsx(
+                        'mt-0.5 flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded border',
+                        isSelected ? 'border-primary bg-primary text-white' : 'border-border bg-background hover:border-primary/50'
                       )}
-                      <BookOpen size={16} className="text-primary" />
-                      <p className="font-semibold">{question.questionText}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      <span className="rounded-full bg-muted px-2 py-1">{question.subject}</span>
-                      {question.system && <span className="rounded-full bg-muted px-2 py-1">{question.system}</span>}
-                      <span className="rounded-full bg-muted px-2 py-1">{question.topic}</span>
-                      <span className="rounded-full bg-muted px-2 py-1">{question.difficulty}</span>
+                    >
+                      {isSelected && <CheckCircle2 size={12} />}
+                    </span>
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {question.qid && (
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-xs font-medium text-primary">
+                            {question.qid}
+                          </span>
+                        )}
+                        <BookOpen size={16} className="text-primary" />
+                        <p className="font-semibold">{question.questionText}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <span className="rounded-full bg-muted px-2 py-1">{question.subject}</span>
+                        {question.system && <span className="rounded-full bg-muted px-2 py-1">{question.system}</span>}
+                        <span className="rounded-full bg-muted px-2 py-1">{question.topic}</span>
+                        <span className="rounded-full bg-muted px-2 py-1">{question.difficulty}</span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

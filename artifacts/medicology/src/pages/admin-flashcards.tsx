@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Archive, Globe, FileText, ArrowLeft, Layers, CheckCircle2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Archive, Globe, FileText, ArrowLeft, Layers, CheckCircle2, Upload, Download, FileSpreadsheet, AlertTriangle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import RichTextEditor from "@/components/RichTextEditor";
@@ -14,6 +14,21 @@ interface Deck {
   description: string | null;
   status: "draft" | "published" | "archived";
   cardCount: number;
+  country?: string | null;
+  exam?: string | null;
+  program?: string | null;
+  year?: string | null;
+  system?: string | null;
+  topic?: string | null;
+  subtopic?: string | null;
+  countryId?: number | null;
+  examId?: number | null;
+  programId?: number | null;
+  yearId?: number | null;
+  subjectId?: number | null;
+  systemId?: number | null;
+  topicId?: number | null;
+  subtopicId?: number | null;
 }
 
 interface Card {
@@ -41,7 +56,15 @@ export default function AdminFlashcardsPage() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [loading, setLoading] = useState(true);
   const [deckModal, setDeckModal] = useState(false);
-  const [deckForm, setDeckForm] = useState({ id: 0, slug: "", name: "", subject: "Other", description: "", status: "draft" as Deck["status"] });
+  const [deckForm, setDeckForm] = useState({ id: 0, slug: "", name: "", subject: "Other", description: "", status: "draft" as Deck["status"], exam: "", program: "", year: "", country: "", system: "", topic: "", subtopic: "" });
+
+  // Bulk deck import
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [downloadTemplate, setDownloadTemplate] = useState<"xlsx" | "csv" | null>(null);
+  const [importPreview, setImportPreview] = useState<any>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
@@ -83,8 +106,8 @@ export default function AdminFlashcardsPage() {
   /* ── Deck CRUD ──────────────────────────────────────────────────── */
   const openDeckModal = (deck?: Deck) => {
     setDeckForm(deck
-      ? { id: deck.id, slug: deck.slug, name: deck.name, subject: deck.subject, description: deck.description ?? "", status: deck.status }
-      : { id: 0, slug: "", name: "", subject: "Other", description: "", status: "draft" });
+      ? { id: deck.id, slug: deck.slug, name: deck.name, subject: deck.subject, description: deck.description ?? "", status: deck.status, exam: deck.exam ?? "", program: deck.program ?? "", year: deck.year ?? "", country: deck.country ?? "", system: deck.system ?? "", topic: deck.topic ?? "", subtopic: deck.subtopic ?? "" }
+      : { id: 0, slug: "", name: "", subject: "Other", description: "", status: "draft", exam: "", program: "", year: "", country: "", system: "", topic: "", subtopic: "" });
     setDeckModal(true);
   };
 
@@ -92,7 +115,10 @@ export default function AdminFlashcardsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = { ...deckForm, description: deckForm.description || null };
+      const payload: Record<string, any> = { ...deckForm, description: deckForm.description || null };
+      for (const key of ["exam", "program", "year", "country", "system", "topic", "subtopic"]) {
+        payload[key] = deckForm[key as keyof typeof deckForm] || null;
+      }
       const res = deckForm.id
         ? await apiFetch(`/api/flashcards/admin/decks/${deckForm.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         : await apiFetch("/api/flashcards/admin/decks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -105,6 +131,84 @@ export default function AdminFlashcardsPage() {
       toast({ title: "Error", description: err instanceof Error ? err.message : "Save failed", variant: "destructive" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  /* ── Bulk deck import ───────────────────────────────────────────── */
+  const handleImportFile = (file: File | null) => {
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    if (!/\.(xlsx|xls|csv|tsv|txt)$/.test(name)) {
+      toast({ title: "Invalid file", description: "Use .xlsx, .xls, .csv, .tsv or .txt (Anki text)", variant: "destructive" });
+      return;
+    }
+    setImportFile(file);
+    setImportPreview(null);
+  };
+
+  const runImportPreview = async () => {
+    if (!importFile) return;
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+      const res = await apiFetch("/api/flashcards/admin/decks/import/preview", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Preview failed");
+      setImportPreview(data);
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Preview failed", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const runImportExecute = async () => {
+    if (!importPreview) return;
+    setImporting(true);
+    try {
+      const res = await apiFetch("/api/flashcards/admin/decks/import/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rows: importPreview.rows,
+          deck: { ...importPreview.deck, slug: importPreview.deck.slug },
+          createMissingTaxonomy: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Import failed");
+      toast({ title: "Import complete", description: `${data.inserted} card(s) in deck "${data.deck?.name ?? ""}"`, variant: data.inserted > 0 ? "default" : "destructive" });
+      setImportOpen(false);
+      setImportFile(null);
+      setImportPreview(null);
+      if (importFileRef.current) importFileRef.current.value = "";
+      await loadDecks();
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Import failed", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadDeckTemplate = async (format: "xlsx" | "csv") => {
+    setDownloadTemplate(format);
+    try {
+      const res = await apiFetch(`/api/flashcards/admin/decks/template?format=${format}`);
+      if (!res.ok) throw new Error("Template download failed");
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `medicology-flashcard-deck-template.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+      toast({ title: "Template ready", description: "Deck-metadata block + card rows + Guide sheet." });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Template download failed", variant: "destructive" });
+    } finally {
+      setDownloadTemplate(null);
     }
   };
 
@@ -229,9 +333,25 @@ export default function AdminFlashcardsPage() {
           <h2 className="text-2xl font-bold">Flashcard Decks</h2>
           <p className="text-sm text-muted-foreground">Create official decks with rich content — tables, images and flowcharts. Students sync them into their study system.</p>
         </div>
-        <button onClick={() => openDeckModal()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90">
-          <Plus size={16} /> New Deck
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => void downloadDeckTemplate("xlsx")}
+            disabled={downloadTemplate !== null}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-50"
+          >
+            <Download size={15} />
+            {downloadTemplate === "xlsx" ? "Preparing…" : "Deck template"}
+          </button>
+          <button
+            onClick={() => { setImportOpen(true); setImportFile(null); setImportPreview(null); }}
+            className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+          >
+            <Upload size={15} /> Bulk Import Deck
+          </button>
+          <button onClick={() => openDeckModal()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90">
+            <Plus size={16} /> New Deck
+          </button>
+        </div>
       </div>
 
       {/* Deck list */}
@@ -250,7 +370,10 @@ export default function AdminFlashcardsPage() {
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{deck.name} {statusBadge(deck.status)}</p>
-                <p className="truncate text-xs text-muted-foreground">{deck.subject} · {deck.cardCount} cards{deck.description ? ` · ${deck.description}` : ""}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {[deck.country, deck.exam, deck.program, deck.year].filter(Boolean).join(" · ") || deck.subject} · {deck.cardCount} cards
+                  {deck.description ? ` · ${deck.description}` : ""}
+                </p>
               </div>
             </button>
             <div className="flex shrink-0 items-center gap-1">
@@ -363,11 +486,136 @@ export default function AdminFlashcardsPage() {
                 <label className="mb-1 block text-sm font-medium">Description</label>
                 <input value={deckForm.description} onChange={(e) => setDeckForm({ ...deckForm, description: e.target.value })} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
               </div>
+              <div className="rounded-xl border border-border bg-background p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Taxonomy (exam hierarchy)</p>
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Country</label>
+                    <input value={deckForm.country} onChange={(e) => setDeckForm({ ...deckForm, country: e.target.value })} placeholder="Pakistan" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Exam / University</label>
+                    <input value={deckForm.exam} onChange={(e) => setDeckForm({ ...deckForm, exam: e.target.value })} placeholder="UHS" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Program</label>
+                    <input value={deckForm.program} onChange={(e) => setDeckForm({ ...deckForm, program: e.target.value })} placeholder="MBBS" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Year</label>
+                    <input value={deckForm.year} onChange={(e) => setDeckForm({ ...deckForm, year: e.target.value })} placeholder="Final Year" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">System</label>
+                    <input value={deckForm.system} onChange={(e) => setDeckForm({ ...deckForm, system: e.target.value })} placeholder="Cardiovascular" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Topic</label>
+                    <input value={deckForm.topic} onChange={(e) => setDeckForm({ ...deckForm, topic: e.target.value })} placeholder="Ischemic Heart Disease" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Subtopic</label>
+                    <input value={deckForm.subtopic} onChange={(e) => setDeckForm({ ...deckForm, subtopic: e.target.value })} placeholder="Myocardial Infarction" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                  </div>
+                </div>
+              </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setDeckModal(false)} className="rounded-lg border border-border px-4 py-2 text-sm">Cancel</button>
                 <button type="submit" disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{saving ? "Saving…" : "Save Deck"}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk import modal */}
+      {importOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-semibold">Bulk Import Flashcard Deck</h3>
+              <button onClick={() => setImportOpen(false)} className="text-muted-foreground hover:text-foreground">✕</button>
+            </div>
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => void downloadDeckTemplate("xlsx")} disabled={downloadTemplate !== null} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-primary">
+                  <Download size={13} /> {downloadTemplate === "xlsx" ? "Preparing…" : "Excel template (.xlsx)"}
+                </button>
+                <button onClick={() => void downloadDeckTemplate("csv")} disabled={downloadTemplate !== null} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-primary">
+                  <Download size={13} /> {downloadTemplate === "csv" ? "Preparing…" : "CSV template"}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Deck metadata block (name, slug, exam, program, year…) + one row per card (Front, Back, Note, Tags, Image, taxonomy).
+                Anki text files (<code className="rounded bg-muted px-1">front&lt;TAB&gt;back</code> per line) work too.
+              </p>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".xlsx,.xls,.csv,.tsv,.txt"
+                className="hidden"
+                onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
+              />
+              {!importFile ? (
+                <button onClick={() => importFileRef.current?.click()} className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border py-8 text-center hover:border-primary/40">
+                  <FileSpreadsheet size={32} className="text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Choose a file to import</p>
+                    <p className="text-xs text-muted-foreground">.xlsx · .xls · .csv · .tsv · .txt (Anki text)</p>
+                  </div>
+                </button>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-background p-4">
+                  <FileSpreadsheet size={18} className="text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{importFile.name}</p>
+                    <p className="text-xs text-muted-foreground">{(importFile.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                  <button onClick={() => { setImportFile(null); setImportPreview(null); if (importFileRef.current) importFileRef.current.value = ""; }} className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground">Remove</button>
+                  <button onClick={() => void runImportPreview()} disabled={importing} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+                    <Upload size={13} /> {importing ? "Parsing…" : "Validate & Preview"}
+                  </button>
+                </div>
+              )}
+
+              {importPreview && (
+                <div className="space-y-3 rounded-xl border border-border bg-background p-4">
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    <span className="font-semibold">Deck: {importPreview.deck?.name}</span>
+                    <span className="font-mono text-xs text-primary">{importPreview.deck?.slug}</span>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{importPreview.deck?.subject || "Other"}</span>
+                    <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600">{importPreview.stats?.valid ?? 0} valid</span>
+                    {importPreview.stats?.error > 0 && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-600">{importPreview.stats.error} errors</span>}
+                  </div>
+                  {importPreview.taxonomyNotes?.length > 0 && (
+                    <div className="flex items-start gap-1.5 rounded-lg bg-amber-500/10 p-2 text-xs text-amber-600">
+                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                      <div>{importPreview.taxonomyNotes.slice(0, 6).map((n: string, i: number) => <p key={i}>{n}</p>)}</div>
+                    </div>
+                  )}
+                  <div className="max-h-48 overflow-y-auto divide-y divide-border">
+                    {importPreview.rows?.filter((r: any) => r.status === "error").map((r: any, i: number) => (
+                      <div key={i} className="flex items-start gap-2 py-1.5 text-xs">
+                        <XCircle size={13} className="mt-0.5 shrink-0 text-red-500" />
+                        <span className="text-muted-foreground">Row {r.rowNumber}: {r.messages.join("; ")}</span>
+                      </div>
+                    ))}
+                    {importPreview.rows?.filter((r: any) => r.status === "valid").slice(0, 3).map((r: any, i: number) => (
+                      <div key={i} className="flex items-start gap-2 py-1.5 text-xs">
+                        <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-emerald-500" />
+                        <span className="line-clamp-1">{r.data.front}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button onClick={() => setImportPreview(null)} className="rounded-lg border border-border px-3 py-1.5 text-xs">Back</button>
+                    <button onClick={() => void runImportExecute()} disabled={importing || (importPreview.stats?.valid ?? 0) === 0} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+                      {importing ? "Importing…" : `Create deck with ${importPreview.stats?.valid ?? 0} card(s)`}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

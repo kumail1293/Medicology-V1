@@ -29,6 +29,8 @@ import {
   createQbankSchema,
   updateQbankSchema,
   qbankMappingSchema,
+  spreadsheetSaveSchema,
+  bulkReviewSchema,
 } from './schemas.js';
 import type {
   CreateQuestion,
@@ -38,6 +40,8 @@ import type {
   CreateQbank,
   UpdateQbank,
   QbankMapping,
+  SpreadsheetSave,
+  BulkReview,
 } from './schemas.js';
 import { generateQid, isValidQid } from '../utils/qid.js';
 import { resolveTaxonomyFields } from '../utils/taxonomy.js';
@@ -749,6 +753,298 @@ adminRouter.get('/audit-logs', requirePermission('audit.view'), async (req: any,
       res.json(result);
     } catch (err: any) {
       console.error('Error in admin get audit logs:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Bulk review — apply the same pipeline action to many questions at once
+// (approve / publish / reject / archive …). Scope enforcement applies per
+// question, and every transition is versioned + audited like the single route.
+// ---------------------------------------------------------------------------
+adminRouter.post(
+  '/questions/bulk-review',
+  requirePermission('review.manage'),
+  validateBody(bulkReviewSchema),
+  async (req: any, res: any) => {
+    try {
+      const { ids, action, note } = req.validatedBody as BulkReview;
+      const transition = REVIEW_TRANSITIONS[action];
+      if (!transition) {
+        return res.status(400).json({ error: `Unknown review action "${action}"` });
+      }
+      if (transition.needsNote && !note?.trim()) {
+        return res.status(400).json({ error: 'A note explaining the rejection is required' });
+      }
+
+      let actorName = req.user?.name;
+      if (!actorName && req.user?.id) {
+        const [reviewer] = await db
+          .select({ name: usersTable.name })
+          .from(usersTable)
+          .where(eq(usersTable.id, req.user.id));
+        actorName = reviewer?.name;
+      }
+      const actor = { id: req.user?.id, name: actorName, email: req.user?.email };
+      const { questionInScope } = await import('../utils/authorization.js');
+      const now = new Date();
+
+      const results: { id: number; ok: boolean; status?: string; error?: string }[] = [];
+      let changed = 0;
+
+      for (const id of ids) {
+        try {
+          const [existing] = await db.select().from(questionsTable).where(eq(questionsTable.id, id));
+          if (!existing) {
+            results.push({ id, ok: false, error: 'Question not found' });
+            continue;
+          }
+          if (req.access) {
+            const inScope = await questionInScope(req.access, existing);
+            if (!inScope) {
+              results.push({ id, ok: false, error: 'Outside your access scope' });
+              continue;
+            }
+          }
+          if (!transition.from.includes(existing.status)) {
+            results.push({ id, ok: false, status: existing.status, error: `Cannot ${action} from "${existing.status}"` });
+            continue;
+          }
+
+          const oldStatus = existing.status;
+          const values: any = { status: transition.to, updatedAt: now };
+          if (transition.to === 'published' && !existing.publishedAt) {
+            values.publishedAt = now;
+          }
+          const [question] = await db
+            .update(questionsTable)
+            .set(values)
+            .where(eq(questionsTable.id, id))
+            .returning();
+
+          const trimmedNote = note?.trim();
+          const summary = trimmedNote
+            ? `${transition.label} (${oldStatus} → ${transition.to}) — ${trimmedNote}`
+            : `${transition.label} (${oldStatus} → ${transition.to})`;
+          await recordQuestionVersion({
+            questionId: id,
+            qid: question.qid,
+            changeType: 'status_change',
+            summary,
+            oldValues: { status: oldStatus },
+            newValues: { status: question.status, note: trimmedNote ?? undefined },
+            actor,
+            ...(action === 'approve' || action === 'publish'
+              ? { reviewStatus: 'approved' as const }
+              : action === 'reject'
+                ? { reviewStatus: 'rejected' as const }
+                : {}),
+            reviewerId: actor.id,
+            reviewerName: actor.name,
+            reviewedAt: now,
+          });
+          await recordAudit({
+            actor,
+            action: 'question.bulk_review',
+            entityType: 'question',
+            entityId: id,
+            entityLabel: question.qid,
+            summary,
+            oldValues: { status: oldStatus },
+            newValues: { status: question.status },
+            ip: req.ip,
+          });
+          changed++;
+          results.push({ id, ok: true, status: question.status });
+        } catch (err: any) {
+          results.push({ id, ok: false, error: err.message });
+        }
+      }
+
+      res.json({ action, changed, total: ids.length, results });
+    } catch (err: any) {
+      console.error('Error in admin bulk review:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Spreadsheet grid — flat rows for the in-app Excel editor.
+// ---------------------------------------------------------------------------
+
+adminRouter.get('/questions/spreadsheet', async (req: any, res: any) => {
+  try {
+    const { search, status, limit, offset } = req.query;
+    const conditions: any[] = [];
+    if (search) {
+      const q = String(search).trim();
+      if (isValidQid(q)) {
+        conditions.push(eq(questionsTable.qid, q));
+      } else {
+        conditions.push(
+          or(
+            ilike(questionsTable.questionText, `%${q}%`),
+            ilike(questionsTable.subject, `%${q}%`),
+            ilike(questionsTable.topic, `%${q}%`),
+            ilike(questionsTable.qid, `%${q}%`)
+          )
+        );
+      }
+    }
+    if (status) {
+      conditions.push(eq(questionsTable.status, String(status) as any));
+    }
+
+    const max = Math.min(Number(limit) || 200, 2000);
+    const off = Number(offset) || 0;
+    const questions = await db
+      .select({
+        id: questionsTable.id,
+        qid: questionsTable.qid,
+        questionText: questionsTable.questionText,
+        questionType: questionsTable.questionType,
+        options: questionsTable.options,
+        correctAnswer: questionsTable.correctAnswer,
+        explanation: questionsTable.explanation,
+        whyCorrect: questionsTable.whyCorrect,
+        whyWrong: questionsTable.whyWrong,
+        examPearl: questionsTable.examPearl,
+        commonTrap: questionsTable.commonTrap,
+        subject: questionsTable.subject,
+        system: questionsTable.system,
+        topic: questionsTable.topic,
+        subtopic: questionsTable.subtopic,
+        difficulty: questionsTable.difficulty,
+        status: questionsTable.status,
+        tags: questionsTable.tags,
+        isFree: questionsTable.isFree,
+      })
+      .from(questionsTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .limit(max)
+      .offset(off)
+      .orderBy(questionsTable.id);
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(questionsTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    res.json({ questions, total: Number(count) });
+  } catch (err: any) {
+    console.error('Error in admin spreadsheet:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Bulk save edited spreadsheet rows back into the QBank (validated, versioned,
+// audited). Every changed question gets a version row so the edit is traceable.
+adminRouter.post(
+  '/questions/spreadsheet/save',
+  requirePermission('questions.manage'),
+  validateBody(spreadsheetSaveSchema),
+  async (req: any, res: any) => {
+    try {
+      const { rows } = req.validatedBody as SpreadsheetSave;
+      const results: { id: number; ok: boolean; qid?: string; error?: string }[] = [];
+      let changed = 0;
+      const actor = { id: req.user?.id, name: req.user?.name, email: req.user?.email };
+
+      for (const row of rows) {
+        try {
+          const [existing] = await db.select().from(questionsTable).where(eq(questionsTable.id, row.id));
+          if (!existing) {
+            results.push({ id: row.id, ok: false, error: 'Question not found' });
+            continue;
+          }
+
+          const values: Record<string, any> = {};
+          if (row.questionText !== undefined) values.questionText = row.questionText;
+          if (row.questionType !== undefined) values.questionType = row.questionType;
+          if (row.explanation !== undefined) values.explanation = row.explanation;
+          if (row.whyCorrect !== undefined) values.whyCorrect = row.whyCorrect;
+          if (row.whyWrong !== undefined) values.whyWrong = row.whyWrong;
+          if (row.examPearl !== undefined) values.examPearl = row.examPearl;
+          if (row.commonTrap !== undefined) values.commonTrap = row.commonTrap;
+          if (row.subject !== undefined) values.subject = row.subject;
+          if (row.system !== undefined) values.system = row.system;
+          if (row.topic !== undefined) values.topic = row.topic;
+          if (row.subtopic !== undefined) values.subtopic = row.subtopic;
+          if (row.difficulty !== undefined) values.difficulty = row.difficulty;
+          if (row.status !== undefined) values.status = row.status;
+          if (row.tags !== undefined) values.tags = row.tags;
+          if (row.isFree !== undefined) values.isFree = row.isFree;
+          if (row.correctAnswer !== undefined) values.correctAnswer = row.correctAnswer;
+
+          // Options — rebuild the full map from the five editable cells so
+          // clearing a cell is respected.
+          if (row.optionA !== undefined || row.optionB !== undefined || row.optionC !== undefined || row.optionD !== undefined || row.optionE !== undefined) {
+            const current: Record<string, string> = { ...((existing as any).options ?? {}) };
+            if (row.optionA !== undefined) current.A = row.optionA;
+            if (row.optionB !== undefined) current.B = row.optionB;
+            if (row.optionC !== undefined) current.C = row.optionC;
+            if (row.optionD !== undefined) current.D = row.optionD;
+            if (row.optionE !== undefined) current.E = row.optionE;
+            values.options = current;
+          }
+
+          if (Object.keys(values).length === 0) {
+            results.push({ id: row.id, ok: false, error: 'No fields to update' });
+            continue;
+          }
+          values.updatedAt = new Date();
+
+          const [updated] = await db
+            .update(questionsTable)
+            .set(values)
+            .where(eq(questionsTable.id, row.id))
+            .returning();
+
+          const changedFields = Object.keys(values).filter((k) => k !== 'updatedAt');
+          await recordQuestionVersion({
+            questionId: row.id,
+            qid: updated.qid,
+            changeType: 'update',
+            summary: `Spreadsheet edit: ${changedFields.join(', ')}`,
+            oldValues: changedFields.reduce((acc: any, k) => {
+              acc[k] = (existing as any)[k];
+              return acc;
+            }, {}),
+            newValues: changedFields.reduce((acc: any, k) => {
+              acc[k] = values[k];
+              return acc;
+            }, {}),
+            actor,
+          });
+          await recordAudit({
+            actor,
+            action: 'question.spreadsheet_save',
+            entityType: 'question',
+            entityId: row.id,
+            entityLabel: updated.qid,
+            summary: `Spreadsheet edit: ${changedFields.join(', ')}`,
+            oldValues: changedFields.reduce((acc: any, k) => {
+              acc[k] = (existing as any)[k];
+              return acc;
+            }, {}),
+            newValues: changedFields.reduce((acc: any, k) => {
+              acc[k] = values[k];
+              return acc;
+            }, {}),
+            ip: req.ip,
+          });
+          changed++;
+          results.push({ id: row.id, ok: true, qid: updated.qid });
+        } catch (err: any) {
+          results.push({ id: row.id, ok: false, error: err.message });
+        }
+      }
+
+      res.json({ changed, total: rows.length, results });
+    } catch (err: any) {
+      console.error('Error in spreadsheet save:', err);
       res.status(500).json({ error: err.message });
     }
   }
