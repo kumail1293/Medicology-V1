@@ -79,6 +79,23 @@ errors.** What was found and fixed:
     Content & Exams / Users & Commerce / Communication / Platform /
     System) with a **"Search settings…"** box that filters groups live.
 
+### Admin page polish pass — Aug 2026 (lean pages)
+
+Upgraded the five leanest admin pages to the same quality bar as the
+rest of the panel (browser-verified, zero console errors):
+
+-   **Question Flags** — stats header (total / pending / resolved),
+    live search, question preview modal, and the backend now joins the
+    reporting user's email/name + question text for context.
+-   **Audit Logs** — action + entity-type filter dropdowns, CSV export,
+    refresh button, pagination range indicator, and a cleaner diff modal
+    (before/after per group).
+-   **Media Library** — multi-file upload with per-file progress,
+    drag-and-drop zone, and a click-to-zoom lightbox preview.
+-   **Taxonomy** — per-entity counts, better empty states.
+-   **Coming Soon** — category filter chips with counts and a live
+    search box (empty state preserved when no items exist).
+
 Verified against the repository (schema, migrations, routes, middleware,
 tests) — see commit history for the audit trail:
 

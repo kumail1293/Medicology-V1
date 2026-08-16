@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, Search, ChevronLeft, ChevronRight, FileText, X } from "lucide-react";
+import { Shield, Search, ChevronLeft, ChevronRight, FileText, X, Download, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 
@@ -74,7 +74,36 @@ export default function AdminAudit() {
 
   const entityTypes = useMemo(() => Array.from(new Set(logs.map((l) => l.entityType))), [logs]);
 
+  // Known action keys (from ACTION_LABELS) plus any seen in the loaded logs.
+  const actionOptions = useMemo(() => {
+    const known = Object.keys(ACTION_LABELS);
+    const seen = logs.map((l) => l.action);
+    return Array.from(new Set([...known, ...seen])).sort();
+  }, [logs]);
+
   const actionLabel = (a: string) => ACTION_LABELS[a] ?? a.replace(/[._]/g, " ");
+
+  const exportCsv = () => {
+    const header = ["Action", "Entity", "Summary", "Actor", "Email", "When"];
+    const rows = logs.map((l) => [
+      actionLabel(l.action),
+      l.entityType,
+      (l.summary ?? "").replace(/"/g, '""'),
+      l.actorName ?? "",
+      l.actorEmail ?? "",
+      new Date(l.createdAt).toISOString(),
+    ]);
+    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `medicology-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
@@ -86,12 +115,11 @@ export default function AdminAudit() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-          <input value={action} onChange={(e) => { setAction(e.target.value); setOffset(0); }}
-            placeholder="Filter by action…"
-            className="w-64 rounded-xl border border-border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
-        </div>
+        <select value={action} onChange={(e) => { setAction(e.target.value); setOffset(0); }}
+          className="rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none">
+          <option value="">All actions</option>
+          {actionOptions.map((a) => <option key={a} value={a}>{actionLabel(a)}</option>)}
+        </select>
         <select value={entityType} onChange={(e) => { setEntityType(e.target.value); setOffset(0); }}
           className="rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none">
           <option value="">All entity types</option>
@@ -99,6 +127,10 @@ export default function AdminAudit() {
         </select>
         <span className="text-sm text-muted-foreground">{total} log entries</span>
         <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => void load()} title="Refresh"
+            className="rounded-xl border border-border p-2 hover:border-primary/40"><RefreshCw size={15} /></button>
+          <button onClick={exportCsv} disabled={logs.length === 0} title="Export CSV"
+            className="rounded-xl border border-border p-2 hover:border-primary/40 disabled:opacity-40"><Download size={15} /></button>
           <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}
             className="rounded-xl border border-border p-2 disabled:opacity-40 hover:border-primary/40"><ChevronLeft size={15} /></button>
           <span className="text-xs text-muted-foreground">{offset + 1}–{Math.min(offset + limit, total)}</span>

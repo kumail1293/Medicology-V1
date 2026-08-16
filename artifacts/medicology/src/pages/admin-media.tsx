@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Trash2, Link2, Search, ImageIcon, Loader2 } from "lucide-react";
+import { Upload, Trash2, Link2, Search, ImageIcon, Loader2, X, Maximize2 } from "lucide-react";
 import {
   MEDIA_CATEGORIES, MEDIA_CATEGORY_LABELS, MediaItem,
   listMedia, uploadMedia, updateMedia, deleteMedia, formatBytes,
@@ -16,9 +16,14 @@ export default function AdminMediaPage() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
+  const [lightbox, setLightbox] = useState<MediaItem | null>(null);
   const [editingAlt, setEditingAlt] = useState<number | null>(null);
   const [altDraft, setAltDraft] = useState("");
   const [categoryDraft, setCategoryDraft] = useState<Record<number, string>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchItems = async () => {
     try {
@@ -36,18 +41,34 @@ export default function AdminMediaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (files: File[]) => {
+    if (files.length === 0) return;
+    setUploading(true);
+    setUploadProgress(0);
+    setUploadTotal(files.length);
+    let done = 0;
+    let failed = 0;
     try {
-      setUploading(true);
-      await uploadMedia(file, { category: filter === "all" ? "rich_content" : (filter as any) });
-      toast({ title: "Uploaded", description: `${file.name} added to the library.` });
+      for (const file of files) {
+        try {
+          await uploadMedia(file, { category: filter === "all" ? "rich_content" : (filter as any) });
+        } catch {
+          failed++;
+          toast({ title: "Upload failed", description: `${file.name}: ${errMessage()}`, variant: "destructive" });
+        }
+        done++;
+        setUploadProgress(done);
+      }
+      if (done - failed > 0) toast({ title: "Uploaded", description: `${done - failed} file(s) added to the library.` });
       void fetchItems();
-    } catch (err) {
-      toast({ title: "Upload failed", description: err instanceof Error ? err.message : "Please try again", variant: "destructive" });
     } finally {
       setUploading(false);
     }
   };
+
+  function errMessage() {
+    return "Please check the file type/size and try again";
+  }
 
   const saveAlt = async (m: MediaItem) => {
     try {
@@ -104,11 +125,33 @@ export default function AdminMediaPage() {
           uploading && "opacity-60"
         )}>
           {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-          {uploading ? "Uploading…" : "Upload image"}
-          <input type="file" accept="image/*" className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleUpload(f); e.target.value = ""; }} />
+          {uploading ? `Uploading ${uploadProgress}/${uploadTotal}…` : "Upload images"}
+          <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
+            onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) void handleUpload(files); e.target.value = ""; }} />
         </label>
       </div>
+
+      {/* Drag & drop zone (visible when not uploading) */}
+      {!uploading && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const files = Array.from(e.dataTransfer.files ?? []).filter((f) => f.type.startsWith("image/"));
+            if (files.length) void handleUpload(files);
+          }}
+          className={cn(
+            "flex items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-3 text-sm transition-colors cursor-pointer",
+            dragOver ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/40"
+          )}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Upload size={14} />
+          Drag & drop images here, or click to browse (multiple allowed)
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
@@ -147,14 +190,17 @@ export default function AdminMediaPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {items.map((m) => (
             <div key={m.id} className="group overflow-hidden rounded-xl border border-border bg-card transition-all hover:border-primary/40 hover:shadow-md">
-              <div className="aspect-square w-full overflow-hidden bg-muted/40">
+              <button onClick={() => setLightbox(m)} className="relative block aspect-square w-full overflow-hidden bg-muted/40 cursor-zoom-in">
                 {m.mimeType === "image/svg+xml" ? (
                   <img src={m.url} alt={m.altText ?? m.originalName} className="h-full w-full object-contain p-3" />
                 ) : (
                   <img src={m.url} alt={m.altText ?? m.originalName} loading="lazy"
                     className="h-full w-full object-cover transition-transform group-hover:scale-105" />
                 )}
-              </div>
+                <span className="absolute right-2 top-2 rounded-md bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                  <Maximize2 size={12} />
+                </span>
+              </button>
               <div className="space-y-2 p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -205,6 +251,41 @@ export default function AdminMediaPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Lightbox preview */}
+      {lightbox && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setLightbox(null)}>
+          <div className="relative max-h-[90vh] max-w-4xl" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={lightbox.url}
+              alt={lightbox.altText ?? lightbox.originalName}
+              className="max-h-[80vh] max-w-full rounded-2xl object-contain shadow-2xl"
+            />
+            <button
+              onClick={() => setLightbox(null)}
+              className="absolute -right-3 -top-3 rounded-full bg-card p-2 shadow-lg border border-border hover:bg-muted"
+            >
+              <X size={16} />
+            </button>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-white/90">
+              <div className="min-w-0">
+                <p className="font-medium truncate">{lightbox.originalName}</p>
+                <p className="text-xs text-white/60">
+                  {lightbox.width && lightbox.height ? `${lightbox.width}×${lightbox.height} · ` : ""}
+                  {formatBytes(lightbox.sizeBytes)} · {MEDIA_CATEGORY_LABELS[lightbox.category]}
+                </p>
+                {lightbox.altText && <p className="mt-1 text-xs text-white/70">Alt: {lightbox.altText}</p>}
+              </div>
+              <button
+                onClick={() => void copyUrl(lightbox)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium hover:bg-white/20"
+              >
+                <Link2 size={13} /> Copy URL
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

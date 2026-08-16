@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Clock, Eye, EyeOff, Users, Rocket, BookOpen, GraduationCap, Package, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, Clock, Eye, EyeOff, Users, Rocket, BookOpen, GraduationCap, Package, Sparkles, Search } from "lucide-react";
 import { clsx } from "clsx";
 import {
   ComingSoonEntry, ComingSoonCategory,
@@ -74,6 +74,8 @@ export default function AdminComingSoonPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<ComingSoonCategory | "all">("all");
+  const [query, setQuery] = useState("");
 
   const load = async () => {
     try {
@@ -131,6 +133,22 @@ export default function AdminComingSoonPage() {
 
   const totalInterest = entries.reduce((sum, e) => sum + (e.interestCount ?? 0), 0);
 
+  const q = query.trim().toLowerCase();
+  const filtered = entries.filter((e) => {
+    if (categoryFilter !== "all" && e.category !== categoryFilter) return false;
+    if (!q) return true;
+    return (
+      e.name.toLowerCase().includes(q) ||
+      (e.description ?? "").toLowerCase().includes(q) ||
+      (e.audience ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  const categoryCounts = entries.reduce<Record<string, number>>((acc, e) => {
+    acc[e.category] = (acc[e.category] ?? 0) + 1;
+    return acc;
+  }, {});
+
   const field = (label: string, node: React.ReactNode, hint?: string) => (
     <label className="block">
       <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
@@ -160,13 +178,44 @@ export default function AdminComingSoonPage() {
       </div>
 
       {!loading && entries.length > 0 && (
-        <div className="flex flex-wrap gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-muted-foreground">
             <Package size={14} /> {entries.length} items
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 font-medium text-primary">
             <Users size={14} /> {totalInterest} Notify Me registrations
           </span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search items…"
+                className="w-48 rounded-lg border border-border bg-background py-1.5 pl-8 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loading && entries.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setCategoryFilter("all")}
+            className={clsx("rounded-full border px-3 py-1 text-xs font-medium transition-colors", categoryFilter === "all" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground")}
+          >
+            All <span className="ml-1 text-[11px] opacity-70">{entries.length}</span>
+          </button>
+          {Object.entries(COMING_SOON_CATEGORY_LABELS).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setCategoryFilter(value as ComingSoonCategory)}
+              className={clsx("rounded-full border px-3 py-1 text-xs font-medium transition-colors", categoryFilter === value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground")}
+            >
+              {label} <span className="ml-1 text-[11px] opacity-70">{categoryCounts[value] ?? 0}</span>
+            </button>
+          ))}
         </div>
       )}
 
@@ -176,9 +225,13 @@ export default function AdminComingSoonPage() {
         <div className="rounded-xl border-2 border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
           No Coming Soon items yet. Create your first one — e.g. <span className="font-medium text-foreground">FCPS → Coming Soon → Notify Me</span>.
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border-2 border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
+          No items match your filters. Try a different category or search term.
+        </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {entries.map((entry) => (
+          {filtered.map((entry) => (
             <div key={entry.id} className={clsx("flex flex-col rounded-xl border bg-card p-5", entry.active ? "border-border" : "border-border/50 opacity-70")}>
               <div className="mb-2 flex items-start justify-between gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">

@@ -13,6 +13,7 @@ import {
   Tag,
   Save,
   X,
+  Search,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -104,6 +105,7 @@ export default function AdminTaxonomyPage() {
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; row?: Row } | null>(null);
   const [form, setForm] = useState<Record<string, any>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState('');
 
   const fetchAll = useCallback(async () => {
     try {
@@ -254,13 +256,23 @@ export default function AdminTaxonomyPage() {
   const currentParent = entityDef.parent;
   const parentLabel = currentParent ? FIELD_LABELS[`${currentParent === 'exam-systems' ? 'examSystem' : currentParent.replace('-', '')}Id`] ?? 'Parent' : null;
 
+  // Case-insensitive filter for the current entity's rows.
+  const searchable = (row: Row) => {
+    const q = search.toLowerCase().trim();
+    if (!q) return true;
+    return [row.name, row.code, row.shortName, row.flag]
+      .filter((v): v is string => typeof v === 'string')
+      .some((v) => v.toLowerCase().includes(q));
+  };
+  const visibleRows = currentRows.filter(searchable);
+
   // Simple tree display for the currently selected entity's parent chain.
   const toggleExpand = (key: string) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const renderTree = () => {
     const parentKey = currentParent;
     if (!parentKey) {
-      return currentRows.map((row) => (
+      return visibleRows.map((row) => (
         <div key={row.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/40">
           <div className="flex items-center gap-2 text-sm">
             <span className="font-medium">{row.flag ? `${row.flag} ` : ''}{row.name}</span>
@@ -280,7 +292,7 @@ export default function AdminTaxonomyPage() {
 
     const parents = parentOptions(parentKey);
     return parents.map((parent) => {
-      const children = currentRows.filter((row) => row[`${parentKey.replace('-', '')}Id`] === parent.id);
+      const children = visibleRows.filter((row) => row[`${parentKey.replace('-', '')}Id`] === parent.id);
       const isOpen = expanded[`${parentKey}-${parent.id}`] ?? true;
       return (
         <div key={parent.id} className="border-b border-border/60">
