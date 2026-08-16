@@ -138,8 +138,8 @@ export default function AdminFlashcardsPage() {
   const handleImportFile = (file: File | null) => {
     if (!file) return;
     const name = file.name.toLowerCase();
-    if (!/\.(xlsx|xls|csv|tsv|txt)$/.test(name)) {
-      toast({ title: "Invalid file", description: "Use .xlsx, .xls, .csv, .tsv or .txt (Anki text)", variant: "destructive" });
+    if (!/\.(xlsx|xls|csv|tsv|txt|apkg)$/.test(name)) {
+      toast({ title: "Invalid file", description: "Use .xlsx, .xls, .csv, .tsv, .txt (Anki text) or .apkg (Anki package)", variant: "destructive" });
       return;
     }
     setImportFile(file);
@@ -547,12 +547,12 @@ export default function AdminFlashcardsPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Deck metadata block (name, slug, exam, program, year…) + one row per card (Front, Back, Note, Tags, Image, taxonomy).
-                Anki text files (<code className="rounded bg-muted px-1">front&lt;TAB&gt;back</code> per line) work too.
+                Anki text files (<code className="rounded bg-muted px-1">front&lt;TAB&gt;back</code> per line) and full Anki packages (<code className="rounded bg-muted px-1">.apkg</code> — e.g. AnKing decks, with images) work too.
               </p>
               <input
                 ref={importFileRef}
                 type="file"
-                accept=".xlsx,.xls,.csv,.tsv,.txt"
+                accept=".xlsx,.xls,.csv,.tsv,.txt,.apkg"
                 className="hidden"
                 onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
               />
@@ -561,7 +561,7 @@ export default function AdminFlashcardsPage() {
                   <FileSpreadsheet size={32} className="text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">Choose a file to import</p>
-                    <p className="text-xs text-muted-foreground">.xlsx · .xls · .csv · .tsv · .txt (Anki text)</p>
+                    <p className="text-xs text-muted-foreground">.xlsx · .xls · .csv · .tsv · .txt (Anki text) · .apkg (Anki package)</p>
                   </div>
                 </button>
               ) : (

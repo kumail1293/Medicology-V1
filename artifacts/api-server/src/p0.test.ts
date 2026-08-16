@@ -2174,3 +2174,116 @@ test('bulk review: reject requires a note and skips questions that cannot transi
   assert.equal(withNote.status, 200);
   assert.ok(Array.isArray(withNoteData.results), 'results array returned');
 });
+
+test('bulk deck import: .apkg (Anki package) with media — notes, cloze, field layout, image rewrite', async () => {
+  const { db } = await import('./db.js');
+  const { usersTable, flashcardDecksTable, flashcardsTable, mediaTable } = await import('@workspace/db');
+  const { eq: drizzleEq } = await import('./utils/drizzle.js');
+  await db.update(usersTable).set({ role: 'superadmin' as any }).where(drizzleEq(usersTable.id, 1));
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const auth = { Authorization: `Bearer ${adminToken}` };
+
+  // Build a real Anki collection.anki2 (SQLite) + media map + media file inside
+  // a ZIP, mirroring the .apkg format Anki exports.
+  const JSZip = (await import('jszip')).default;
+  const initSqlJs = (await import('sql.js')).default;
+  const SQL = await initSqlJs();
+  const col = new SQL.Database();
+  col.run(`
+    CREATE TABLE col (id INTEGER PRIMARY KEY, crt INTEGER NOT NULL, mod INTEGER NOT NULL, scm INTEGER NOT NULL, ver INTEGER NOT NULL, dty INTEGER NOT NULL, usn INTEGER NOT NULL, ls INTEGER NOT NULL, conf TEXT NOT NULL, models TEXT NOT NULL, decks TEXT NOT NULL, dconf TEXT NOT NULL, tags TEXT NOT NULL);
+    CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT NOT NULL, mid INTEGER NOT NULL, mod INTEGER NOT NULL, usn INTEGER NOT NULL, tags TEXT NOT NULL, flds TEXT NOT NULL, sfld INTEGER NOT NULL, csum INTEGER NOT NULL, flags INTEGER NOT NULL, data TEXT NOT NULL);
+  `);
+  const models = {
+    '101': {
+      id: 101, name: 'AnKing Overhaul', type: 0, mod: 0, usn: 0, sortf: 0, did: 1,
+      flds: [
+        { name: 'Text', ord: 0, sticky: false, rtl: false, font: 'Arial', size: 20 },
+        { name: 'Extra', ord: 1, sticky: false, rtl: false, font: 'Arial', size: 20 },
+        { name: 'Lecture Notes', ord: 2, sticky: false, rtl: false, font: 'Arial', size: 20 },
+      ],
+      tmpls: [{ name: 'Card 1', ord: 0, qfmt: '{{Text}}', afmt: '{{FrontSide}}<hr>{{Extra}}', bqfmt: '', bafmt: '', did: null, bfont: 'Arial', bsize: 20 }],
+    },
+    '102': {
+      id: 102, name: 'Cloze', type: 1, mod: 0, usn: 0, sortf: 0, did: 1,
+      flds: [
+        { name: 'Text', ord: 0, sticky: false, rtl: false, font: 'Arial', size: 20 },
+        { name: 'Extra', ord: 1, sticky: false, rtl: false, font: 'Arial', size: 20 },
+      ],
+      tmpls: [{ name: 'Cloze', ord: 0, qfmt: '{{cloze:Text}}', afmt: '{{cloze:Text}}', bqfmt: '', bafmt: '', did: null, bfont: 'Arial', bsize: 20 }],
+    },
+  };
+  const decks = {
+    '1': { id: 1, name: 'AnKing Overhaul for Step 1 & 2', mtime: 0, usn: 0, desc: '', conf: 1 },
+  };
+  col.run('INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (1, 0, 0, 0, 11, 0, 0, 0, ?, ?, ?, ?, ?)',
+    ['{}', JSON.stringify(models), JSON.stringify(decks), '{}', '{}']);
+
+  // Two notes: a basic (front/back with an embedded image) + a cloze.
+  col.run('INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (1, ?, 101, 0, 0, ?, ?, 0, 0, 0, ?)',
+    ['guid-1', 'AnKing Pathology', 'Inferior vena cava drains into the right atrium <img src="heart.png">\x1f<b>Right atrium</b>\x1fLecture: heart week 3'.replace('\x1f', String.fromCharCode(31)).replace('\x1f', String.fromCharCode(31)), '{}']);
+  col.run('INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (2, ?, 102, 0, 0, ?, ?, 0, 0, 0, ?)',
+    ['guid-2', 'AnKing Cardio', `The heart has {{c1::four}} chambers\x1fExtra cloze info`.replace('\x1f', String.fromCharCode(31)).replace('\x1f', String.fromCharCode(31)), '{}']);
+  const colBytes = Buffer.from(col.export());
+  col.close();
+
+  // Tiny PNG + media map + zip.
+  const png = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x08, 0x02, 0x00, 0x00, 0x00,
+    0x26, 0x93, 0x0b, 0x91, 0x00, 0x00, 0x00, 0x01, 0x73, 0x52, 0x47, 0x42, 0x00, 0xae, 0xce, 0x1c, 0xe9, 0x00, 0x00, 0x00, 0x04,
+    0x67, 0x41, 0x4d, 0x41, 0x00, 0x00, 0xb1, 0x8f, 0x0b, 0xfc, 0x61, 0x05, 0x00, 0x00, 0x00, 0x20, 0x49, 0x44, 0x41, 0x54, 0x78,
+    0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xc0, 0xf0, 0x1f, 0x08, 0x18, 0x18, 0x18, 0x18, 0xfe, 0xff, 0xff, 0xff, 0x0f, 0x00, 0x0c, 0x7c,
+    0x04, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+  ]);
+  const zip = new JSZip();
+  zip.file('collection.anki2', colBytes);
+  zip.file('media', JSON.stringify({ 'heart.png': 'mediahash123' }));
+  zip.file('mediahash123', png);
+  const apkgBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+
+  const form = new FormData();
+  form.append('file', new Blob([apkgBuffer], { type: 'application/octet-stream' }), 'AnKing Overhaul for Step 1 & 2.apkg');
+  const previewRes = await fetch(`${BASE}/flashcards/admin/decks/import/preview`, { method: 'POST', headers: auth, body: form });
+  const preview = (await previewRes.json()) as any;
+  assert.equal(previewRes.status, 200, JSON.stringify(preview).slice(0, 400));
+  assert.equal(preview.format, 'apkg');
+  assert.equal(preview.totalRows, 2, 'both notes parsed');
+  assert.equal(preview.stats.valid, 2);
+  assert.ok(preview.deck.name.includes('AnKing Overhaul'), `deck name from apkg: ${preview.deck.name}`);
+  assert.ok(preview.mediaImported >= 1, 'embedded media extracted');
+
+  // Field layout: front = primary field, back = remaining fields.
+  const basic = preview.rows.find((r: any) => r.data.front.includes('Inferior vena cava'));
+  assert.ok(basic, 'basic note present');
+  assert.ok(basic.data.back.includes('Right atrium'), 'back = Extra field');
+  assert.ok(basic.data.back.includes('Lecture: heart week 3'), 'lecture notes appended to back');
+  assert.ok(basic.data.front.includes('/api/storage/uploads/'), 'image src rewritten to served media URL');
+  assert.ok(basic.data.front.includes('fc-'), 'media filename has fc- prefix');
+
+  // Cloze preserved verbatim.
+  const cloze = preview.rows.find((r: any) => r.data.front.includes('{{c1::'));
+  assert.ok(cloze, 'cloze note preserved {{c1::…}} template');
+  assert.ok(cloze.data.front.includes('{{c1::four}}'), 'cloze intact');
+  assert.ok(cloze.data.tags.includes('AnKing'), 'anki tags carried over');
+
+  // Media landed in the library.
+  const mediaRows = await db.select().from(mediaTable);
+  const imported = mediaRows.filter((m: any) => String(m.filename).startsWith('fc-'));
+  assert.ok(imported.length >= 1, 'media registered in media library');
+
+  const execRes = await fetch(`${BASE}/flashcards/admin/decks/import/execute`, json(auth, {
+    rows: preview.rows,
+    deck: preview.deck,
+    createMissingTaxonomy: true,
+  }, 'POST'));
+  const result = (await execRes.json()) as any;
+  assert.equal(execRes.status, 201, JSON.stringify(result).slice(0, 300));
+  assert.equal(result.inserted, 2, 'both cards inserted');
+
+  const [deck] = await db.select().from(flashcardDecksTable).where(drizzleEq(flashcardDecksTable.slug, preview.deck.slug));
+  assert.ok(deck, 'deck persisted');
+  const cards = await db.select().from(flashcardsTable).where(drizzleEq(flashcardsTable.deckId, deck.id));
+  assert.equal(cards.length, 2);
+  assert.ok(cards.some((c: any) => c.front.includes('/api/storage/uploads/')), 'card front keeps rewritten media URL');
+});

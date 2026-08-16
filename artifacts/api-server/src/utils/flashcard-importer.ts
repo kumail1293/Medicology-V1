@@ -267,10 +267,76 @@ export function parseFlashcardFile(buffer: Buffer, fileName: string): { rows: Fl
   } else if (lower.endsWith('.txt')) {
     parsed = parseAnkiTextCards(buffer.toString('utf8'));
     format = 'anki-text';
+  } else if (lower.endsWith('.apkg')) {
+    throw new Error('Anki .apkg files must be parsed through parseApkgFile (async — media extraction)');
   } else {
-    throw new Error('Unsupported file — use .xlsx, .xls, .csv, .tsv or .txt (Anki text)');
+    throw new Error('Unsupported file — use .xlsx, .xls, .csv, .tsv, .txt (Anki text) or .apkg (Anki package)');
   }
   return { rows: parsed.rows, deckMeta: parsed.deckMeta, format };
+}
+
+/**
+ * Parse an Anki .apkg package into import rows. The primary field of each
+ * note type becomes the card front, the remaining fields form the back, and
+ * embedded media is extracted into the shared media library with `<img>`
+ * references rewritten to the served URLs.
+ */
+export async function parseApkgFile(
+  buffer: Buffer,
+  fileName: string,
+  userId: number | null = null,
+): Promise<{ rows: FlashcardImportRow[]; deckMeta: Record<string, any>; format: string; mediaImported: number }> {
+  const { parseApkg, importApkgMedia, rewriteCardImages } = await import('./flashcard-apkg.js');
+  const { db } = await import('../db.js');
+  const { mediaTable } = await import('@workspace/db');
+
+  const { notes, models, media, deckNameHint } = await parseApkg(buffer);
+  const urlMap = await importApkgMedia(media, userId, db, mediaTable);
+
+  const rows: FlashcardImportRow[] = [];
+  let rowNumber = 1;
+  for (const note of notes) {
+    rowNumber++;
+    const model = models.get(note.mid);
+    const fields = note.fields;
+
+    // Pick the front field: the note type's first field, or a conventionally
+    // named front field (Text / Front / Question / FrontSide) when present.
+    let frontIdx = 0;
+    if (model && model.fieldNames.length > 0) {
+      const named = model.fieldNames.findIndex((f) => /^(text|front|question|frontside)$/i.test(f.trim()));
+      if (named >= 0) frontIdx = named;
+    }
+
+    const front = stringValue(fields[frontIdx]);
+    // Everything else becomes the back (AnKing note types carry lecture notes,
+    // missed questions and resource tags after the main front/extra fields).
+    const backParts = fields
+      .filter((_, i) => i !== frontIdx)
+      .map((f) => stringValue(f))
+      .filter(Boolean);
+    const back = backParts.join('<br>');
+
+    const row: FlashcardImportRow = {
+      rowNumber,
+      data: {
+        front: rewriteCardImages(front, urlMap),
+        back: rewriteCardImages(back, urlMap),
+        tags: note.tags,
+      },
+      status: front ? 'valid' : 'error',
+      messages: front ? [] : ['Missing front text'],
+    };
+    rows.push(row);
+  }
+
+  const hint = stringValue(deckNameHint) || fileName.replace(/\.apkg$/i, '');
+  return {
+    rows,
+    deckMeta: { deckName: hint, deckSlug: slugify(hint) },
+    format: 'apkg',
+    mediaImported: urlMap.size,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -297,8 +363,18 @@ function validateCard(row: FlashcardImportRow): void {
   }
 }
 
-export async function buildFlashcardImportPreview(buffer: Buffer, fileName: string): Promise<FlashcardImportPreview> {
-  const { rows, deckMeta, format } = parseFlashcardFile(buffer, fileName);
+export interface FlashcardImportPreviewWithMedia extends FlashcardImportPreview {
+  mediaImported?: number;
+}
+
+export async function buildFlashcardImportPreview(
+  buffer: Buffer,
+  fileName: string,
+  userId: number | null = null,
+): Promise<FlashcardImportPreviewWithMedia> {
+  const { rows, deckMeta, format, mediaImported } = fileName.toLowerCase().endsWith('.apkg')
+    ? await parseApkgFile(buffer, fileName, userId)
+    : { ...parseFlashcardFile(buffer, fileName), mediaImported: 0 };
   const taxonomyNotes: string[] = [];
 
   for (const row of rows) {
@@ -346,6 +422,7 @@ export async function buildFlashcardImportPreview(buffer: Buffer, fileName: stri
     rows,
     stats,
     taxonomyNotes: [...new Set(taxonomyNotes)].slice(0, 25),
+    mediaImported,
   };
 }
 

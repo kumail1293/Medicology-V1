@@ -83,10 +83,10 @@ bio/phone · `0014` user study aim (`studyAim` — AMBOSS-style goal) ·
 user_roles, user_permissions, organizations, teams, team_members,
 user_scopes, role_scopes) + `users.userType`.
 
-Tests: 57 integration tests (settings precedence, overrides, imports,
-bulk deck import, spreadsheet grid + bulk save, bulk review, media,
-coming soon, RBAC + Administration 2.0 + taxonomy-aware scope
-enforcement, email templates/renderer/
+Tests: 58 integration tests (settings precedence, overrides, imports,
+bulk deck import incl. Anki .apkg with media, spreadsheet grid + bulk
+save, bulk review, media, coming soon, RBAC + Administration 2.0 +
+taxonomy-aware scope enforcement, email templates/renderer/
 secret handling, sessions/revocation, export/import, audit gating,
 transactional sends, template seeding, forgot/reset password,
 announcement email, study aim + progress reset, announcement user
@@ -186,10 +186,14 @@ build, 18-check browser QA (RBAC pages + access drawer) — all green.
     values.
 -   **Admin bulk deck import** (`/admin/flashcards`): xlsx/csv/tsv with
     a deck-metadata block (Deck Name, Exam, Program, Year, Subject…) +
-    card rows (Front/Back/Note/Tags/Image), or plain Anki `front\tback`
-    text; preview with per-row validation, taxonomy auto-create
-    (subjects/systems/topics/subtopics), duplicate-slug handling
-    (reuses existing deck), audit-free card insert with sort order.
+    card rows (Front/Back/Note/Tags/Image), plain Anki `front\tback`
+    text, or **full Anki `.apkg` packages** (e.g. AnKing Overhaul for
+    Step 1 & 2) — the SQLite collection is parsed (note types, field
+    layout, tags, cloze templates preserved), embedded media is
+    extracted into the shared media library with `<img>` references
+    rewritten to served URLs; preview with per-row validation,
+    taxonomy auto-create, duplicate-slug handling (reuses existing
+    deck), audit-free card insert with sort order.
 -   **Deck template downloads** (`.xlsx` and `format=csv`) with example
     rows + guide for exam-specific decks.
 -   **Card image rendering fix**: deck links now render images

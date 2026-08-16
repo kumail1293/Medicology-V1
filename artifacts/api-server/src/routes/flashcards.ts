@@ -173,12 +173,12 @@ flashcardsRouter.get('/admin/decks/template', authenticate, requirePermission('f
 
 const deckUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 },
+  limits: { fileSize: 60 * 1024 * 1024 }, // .apkg decks with media can be large
   fileFilter: (req, file, cb) => {
     const name = (file.originalname || '').toLowerCase();
-    const ok = /(\.xlsx|\.xls|\.csv|\.tsv|\.txt)$/.test(name);
+    const ok = /(\.xlsx|\.xls|\.csv|\.tsv|\.txt|\.apkg)$/.test(name);
     if (ok) cb(null, true);
-    else cb(new Error('Only .xlsx, .xls, .csv, .tsv or .txt (Anki text) files are supported'));
+    else cb(new Error('Only .xlsx, .xls, .csv, .tsv, .txt (Anki text) or .apkg (Anki package) files are supported'));
   },
 });
 
@@ -188,7 +188,7 @@ flashcardsRouter.post('/admin/decks/import/preview', authenticate, requirePermis
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     try {
-      const preview = await buildFlashcardImportPreview(req.file.buffer, req.file.originalname);
+      const preview = await buildFlashcardImportPreview(req.file.buffer, req.file.originalname, req.user?.id ?? null);
       res.json(preview);
     } catch (parseErr: any) {
       res.status(400).json({ error: parseErr.message });

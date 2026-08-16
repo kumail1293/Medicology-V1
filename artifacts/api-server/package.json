@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-  "dev": "node --env-file=../../.env --watch --import tsx/esm src/app.ts",
-  "build": "tsc --noEmit",
-  "start": "node --env-file=../../.env --import tsx/esm src/app.ts",
-  "typecheck": "tsc --noEmit",
-  "test": "node --import tsx/esm --test --test-force-exit src/p0.test.ts"
+    "dev": "node --env-file=../../.env --watch --import tsx/esm src/app.ts",
+    "build": "tsc --noEmit",
+    "start": "node --env-file=../../.env --import tsx/esm src/app.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx/esm --test --test-force-exit src/p0.test.ts"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
@@ -21,7 +21,9 @@
     "multer": "^1.4.5-lts.2",
     "pg": "^8.11.0",
     "xlsx": "^0.18.5",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "jszip": "^3.10.1",
+    "sql.js": "^1.14.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
