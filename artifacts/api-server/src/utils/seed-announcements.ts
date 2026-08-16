@@ -1,10 +1,5 @@
 // ============================================================================
-// Prebuilt announcement templates + active in-app announcements seeder.
-//
-// Seeds beautiful, reusable announcement templates (for admins to pick from
-// when creating announcements) and a set of active general + personalized
-// announcements (in-app only, delivered via /api/announcements/active).
-// Idempotent: skipped when the tables already contain rows.
+// Seeder: prebuilt announcement templates + active in-app announcements.
 // ============================================================================
 
 import { db } from '../db.js';
@@ -12,9 +7,8 @@ import { announcementsTable, announcementTemplatesTable } from '@workspace/db';
 import { eq } from '../utils/drizzle.js';
 
 // ---------------------------------------------------------------------------
-// Prebuilt templates — beautiful, reusable skeletons for the announcement
-// builder. Each one has rich HTML content with emojis, styled lists, and
-// clear CTAs. Admins create an announcement "from template" to prefill.
+// Templates — beautiful, reusable, cover all 7 schema categories.
+// Admins pick from these when creating announcements.
 // ---------------------------------------------------------------------------
 
 const TEMPLATES = [
@@ -23,15 +17,24 @@ const TEMPLATES = [
     category: 'exam_alert',
     type: 'exam_alert',
     title: '🔔 {examName} is {days} Days Away — You\'ve Got This!',
-    content: `<p>Dear medic,</p>
-<p>Your <strong>{examName}</strong> is just <strong>{days} days</strong> away — and you\'re closer than you think. This is the moment to consolidate what you know and sharpen the edges.</p>
-<h3 style="margin-top:1rem">Quick Tips for the Final Stretch</h3>
-<ul style="padding-left:1.25rem">
-  <li><strong>Focus on high-yield topics</strong> — the ones that show up every year.</li>
-  <li><strong>Do timed MCQs daily</strong> — exam rhythm matters as much as knowledge.</li>
-  <li><strong>Review your wrong answers</strong> — every mistake is a free point next time.</li>
+    content: `<div style="display:flex;gap:14px;margin-bottom:14px">
+  <div style="flex:1;background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);border-radius:14px;padding:16px;color:#fff">
+    <div style="font-size:32px;margin-bottom:6px">🔔</div>
+    <div style="font-size:28px;font-weight:800;line-height:1.1">{days}</div>
+    <div style="font-size:13px;opacity:0.92">days to go</div>
+  </div>
+  <div style="flex:2;background:#fff;border-radius:14px;padding:16px;color:#1f2937;border:1px solid #e5e7eb">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px">{examName}</div>
+    <div style="font-size:12.5px;color:#6b7280;line-height:1.5">Your countdown starts now. Every day you prepare is a day closer.</div>
+  </div>
+</div>
+<h3 style="margin-top:6px">Final Stretch Strategy</h3>
+<ul style="padding-left:1.25rem;margin-bottom:12px">
+  <li><strong>High-yield focus</strong> — target the topics that appear every year.</li>
+  <li><strong>Timed practice daily</strong> — exam rhythm is a skill. Build it now.</li>
+  <li><strong>Wrong-answer review</strong> — every mistake is a free point on exam day.</li>
 </ul>
-<p>Medicology is with you every step of the way. You\'ve put in the work — now go show them what you\'ve learned.</p>`,
+<p style="margin:0">Medicology is with you every step. You\'ve put in the work — now go show them.</p>`,
     buttonText: 'Start Focused Review →',
     buttonUrl: null,
     theme: 'warning',
@@ -39,20 +42,25 @@ const TEMPLATES = [
     targetRoles: 'all',
   },
   {
-    name: 'New QBank Launch',
+    name: 'QBank Launch — New Paper',
     category: 'qbank_launch',
     type: 'popup',
-    title: '📚 New QBank: {qbankName} is Here!',
-    content: `<p>Great news — our newest QBank is live and ready for you.</p>
-<p><strong>{qbankName}</strong> brings you <strong>{questionCount} exam-style MCQs</strong> with detailed explanations, covering every major topic you need for your exam.</p>
-<h3 style="margin-top:1rem">What\'s Inside</h3>
+    title: '📚 New QBank: {qbankName} is Live!',
+    content: `<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+  <span style="display:inline-flex;align-items:center;gap:5px;background:#dcfce7;border:1px solid #bbf7d0;border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:600;color:#166534">✅ {questionCount} exam-style MCQs</span>
+  <span style="display:inline-flex;align-items:center;gap:5px;background:#dbeafe;border:1px solid #bfdbfe;border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:600;color:#1e40af">📝 Detailed explanations</span>
+  <span style="display:inline-flex;align-items:center;gap:5px;background:#fef3c7;border:1px solid #fde68a;border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:600;color:#92400e">🎯 Progress tracking</span>
+  <span style="display:inline-flex;align-items:center;gap:5px;background:#f3e8ff;border:1px solid #e9d5ff;border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:600;color:#6b21a8">⏱️ Timed mocks</span>
+</div>
+<p><strong>{qbankName}</strong> is built from the latest paper patterns and covers every major topic you need.</p>
+<h3 style="margin-top:6px">What\'s Inside</h3>
 <ul style="padding-left:1.25rem">
-  <li>✅ <strong>Exam-aligned questions</strong> — built from the latest paper patterns.</li>
-  <li>✅ <strong>Detailed explanations</strong> — understand the "why" behind every answer.</li>
-  <li>✅ <strong>Progress tracking</strong> — see your weak areas improve over time.</li>
-  <li>✅ <strong>Timed mock tests</strong> — simulate real exam conditions.</li>
+  <li><strong>Exam-aligned</strong> — built from the latest question patterns and marking schemes.</li>
+  <li><strong>Explanations that teach</strong> — every answer comes with the "why", not just the "what".</li>
+  <li><strong>See your weak spots</strong> — topic-by-topic analytics that show where to focus.</li>
+  <li><strong>Exam-condition mocks</strong> — timed, full-length tests that feel real.</li>
 </ul>
-<p>Ready to dive in? Your next breakthrough is one question away.</p>`,
+<p style="margin-top:10px">Your next breakthrough is one question away.</p>`,
     buttonText: 'Explore {qbankName} →',
     buttonUrl: null,
     theme: 'success',
@@ -74,7 +82,7 @@ const TEMPLATES = [
     targetRoles: 'all',
   },
   {
-    name: 'Maintenance Notice',
+    name: 'Maintenance Window',
     category: 'maintenance',
     type: 'banner',
     title: '🛠️ Scheduled Maintenance on {date}',
@@ -90,30 +98,103 @@ const TEMPLATES = [
   {
     name: 'Promo Banner',
     category: 'promotion',
-    type: 'banner',
+    type: 'promotion',
     title: '🎉 {promoTitle} — {promoOffer}',
-    content: `<p>Don\'t miss out — <strong>{promoOffer}</strong> on <strong>{promoTitle}</strong>.</p>
-<p>This limited-time offer is available to all active Medicology users. Upgrade now and supercharge your exam prep with exclusive features, ad-free study sessions, and priority support.</p>
-<p style="text-align:center;margin-top:1rem"><strong>Hurry — this offer expires on {expiryDate}.</strong></p>`,
+    content: `<div style="text-align:center;margin-bottom:12px">
+  <div style="display:inline-block;background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);border-radius:999px;padding:6px 18px;font-size:13px;font-weight:700;color:#fff;margin-bottom:10px">🔥 Limited Time Only</div>
+  <p style="font-size:14px;color:#4b5563;margin:0">{promoOffer} on <strong>{promoTitle}</strong></p>
+  <p style="font-size:12.5px;color:#9ca3af;margin:6px 0 0 0">Upgrade now and supercharge your exam prep with exclusive features, ad-free sessions, and priority support.</p>
+</div>
+<p style="text-align:center;margin:0"><strong>Offer expires {expiryDate}.</strong></p>`,
     buttonText: 'Claim Offer →',
     buttonUrl: null,
     theme: 'primary',
     priority: 'high',
     targetRoles: 'all',
   },
+  {
+    name: 'System Update — What Changed',
+    category: 'system_notice',
+    type: 'banner',
+    title: '🔄 System Update — Here\'s What Changed',
+    content: `<p>We\'ve shipped a system update. Here\'s a quick summary of what\'s new and what changed:</p>
+<ul style="padding-left:1.25rem;margin-bottom:8px">
+  <li><strong>{change1}</strong></li>
+  <li><strong>{change2}</strong></li>
+  <li><strong>{change3}</strong></li>
+</ul>
+<p>Everything else works as before. If something looks off, let us know at support@medicology.net.</p>`,
+    buttonText: 'Read Release Notes',
+    buttonUrl: null,
+    theme: 'info',
+    priority: 'normal',
+    targetRoles: 'all',
+  },
+  {
+    name: 'Policy Change Notice',
+    category: 'system_notice',
+    type: 'modal',
+    title: '📋 Important: {policyTitle}',
+    content: `<p>Hi there,</p>
+<p>We\'re writing to let you know about an important change to <strong>{policyTitle}</strong>.</p>
+<h3 style="margin-top:10px">What\'s Changing</h3>
+<ul style="padding-left:1.25rem">
+  <li>{changeDetail1}</li>
+  <li>{changeDetail2}</li>
+</ul>
+<h3 style="margin-top:10px">What You Need to Do</h3>
+<p style="margin:0">{actionRequired}</p>
+<p style="margin-top:10px">If you have questions, our support team is here to help.</p>`,
+    buttonText: 'Read Full Policy →',
+    buttonUrl: null,
+    theme: 'warning',
+    priority: 'high',
+    targetRoles: 'all',
+  },
+  {
+    name: 'Custom Announcement',
+    category: 'custom',
+    type: 'banner',
+    title: '{customTitle}',
+    content: `<p>{customBody}</p>
+<p>{customBody2}</p>`,
+    buttonText: '{customCta}',
+    buttonUrl: null,
+    theme: 'primary',
+    priority: 'normal',
+    targetRoles: 'all',
+  },
+  {
+    name: 'Achievement Celebration',
+    category: 'custom',
+    type: 'toast',
+    title: '🏆 You Did It, {userName}!',
+    content: `<p><strong>Congratulations!</strong> You just reached a major milestone: {achievement}.</p>
+<p>That\'s real progress. Keep going — your next milestone is closer than you think.</p>`,
+    buttonText: 'Keep Going →',
+    buttonUrl: '/practice',
+    theme: 'success',
+    priority: 'normal',
+    targetRoles: 'all',
+  },
 ];
 
 // ---------------------------------------------------------------------------
-// Active general announcements — visible to every in-app user (targetRoles
-// covers "all" or specific roles). These are the "beautiful" live banners,
-// popups, and toasts that make the app feel alive from first boot.
+// Active general announcements — in-app, visible to all users.
 // ---------------------------------------------------------------------------
 
 const GENERAL_ANNOUNCEMENTS = [
   {
     type: 'banner',
     title: 'Welcome back to Medicology 👋',
-    content: `<p style="margin:0">Your study progress is waiting. Pick up where you left off — every question you answer today is a step closer to your exam.</p>`,
+    content: `<div style="display:flex;align-items:center;gap:12px">
+  <div style="display:flex;align-items:center;gap:4px">
+    <span style="font-size:18px">👋</span>
+    <span style="font-weight:700;color:#1f2937">Welcome back</span>
+  </div>
+  <div style="flex:1;height:2px;background:linear-gradient(90deg,#6366f1 0%,#8b5cf6 50%,transparent 100%);border-radius:999px"></div>
+</div>
+<p style="margin:6px 0 0 0">Your study progress is waiting. Pick up where you left off — every question you answer today is a step closer to your exam.</p>`,
     buttonText: 'Go to Dashboard →',
     buttonUrl: '/dashboard',
     targetRoles: 'all',
@@ -126,21 +207,21 @@ const GENERAL_ANNOUNCEMENTS = [
   {
     type: 'modal',
     title: '✨ What\'s New in Medicology',
-    content: `<div style="display:flex;gap:12px;margin-bottom:14px">
-  <div style="flex:1;background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);border-radius:12px;padding:14px;color:#fff">
-    <div style="font-size:26px;margin-bottom:6px">📚</div>
+    content: `<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+  <div style="flex:1;min-width:140px;background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);border-radius:14px;padding:16px;color:#fff">
+    <div style="font-size:30px;margin-bottom:8px">📚</div>
     <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Smart Review</h3>
-    <p style="font-size:12.5px;opacity:0.92;line-height:1.45;margin:0">Spaced repetition that adapts to your weak areas automatically.</p>
+    <p style="font-size:12.5px;opacity:0.92;line-height:1.5;margin:0">Spaced repetition that adapts to your weak areas automatically.</p>
   </div>
-  <div style="flex:1;background:linear-gradient(135deg,#10b981 0%,#059669 100%);border-radius:12px;padding:14px;color:#fff">
-    <div style="font-size:26px;margin-bottom:6px">🎯</div>
+  <div style="flex:1;min-width:140px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);border-radius:14px;padding:16px;color:#fff">
+    <div style="font-size:30px;margin-bottom:8px">🎯</div>
     <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Exam Mode</h3>
-    <p style="font-size:12.5px;opacity:0.92;line-height:1.45;margin:0">Timed mocks that mirror real exam patterns and difficulty.</p>
+    <p style="font-size:12.5px;opacity:0.92;line-height:1.5;margin:0">Timed mocks that mirror real exam patterns and difficulty.</p>
   </div>
-  <div style="flex:1;background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);border-radius:12px;padding:14px;color:#fff">
-    <div style="font-size:26px;margin-bottom:6px">🤝</div>
+  <div style="flex:1;min-width:140px;background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);border-radius:14px;padding:16px;color:#fff">
+    <div style="font-size:30px;margin-bottom:8px">🤝</div>
     <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">Study Buddies</h3>
-    <p style="font-size:12.5px;opacity:0.92;line-height:1.45;margin:0">Compete and collaborate with friends on the same exam.</p>
+    <p style="font-size:12.5px;opacity:0.92;line-height:1.5;margin:0">Compete and collaborate with friends on the same exam.</p>
   </div>
 </div>
 <p style="text-align:center;margin-top:6px"><strong>Three powerful ways to study — all in one place.</strong></p>
@@ -157,25 +238,27 @@ const GENERAL_ANNOUNCEMENTS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Active personalized announcements — visible only to the targeted user IDs
-// (targetUserIds). In-app only. These show the personalized path: e.g. a
-// premium upgrade nudge aimed at specific users.
+// Active personalized announcements — in-app, targeted by user IDs.
 // ---------------------------------------------------------------------------
 
 const PERSONALIZED_ANNOUNCEMENTS = [
   {
     type: 'popup',
-    title: 'Medicology Premium — Designed for Your Success',
-    content: `<p>Hi there,</p>
-<p>We noticed you\'re serious about your medical exam preparation — and we want to match that energy.</p>
-<p><strong>Medicology Premium</strong> gives you:</p>
+    title: 'Medicology Premium — Unlocked for You',
+    content: `<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+  <span style="display:inline-flex;align-items:center;gap:5px;background:#dcfce7;border:1px solid #bbf7d0;border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:600;color:#166534">✅ Unlimited QBanks</span>
+  <span style="display:inline-flex;align-items:center;gap:5px;background:#dbeafe;border:1px solid #bfdbfe;border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:600;color:#1e40af">📊 Advanced analytics</span>
+  <span style="display:inline-flex;align-items:center;gap:5px;background:#f3e8ff;border:1px solid #e9d5ff;border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:600;color:#6b21a8">🎧 Priority support</span>
+</div>
+<p>We noticed you\'re serious about your exam prep — and we want to match that energy. Medicology Premium gives you everything you need to go from studying to passing.</p>
+<h3 style="margin-top:8px">What\'s Included</h3>
 <ul style="padding-left:1.25rem">
-  <li><strong>✓ Unlimited access</strong> to all QBanks and question banks.</li>
-  <li><strong>✓ Advanced analytics</strong> — see your performance by topic, system, and exam.</li>
-  <li><strong>✓ Priority support</strong> — get answers when you need them.</li>
-  <li><strong>✓ Early access</strong> to new features and content.</li>
+  <li><strong>Unlimited access</strong> to all QBanks and question banks across every exam.</li>
+  <li><strong>Advanced analytics</strong> — topic-by-topic performance, weak-area detection, and progress trends.</li>
+  <li><strong>Priority support</strong> — get answers fast, when you need them most.</li>
+  <li><strong>Early access</strong> to every new feature and content drop, before anyone else.</li>
 </ul>
-<p>Your dedication deserves the best tools. Let us help you get there.</p>`,
+<p style="margin-top:10px">Your dedication deserves the best tools. Let us help you get there.</p>`,
     buttonText: 'Unlock Premium →',
     buttonUrl: '/premium',
     targetUserIds: [1],
@@ -187,9 +270,9 @@ const PERSONALIZED_ANNOUNCEMENTS = [
   },
   {
     type: 'toast',
-    title: '⏰ Your Daily Study Check-In',
-    content: `<p><strong>You\'re on a roll!</strong> Keep your momentum going — just a few minutes of focused practice today keeps your progress streak alive.</p>
-<p>Open Medicology and knock out 5 quick MCQs. Small steps, big results.</p>`,
+    title: '⏰ {streak} Day Streak — Keep It Going!',
+    content: `<p><strong>You\'re on a roll, {userName}!</strong> A {streak}-day study streak is no small thing — it means consistency, and consistency is what passes exams.</p>
+<p>Just a few minutes of focused practice today keeps the streak alive. Open Medicology and knock out 5 quick MCQs. Small steps, big results.</p>`,
     buttonText: 'Start Now →',
     buttonUrl: '/practice',
     targetUserIds: [1],
@@ -202,76 +285,47 @@ const PERSONALIZED_ANNOUNCEMENTS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Seeder
+// Seeder function — idempotent, skips if rows already exist.
 // ---------------------------------------------------------------------------
 
-export async function seedAnnouncements(): Promise<{
-  templates: number;
-  general: number;
-  personalized: number;
-}> {
+export async function seedAnnouncements() {
   const now = new Date();
-  let templates = 0;
-  let general = 0;
-  let personalized = 0;
+  let t = 0, g = 0, p = 0;
 
-  // --- Templates (skip if any already exist) ---
   try {
-    const existing = await db.select().from(announcementTemplatesTable).limit(1);
-    if (existing.length === 0) {
-      for (const t of TEMPLATES) {
-        await db.insert(announcementTemplatesTable).values({
-          ...t,
-          createdAt: now,
-          updatedAt: now,
-        });
-        templates++;
+    const has = await db.select().from(announcementTemplatesTable).limit(1);
+    if (!has.length) {
+      for (const tmpl of TEMPLATES) {
+        await db.insert(announcementTemplatesTable).values({ ...tmpl, createdAt: now, updatedAt: now });
+        t++;
       }
-      console.log(`📢 Seeded ${templates} announcement templates`);
+      console.log(`📢 Seeded ${t} announcement templates`);
     }
-  } catch (err: any) {
-    console.warn('Announcement template seeding skipped:', err.message);
-  }
+  } catch (e) { console.warn('Template seeding skipped:', (e as any).message); }
 
-  // --- General announcements (skip if any active ones exist) ---
   try {
-    const existing = await db.select().from(announcementsTable)
-      .where(eq(announcementsTable.isActive, true))
-      .limit(1);
-    if (existing.length === 0) {
+    const has = await db.select().from(announcementsTable)
+      .where(eq(announcementsTable.isActive, true)).limit(1);
+    if (!has.length) {
       for (const a of GENERAL_ANNOUNCEMENTS) {
-        await db.insert(announcementsTable).values({
-          ...a,
-          createdAt: now,
-          updatedAt: now,
-        });
-        general++;
+        await db.insert(announcementsTable).values({ ...a, createdAt: now, updatedAt: now });
+        g++;
       }
-      console.log(`📢 Seeded ${general} general announcements`);
+      console.log(`📢 Seeded ${g} general announcements`);
     }
-  } catch (err: any) {
-    console.warn('General announcement seeding skipped:', err.message);
-  }
+  } catch (e) { console.warn('General seeding skipped:', (e as any).message); }
 
-  // --- Personalized announcements (skip if any targeted ones exist) ---
   try {
-    const existing = await db.select().from(announcementsTable)
-      .where(eq(announcementsTable.targetUserIds, JSON.stringify([1])))
-      .limit(1);
-    if (existing.length === 0) {
+    const has = await db.select().from(announcementsTable)
+      .where(eq(announcementsTable.targetUserIds, JSON.stringify([1]))).limit(1);
+    if (!has.length) {
       for (const a of PERSONALIZED_ANNOUNCEMENTS) {
-        await db.insert(announcementsTable).values({
-          ...a,
-          createdAt: now,
-          updatedAt: now,
-        });
-        personalized++;
+        await db.insert(announcementsTable).values({ ...a, createdAt: now, updatedAt: now });
+        p++;
       }
-      console.log(`📢 Seeded ${personalized} personalized announcements`);
+      console.log(`📢 Seeded ${p} personalized announcements`);
     }
-  } catch (err: any) {
-    console.warn('Personalized announcement seeding skipped:', err.message);
-  }
+  } catch (e) { console.warn('Personalized seeding skipped:', (e as any).message); }
 
-  return { templates, general, personalized };
+  return { templates: t, general: g, personalized: p };
 }
