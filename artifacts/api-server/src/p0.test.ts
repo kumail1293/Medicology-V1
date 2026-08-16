@@ -2219,15 +2219,15 @@ test('bulk deck import: .apkg (Anki package) with media — notes, cloze, field 
   col.run('INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (1, 0, 0, 0, 11, 0, 0, 0, ?, ?, ?, ?, ?)',
     ['{}', JSON.stringify(models), JSON.stringify(decks), '{}', '{}']);
 
-  // Two notes: a basic (front/back with an embedded image) + a cloze.
+  // Two notes: a basic (front/back with an embedded image + audio) + a cloze.
   col.run('INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (1, ?, 101, 0, 0, ?, ?, 0, 0, 0, ?)',
-    ['guid-1', 'AnKing Pathology', 'Inferior vena cava drains into the right atrium <img src="heart.png">\x1f<b>Right atrium</b>\x1fLecture: heart week 3'.replace('\x1f', String.fromCharCode(31)).replace('\x1f', String.fromCharCode(31)), '{}']);
+    ['guid-1', 'AnKing Pathology', 'Inferior vena cava drains into the right atrium <img src="heart.png"> [sound:heart-sound.mp3]\x1f<b>Right atrium</b>\x1fLecture: heart week 3'.replace('\x1f', String.fromCharCode(31)).replace('\x1f', String.fromCharCode(31)), '{}']);
   col.run('INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (2, ?, 102, 0, 0, ?, ?, 0, 0, 0, ?)',
     ['guid-2', 'AnKing Cardio', `The heart has {{c1::four}} chambers\x1fExtra cloze info`.replace('\x1f', String.fromCharCode(31)).replace('\x1f', String.fromCharCode(31)), '{}']);
   const colBytes = Buffer.from(col.export());
   col.close();
 
-  // Tiny PNG + media map + zip.
+  // Tiny PNG + a fake MP3 + media map + zip.
   const png = Buffer.from([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
     0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x08, 0x02, 0x00, 0x00, 0x00,
@@ -2236,10 +2236,12 @@ test('bulk deck import: .apkg (Anki package) with media — notes, cloze, field 
     0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xc0, 0xf0, 0x1f, 0x08, 0x18, 0x18, 0x18, 0x18, 0xfe, 0xff, 0xff, 0xff, 0x0f, 0x00, 0x0c, 0x7c,
     0x04, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
   ]);
+  const mp3 = Buffer.from([0xff, 0xfb, 0x90, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
   const zip = new JSZip();
   zip.file('collection.anki2', colBytes);
-  zip.file('media', JSON.stringify({ 'heart.png': 'mediahash123' }));
+  zip.file('media', JSON.stringify({ 'heart.png': 'mediahash123', 'heart-sound.mp3': 'audiohash456' }));
   zip.file('mediahash123', png);
+  zip.file('audiohash456', mp3);
   const apkgBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 
   const form = new FormData();
@@ -2260,6 +2262,9 @@ test('bulk deck import: .apkg (Anki package) with media — notes, cloze, field 
   assert.ok(basic.data.back.includes('Lecture: heart week 3'), 'lecture notes appended to back');
   assert.ok(basic.data.front.includes('/api/storage/uploads/'), 'image src rewritten to served media URL');
   assert.ok(basic.data.front.includes('fc-'), 'media filename has fc- prefix');
+  // Audio: [sound:…] converted to an <audio> player with the served URL.
+  assert.ok(basic.data.front.includes('<audio'), 'sound reference converted to <audio> player');
+  assert.ok(basic.data.front.includes('/api/storage/uploads/fc-'), 'audio src rewritten to served media URL');
 
   // Cloze preserved verbatim.
   const cloze = preview.rows.find((r: any) => r.data.front.includes('{{c1::'));
@@ -2267,10 +2272,13 @@ test('bulk deck import: .apkg (Anki package) with media — notes, cloze, field 
   assert.ok(cloze.data.front.includes('{{c1::four}}'), 'cloze intact');
   assert.ok(cloze.data.tags.includes('AnKing'), 'anki tags carried over');
 
-  // Media landed in the library.
+  // Media landed in the library — both the image and the audio file.
   const mediaRows = await db.select().from(mediaTable);
   const imported = mediaRows.filter((m: any) => String(m.filename).startsWith('fc-'));
-  assert.ok(imported.length >= 1, 'media registered in media library');
+  assert.ok(imported.length >= 2, 'image + audio registered in media library');
+  const audio = imported.find((m: any) => String(m.filename).endsWith('.mp3'));
+  assert.ok(audio, 'audio file registered with .mp3 extension');
+  assert.equal(audio.mimeType, 'audio/mpeg', 'audio mime type recorded');
 
   const execRes = await fetch(`${BASE}/flashcards/admin/decks/import/execute`, json(auth, {
     rows: preview.rows,

@@ -245,21 +245,31 @@ export function getDeckStudyStats(cards: Flashcard[], deckId: string, options: D
 
 /* ─── Anki HTML sanitization ────────────────────────────────────────── */
 
+const origin = () => (typeof window !== "undefined" ? window.location.origin : "");
+
+const resolveRelative = (src: string) => {
+  const resolved = src.startsWith("/") ? `${origin()}${src}` : src;
+  return resolved;
+};
+
 export function sanitizeAnkiContent(text: string): string {
   if (!text) return "";
   const withImages = markdownImagesToHtml(text);
   return withImages
-    .replace(/\[sound:[^\]]+\]/g, "")
+    // Anki [sound:filename.mp3] → a small audio player (kept instead of
+    // stripped, so imported deck audio actually plays).
+    .replace(/\[sound:([^\]]+)\]/g, (_, file) => {
+      const name = String(file).trim();
+      const src = resolveRelative(name.startsWith("/") ? name : `/api/storage/uploads/${encodeURIComponent(name)}`);
+      return `<audio controls preload="none" src="${src}" style="max-width:100%;margin:4px 0;"></audio>`;
+    })
     // Rewrite relative image srcs (/api/storage/..., /uploads/...) against the
     // current origin so they actually load in the study session — the old
     // behaviour left them bare and the onerror fallback (camera emoji) fired.
     .replace(
       /<img([^>]*?)src="((?!https?:\/\/)[^"]+)"([^>]*?)>/gi,
-      (_, pre, src, post) => {
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const resolved = src.startsWith("/") ? `${origin}${src}` : src;
-        return `<img${pre}src="${resolved}"${post} loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span class=\\'anki-img-missing\\'>📷 ${(src.split("/").pop() ?? src).slice(0, 40)}</span>');" style="max-width:100%;border-radius:8px;">`;
-      },
+      (_, pre, src, post) =>
+        `<img${pre}src="${resolveRelative(src)}"${post} loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span class=\\'anki-img-missing\\'>📷 ${(src.split("/").pop() ?? src).slice(0, 40)}</span>');" style="max-width:100%;border-radius:8px;">`,
     )
     // External image links that fail to load get a graceful fallback instead
     // of a broken-image icon, and every image is lazy-loaded.
@@ -267,6 +277,13 @@ export function sanitizeAnkiContent(text: string): string {
       /<img([^>]*?)src="(https?:\/\/[^"]+)"([^>]*?)>/gi,
       (_, pre, src, post) =>
         `<img${pre}src="${src}"${post} loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<span class=\\'anki-img-missing\\'>📷 ${(src.split("/").pop() ?? src).slice(0, 40)}</span>');" style="max-width:100%;border-radius:8px;">`,
+    )
+    // Rewrite relative audio/video srcs against the current origin too.
+    .replace(/<audio([^>]*?)src="((?!https?:\/\/)[^"]+)"([^>]*?)>/gi, (_, pre, src, post) =>
+      `<audio${pre}src="${resolveRelative(src)}"${post}>`,
+    )
+    .replace(/<source([^>]*?)src="((?!https?:\/\/)[^"]+)"([^>]*?)>/gi, (_, pre, src, post) =>
+      `<source${pre}src="${resolveRelative(src)}"${post}>`,
     )
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .trim();

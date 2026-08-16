@@ -139,9 +139,20 @@ const uploadDir = path.join(process.cwd(), 'uploads');
 
 const MEDIA_CATEGORIES = ['logo', 'icon', 'announcement', 'qbank_cover', 'flashcard', 'rich_content', 'seo', 'other'];
 
-const imageExtToMime: Record<string, string> = {
+// MIME map for every media type Anki cards can embed. Images and audio are
+// the common cases; fonts/video are extracted too so `<img>`, `[sound:…]`,
+// `<audio>` and `<source>` references all resolve to served files.
+const extToMime: Record<string, string> = {
+  // images
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
   webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
+  // audio
+  mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4',
+  aac: 'audio/aac', flac: 'audio/flac', opus: 'audio/ogg',
+  // video
+  mp4: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska',
+  // fonts (used inside card CSS)
+  woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf',
 };
 
 function imageDimensions(buf: Buffer): { width: number; height: number } | null {
@@ -171,10 +182,11 @@ function imageDimensions(buf: Buffer): { width: number; height: number } | null 
 }
 
 /**
- * Persist embedded .apkg media into the shared uploads dir + media table.
- * Returns a filename → served URL map (or {} when nothing was extracted).
- * Deduplicated by content hash so re-importing the same deck doesn't duplicate
- * files. Never fails the import — media problems degrade to broken <img>s.
+ * Persist embedded .apkg media (images, audio, video, fonts) into the shared
+ * uploads dir + media table. Returns a filename → served URL map (or {} when
+ * nothing was extracted). Deduplicated by content hash so re-importing the
+ * same deck doesn't duplicate files. Never fails the import — media problems
+ * degrade to a missing file rather than aborting the deck.
  */
 export async function importApkgMedia(
   media: Map<string, Buffer>,
@@ -189,9 +201,8 @@ export async function importApkgMedia(
   const crypto = await import('node:crypto');
   for (const [original, bytes] of media) {
     try {
-      // Skip non-images (audio, fonts, …) — only images are served as media.
       const ext = path.extname(original).toLowerCase().replace(/^\./, '');
-      const mime = imageExtToMime[ext];
+      const mime = extToMime[ext];
       if (!mime) continue;
 
       const hash = crypto.createHash('sha1').update(bytes).digest('hex').slice(0, 16);
@@ -225,24 +236,54 @@ export async function importApkgMedia(
 }
 
 // ---------------------------------------------------------------------------
-// Card text rewrite — replace <img src="original"> and markdown image
-// references with the served media URL.
+// Card text rewrite — replace <img src="original">, markdown image
+// references, Anki [sound:…] tags, <audio>/<source> and sound spans with the
+// served media URL so images and audio render in the study session.
 // ---------------------------------------------------------------------------
 
-export function rewriteCardImages(html: string, urlMap: Map<string, string>): string {
+const resolveMediaUrl = (src: string, urlMap: Map<string, string>): string | undefined =>
+  urlMap.get(src) ?? urlMap.get(path.basename(src));
+
+export function rewriteCardMedia(html: string, urlMap: Map<string, string>): string {
   if (!html || urlMap.size === 0) return html;
   let out = html;
   // HTML: <img src="filename.png"> / <img src='filename.png'>
   out = out.replace(/<img([^>]*?)src="([^"]+)"([^>]*?)>/gi, (whole, pre, src, post) => {
-    const url = urlMap.get(src) ?? urlMap.get(path.basename(src));
+    const url = resolveMediaUrl(src, urlMap);
     return url ? `<img${pre}src="${url}"${post}>` : whole;
   });
   // Markdown: ![alt](filename.png)
   out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (whole, alt, src) => {
-    const url = urlMap.get(src) ?? urlMap.get(path.basename(src));
+    const url = resolveMediaUrl(src, urlMap);
     return url ? `![${alt}](${url})` : whole;
+  });
+  // Anki 2.x embeds audio as [sound:filename.mp3] — convert to a player.
+  out = out.replace(/\[sound:([^\]]+)\]/g, (whole, file) => {
+    const url = resolveMediaUrl(String(file).trim(), urlMap);
+    return url
+      ? `<audio controls preload="none" src="${url}" style="max-width:100%"></audio>`
+      : whole;
+  });
+  // Anki 2.1 sound spans: <span class="sound">filename.mp3</span>.
+  out = out.replace(/<span class="sound">([^<]+)<\/span>/gi, (whole, file) => {
+    const url = resolveMediaUrl(String(file).trim(), urlMap);
+    return url
+      ? `<audio controls preload="none" src="${url}" style="max-width:100%"></audio>`
+      : whole;
+  });
+  // <audio src="…"> / <audio><source src="…"></audio>
+  out = out.replace(/<audio([^>]*?)src="([^"]+)"([^>]*?)>/gi, (whole, pre, src, post) => {
+    const url = resolveMediaUrl(src, urlMap);
+    return url ? `<audio${pre}src="${url}"${post}>` : whole;
+  });
+  out = out.replace(/<source([^>]*?)src="([^"]+)"([^>]*?)>/gi, (whole, pre, src, post) => {
+    const url = resolveMediaUrl(src, urlMap);
+    return url ? `<source${pre}src="${url}"${post}>` : whole;
   });
   return out;
 }
+
+// Backwards-compatible alias (used by the flashcard importer).
+export const rewriteCardImages = rewriteCardMedia;
 
 export { MEDIA_CATEGORIES };

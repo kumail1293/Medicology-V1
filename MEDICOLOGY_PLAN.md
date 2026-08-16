@@ -191,9 +191,13 @@ build, 18-check browser QA (RBAC pages + access drawer) — all green.
     Step 1 & 2) — the SQLite collection is parsed (note types, field
     layout, tags, cloze templates preserved), embedded media is
     extracted into the shared media library with `<img>` references
-    rewritten to served URLs; preview with per-row validation,
-    taxonomy auto-create, duplicate-slug handling (reuses existing
-    deck), audit-free card insert with sort order.
+    rewritten to served URLs; **audio + video + fonts are extracted too**
+    — Anki `[sound:…]` tags, `<span class="sound">` and `<audio>`/`<source>`
+    srcs are rewritten to served `/api/storage/uploads/…` URLs and the
+    study session renders them as real `<audio>` players (not stripped);
+    preview with per-row validation, taxonomy auto-create,
+    duplicate-slug handling (reuses existing deck), audit-free card
+    insert with sort order.
 -   **Deck template downloads** (`.xlsx` and `format=csv`) with example
     rows + guide for exam-specific decks.
 -   **Card image rendering fix**: deck links now render images
