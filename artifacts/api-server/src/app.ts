@@ -103,6 +103,11 @@ app.use(cors({
   credentials: true,
   maxAge: 3600
 }));
+// The deck-import execute endpoint re-sends every parsed card (full HTML) as
+// JSON, which can exceed the default limit on large decks (e.g. AnKing).
+// Register a path-specific parser BEFORE the global one so this route gets a
+// much higher ceiling; body-parser skips once req.body is already parsed.
+app.use('/api/flashcards/admin/decks/import/execute', express.json({ limit: '500mb' }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 

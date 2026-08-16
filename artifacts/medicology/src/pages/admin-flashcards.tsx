@@ -6,6 +6,16 @@ import { apiFetch } from "@/lib/api";
 import RichTextEditor from "@/components/RichTextEditor";
 import { richTextToPlain } from "@/lib/richText";
 
+// Backend errors come in two shapes: { error: "msg" } (route-level) or
+// { error: { code, message } } (global error handler, e.g. body too large).
+// Normalize to a string so the UI never shows "[object Object]".
+function apiError(data: any, fallback: string): string {
+  const e = data?.error;
+  if (typeof e === "string" && e) return e;
+  if (e && typeof e.message === "string" && e.message) return e.message;
+  return fallback;
+}
+
 interface Deck {
   id: number;
   slug: string;
@@ -131,7 +141,7 @@ export default function AdminFlashcardsPage() {
         ? await apiFetch(`/api/flashcards/admin/decks/${deckForm.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         : await apiFetch("/api/flashcards/admin/decks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Failed to save deck");
+      if (!res.ok) throw new Error(apiError(data, "Failed to save deck"));
       toast({ title: "Success", description: deckForm.id ? "Deck updated" : "Deck created" });
       setDeckModal(false);
       await loadDecks();
@@ -168,7 +178,7 @@ export default function AdminFlashcardsPage() {
       }
       const res = await apiFetch("/api/flashcards/admin/decks/import/preview", { method: "POST", body: formData });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Preview failed");
+      if (!res.ok) throw new Error(apiError(data, "Preview failed"));
       setImportPreview(data);
       // Seed the field picker from the resolved mapping (only when the user
       // hasn't already picked fields for this file).
@@ -203,7 +213,7 @@ export default function AdminFlashcardsPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Import failed");
+      if (!res.ok) throw new Error(apiError(data, "Import failed"));
       toast({ title: "Import complete", description: `${data.inserted} card(s) in deck "${data.deck?.name ?? ""}"`, variant: data.inserted > 0 ? "default" : "destructive" });
       setImportOpen(false);
       setImportFile(null);
@@ -336,7 +346,7 @@ export default function AdminFlashcardsPage() {
         ? await apiFetch(`/api/flashcards/admin/cards/${cardForm.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         : await apiFetch(`/api/flashcards/admin/decks/${cardForm.deckId}/cards`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Failed to save card");
+      if (!res.ok) throw new Error(apiError(data, "Failed to save card"));
       toast({ title: "Success", description: "Card saved" });
       setCardModal(false);
       if (activeDeck) await openDeck(activeDeck);
@@ -383,7 +393,7 @@ export default function AdminFlashcardsPage() {
         body: JSON.stringify({ cards: cardsToAdd }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Bulk add failed");
+      if (!res.ok) throw new Error(apiError(data, "Bulk add failed"));
       toast({ title: "Success", description: `${data.inserted} card(s) added` });
       setBulkText("");
       setBulkOpen(false);

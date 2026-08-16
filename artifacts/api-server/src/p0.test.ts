@@ -2435,3 +2435,32 @@ test('bulk deck import: execute honors skipped + edited rows from the preview', 
   assert.equal(cards[0].front, 'Front One [EDITED]', 'edited front persisted');
   assert.equal(cards[0].back, 'Back One<br>Extra One', 'back fields intact');
 });
+
+test('bulk deck import: execute accepts payloads over the default JSON body limit', async () => {
+  // Regression: the execute endpoint re-sends every parsed card as JSON, which
+  // used to exceed the global 50mb express.json limit on large decks (413
+  // "request entity too large" → "Error [object Object]" in the admin UI).
+  // The route now has its own 500mb parser, so a >50mb body must reach the
+  // handler (and fail its own validation with 400), not be rejected by the
+  // body parser.
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const auth = { Authorization: `Bearer ${adminToken}` };
+
+  // ~52mb of padding in a throwaway field; rows is empty so the route fails
+  // its own validation with 400 (proving the body was parsed) rather than
+  // importing a gigantic card into the mock DB.
+  const big = 'x'.repeat(52 * 1024 * 1024);
+  const body = JSON.stringify({ rows: [], deck: {}, __padding: big });
+  assert.ok(body.length > 50 * 1024 * 1024, 'payload exceeds the old 50mb limit');
+
+  const res = await fetch(`${BASE}/flashcards/admin/decks/import/execute`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body,
+  });
+  const data = (await res.json()) as any;
+  // 400 (route validation) proves the body was parsed; 413 means the limit is back.
+  assert.equal(res.status, 400, `expected 400 (body parsed), got ${res.status}: ${JSON.stringify(data).slice(0, 200)}`);
+  assert.match(String(data.error ?? ''), /rows/i);
+});
