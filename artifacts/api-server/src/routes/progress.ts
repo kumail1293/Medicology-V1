@@ -54,6 +54,38 @@ progressRouter.get('/analytics', authenticate, async (req: AuthRequest, res: any
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+progressRouter.get('/topics', authenticate, async (req: AuthRequest, res: any) => {
+  try {
+    const userId = req.user!.id;
+    const allProgress = await db.select().from(userProgressTable).where(eq(userProgressTable.userId, userId));
+    // Resolve question subject/topic for each attempted question.
+    const qidToMeta = new Map<number, { subject: string; topic: string }>();
+    for (const p of allProgress) {
+      if (qidToMeta.has(p.questionId)) continue;
+      const [q] = await db.select({ subject: questionsTable.subject, topic: questionsTable.topic })
+        .from(questionsTable).where(eq(questionsTable.id, p.questionId));
+      if (q) qidToMeta.set(p.questionId, { subject: q.subject, topic: q.topic });
+    }
+    const topicMap: Record<string, { subject: string; topic: string; attempted: number; correct: number }> = {};
+    for (const p of allProgress) {
+      const meta = qidToMeta.get(p.questionId);
+      if (!meta) continue;
+      const key = `${meta.subject}||${meta.topic}`;
+      if (!topicMap[key]) topicMap[key] = { ...meta, attempted: 0, correct: 0 };
+      topicMap[key].attempted++;
+      if (p.isCorrect) topicMap[key].correct++;
+    }
+    const rows = Object.values(topicMap).map((r) => ({
+      subject: r.subject,
+      topic: r.topic,
+      attempted: r.attempted,
+      correct: r.correct,
+      accuracy: r.attempted > 0 ? Math.round((r.correct / r.attempted) * 100) : 0,
+    })).sort((a, b) => a.subject.localeCompare(b.subject) || a.topic.localeCompare(b.topic));
+    res.json(rows);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 progressRouter.get('/wrong', authenticate, async (req: AuthRequest, res: any) => {
   try {
     const wrong = await db.select().from(userProgressTable).where(and(eq(userProgressTable.userId, req.user!.id), eq(userProgressTable.isCorrect, false))).orderBy(desc(userProgressTable.createdAt));

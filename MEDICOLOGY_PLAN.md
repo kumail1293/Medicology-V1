@@ -39,6 +39,46 @@ behavior should be configurable.
 
 ## System Audit (latest pass)
 
+### Full-app audit — Aug 2026 (user + admin sides)
+
+Walked every user nav page and every admin page in the browser (36
+pages) and cross-checked every frontend API call against the backend
+routes. **Result: zero failing requests across all 36 pages, zero console
+errors.** What was found and fixed:
+
+-   **`/api/daily/challenge` did not exist** — the Daily Challenge page
+    (via the generated client) 404'd. Backend only had `/api/daily/` +
+    `/status` with a different shape. Added the `/challenge` route
+    returning the client-expected `{ questions, date, isCompleted,
+    streak }` with real streak computation from challenge history.
+-   **`/api/progress/topics` did not exist** — the Analytics Topic
+    Mastery Heat Map 404'd (marked `TODO` in the page). Implemented the
+    endpoint: aggregates `user_progress` per question subject/topic into
+    `{ subject, topic, attempted, correct, accuracy }` rows.
+-   **`/api/cases` had zero backend** — Clinical Cases is a full
+    progressive-disclosure UI but nothing served it. Added `clinical_cases`
+    + `case_completions` tables (migration `0017`), `GET /api/cases` with
+    system/difficulty/examType filters, `POST /api/cases/:id/complete`
+    (idempotent, server-recorded), and 8 realistic seeded cases
+    (cardiology, GI, neuro, resp, endocrine, paeds, diabetes).
+-   **`/api/leaderboard` had zero backend** — Leaderboard 404'd.
+    Implemented `GET /api/leaderboard` with all / university / subject
+    filters, ranked by accuracy (tie-broken by questions solved +
+    reward points).
+-   **Duplicate admin route** — `/admin-dashboard` was a second entry
+    point to the same page as `/admin`; removed (single canonical `/admin`).
+-   **Fake admin dashboard data** — Recent Activity was hard-coded
+    ("John Doe…") and System Health showed everything "online" with
+    invented latencies. Now: Recent Activity reads real audit logs,
+    System Health probes `/api/healthz` (latency), storage, and email
+    configuration live; the fake trend percentages were removed.
+-   **SaaS-style admin navigation** — the flat admin sidebar is now
+    grouped into sections (Overview / Content / Users & Access /
+    Communication / Platform / System) with a filter box, and the
+    Settings page nav is grouped into categories (General / Design /
+    Content & Exams / Users & Commerce / Communication / Platform /
+    System) with a **"Search settings…"** box that filters groups live.
+
 Verified against the repository (schema, migrations, routes, middleware,
 tests) — see commit history for the audit trail:
 
@@ -81,9 +121,10 @@ prefs · `0011` entitlement `emailNotifiedAt` (transactional expiry emails) ·
 bio/phone · `0014` user study aim (`studyAim` — AMBOSS-style goal) ·
 `0015` RBAC (user_types, permissions, roles, role_permissions,
 user_roles, user_permissions, organizations, teams, team_members,
-user_scopes, role_scopes) + `users.userType`.
+user_scopes, role_scopes) + `users.userType` · `0016` flashcard deck
+taxonomy · `0017` clinical cases + case completions.
 
-Tests: 62 integration tests (settings precedence, overrides, imports,
+Tests: 66 integration tests (settings precedence, overrides, imports,
 bulk deck import incl. Anki .apkg with media + per-note-type field
 mapping + per-card edit/skip + oversized-execute-payload regression +
 previewId/delta execute flow,
@@ -93,8 +134,11 @@ scope enforcement, email templates/renderer/
 secret handling, sessions/revocation, export/import, audit gating,
 transactional sends, template seeding, forgot/reset password,
 announcement email, study aim + progress reset, announcement user
-targeting, purchases shape), backend + frontend typecheck, production
-build, 18-check browser QA (RBAC pages + access drawer) — all green.
+targeting, purchases shape,
+daily challenge shape, topic heat map, leaderboard, clinical cases),
+backend + frontend typecheck, production
+build, 36-page browser audit (no failing requests), RBAC pages +
+access drawer — all green.
 
 ------------------------------------------------------------------------
 

@@ -148,10 +148,7 @@ function Router() {
           {() => <ProtectedRoute component={() => <AppLayout><SubscriptionPage /></AppLayout>} />}
         </Route>
 
-        {/* Admin routes */}
-        <Route path="/admin-dashboard">
-          {() => <AdminRoute component={() => <AdminLayout><AdminDashboard /></AdminLayout>} />}
-        </Route>
+        {/* Admin routes — single canonical entry point is /admin */}
         <Route path="/admin/users">
           {() => <AdminRoute component={() => <AdminLayout><AdminUsers /></AdminLayout>} />}
         </Route>

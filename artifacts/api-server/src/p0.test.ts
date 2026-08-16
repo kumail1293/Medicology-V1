@@ -2534,3 +2534,107 @@ test('bulk deck import: execute via previewId + small delta (edits/skips), no fu
   assert.equal(again.status, 400, 'preview is single-use');
   assert.match(String(((await again.json()) as any).error ?? ''), /expired|re-validate/i);
 });
+
+// ---------------------------------------------------------------------------
+// Phase-0 audit fixes — endpoints that pages called but the API never served
+// (daily challenge, analytics topic heat map, leaderboard, clinical cases).
+// ---------------------------------------------------------------------------
+
+test('daily challenge: /api/daily/challenge returns the client-expected shape (questions, date, isCompleted, streak)', async () => {
+  const { token } = await registerUser('dailyaudit@test.com');
+  const res = await fetch(`${BASE}/daily/challenge`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(res.status, 200);
+  const data: any = await res.json();
+  assert.ok(Array.isArray(data.questions) && data.questions.length > 0, 'challenge includes questions');
+  assert.equal(typeof data.date, 'string');
+  assert.equal(typeof data.isCompleted, 'boolean');
+  assert.equal(typeof data.streak, 'number');
+  // Calling again reuses the same day's challenge (no duplicate row churn).
+  const again = await fetch(`${BASE}/daily/challenge`, { headers: { Authorization: `Bearer ${token}` } });
+  const data2: any = await again.json();
+  assert.equal(data2.date, data.date);
+});
+
+test('progress topics: /api/progress/topics aggregates per-subject/topic accuracy rows', async () => {
+  const { token } = await registerUser('topicsaudit@test.com');
+  // Answer a few questions so progress rows exist.
+  const qsRes = await fetch(`${BASE}/questions/free?limit=3`, { headers: { Authorization: `Bearer ${token}` } });
+  const qs: any = await qsRes.json();
+  for (const q of (qs.questions ?? [])) {
+    const opts = Object.keys(q.options ?? {});
+    const pick = opts.length > 0 ? opts[0] : 'A';
+    await fetch(`${BASE}/practice/submit`, json({ Authorization: `Bearer ${token}` }, {
+      questionId: q.id, selectedAnswer: pick, timeTaken: 10, mode: 'practice',
+    }));
+  }
+  const res = await fetch(`${BASE}/progress/topics`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(res.status, 200);
+  const rows: any = await res.json();
+  assert.ok(Array.isArray(rows), 'returns an array of topic rows');
+  assert.ok(rows.length > 0, 'has aggregated rows after attempts');
+  const row = rows[0];
+  for (const k of ['subject', 'topic', 'attempted', 'correct', 'accuracy']) {
+    assert.ok(k in row, `row has ${k}`);
+  }
+  // Every attempt lands in exactly one topic row (questions may share topics).
+  const totalAttempted = rows.reduce((s: number, r: any) => s + r.attempted, 0);
+  assert.equal(totalAttempted, 3);
+  const totalCorrect = rows.reduce((s: number, r: any) => s + r.correct, 0);
+  assert.ok(totalCorrect <= totalAttempted);
+});
+
+test('leaderboard: /api/leaderboard ranks users by accuracy with filters', async () => {
+  // Register two users and have them answer questions so they rank.
+  const u1 = await registerUser('lead1@test.com');
+  const u2 = await registerUser('lead2@test.com');
+  for (const u of [u1, u2]) {
+    const qsRes = await fetch(`${BASE}/questions/free?limit=2`, { headers: { Authorization: `Bearer ${u.token}` } });
+    const qs: any = await qsRes.json();
+    for (const q of (qs.questions ?? [])) {
+      const opts = Object.keys(q.options ?? {});
+      const pick = opts.length > 0 ? opts[0] : 'A';
+      await fetch(`${BASE}/practice/submit`, json({ Authorization: `Bearer ${u.token}` }, {
+        questionId: q.id, selectedAnswer: pick, timeTaken: 5, mode: 'practice',
+      }));
+    }
+  }
+  const res = await fetch(`${BASE}/leaderboard?filter=all`, { headers: { Authorization: `Bearer ${u1.token}` } });
+  assert.equal(res.status, 200);
+  const data: any = await res.json();
+  assert.ok(Array.isArray(data.entries) && data.entries.length >= 2, 'at least the two test users rank');
+  const e = data.entries[0];
+  for (const k of ['rank', 'userId', 'name', 'college', 'accuracy', 'questionsSolved']) {
+    assert.ok(k in e, `entry has ${k}`);
+  }
+  // Ranks are ordered.
+  const ranks = data.entries.map((x: any) => x.rank);
+  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b));
+});
+
+test('clinical cases: /api/cases lists seeded cases with filters, and completion is recorded', async () => {
+  const { token } = await registerUser('casesaudit@test.com');
+  const res = await fetch(`${BASE}/cases`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(res.status, 200);
+  const data: any = await res.json();
+  assert.ok(Array.isArray(data.cases) && data.cases.length > 0, 'seeded cases exist');
+  const c = data.cases[0];
+  for (const k of ['id', 'title', 'system', 'difficulty', 'examType', 'estimatedMinutes', 'relatedSubject', 'chiefComplaint', 'history', 'examination', 'investigations', 'diagnosisOptions', 'correctDiagnosis', 'explanation', 'managementPlan', 'keyLearningPoints']) {
+    assert.ok(k in c, `case has ${k}`);
+  }
+  assert.ok(Array.isArray(c.diagnosisOptions), 'diagnosisOptions parsed to array');
+  assert.ok(Array.isArray(c.keyLearningPoints), 'keyLearningPoints parsed to array');
+
+  // Filter by system.
+  const filtered = await fetch(`${BASE}/cases?system=${encodeURIComponent(c.system)}`, { headers: { Authorization: `Bearer ${token}` } });
+  const fdata: any = await filtered.json();
+  assert.ok(fdata.cases.every((x: any) => x.system === c.system));
+
+  // Complete a case → recorded server-side, idempotent.
+  const done1 = await fetch(`${BASE}/cases/${c.id}/complete`, json({ Authorization: `Bearer ${token}` }, { timeSpentSeconds: 90 }));
+  assert.equal(done1.status, 200);
+  const body1: any = await done1.json();
+  assert.equal(body1.alreadyCompleted, false);
+  const done2 = await fetch(`${BASE}/cases/${c.id}/complete`, json({ Authorization: `Bearer ${token}` }, { timeSpentSeconds: 90 }));
+  const body2: any = await done2.json();
+  assert.equal(body2.alreadyCompleted, true, 'second completion is idempotent');
+});

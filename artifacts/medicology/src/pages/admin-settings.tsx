@@ -105,26 +105,31 @@ function Card({ title, description, children }: { title: string; description?: s
 /* ── Group definitions (WordPress-style settings sections) ─────────────── */
 
 // "history" is a read-only pseudo-group (audit trail), not a settings key.
-const GROUPS: { id: SettingsGroup | "history" | "overrides"; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; blurb: string }[] = [
-  { id: "general", label: "General", icon: Settings, blurb: "Site identity, homepage and regional defaults." },
-  { id: "branding", label: "Branding & Design", icon: Palette, blurb: "Elementor-style design tokens — colors, fonts, radius, logo." },
-  { id: "content", label: "Content & QBanks", icon: BookOpen, blurb: "Default statuses and content workflow rules." },
-  { id: "registration", label: "Users & Registration", icon: UserPlus, blurb: "Registration policy and default roles." },
-  { id: "notifications", label: "Notifications", icon: Bell, blurb: "Which events trigger email alerts." },
-  { id: "security", label: "Security", icon: Shield, blurb: "MFA, sessions, passwords and maintenance mode." },
-  { id: "payments", label: "Payments", icon: CreditCard, blurb: "Currency, provider and pricing policy." },
-  { id: "storage", label: "Storage & Uploads", icon: Database, blurb: "Upload limits and allowed file types." },
-  { id: "integrations", label: "Integrations", icon: Plug, blurb: "Analytics, SEO meta and custom head code." },
-  { id: "seo", label: "SEO", icon: Search, blurb: "Site title, meta, Open Graph, Twitter cards and robots." },
-  { id: "footer", label: "Footer & Social", icon: Link2, blurb: "Footer text, legal links and social platform links." },
-  { id: "email", label: "Email", icon: Mail, blurb: "SMTP provider, sender identity and delivery policy." },
-  { id: "animations", label: "Animations", icon: Sparkles, blurb: "Platform-wide motion — always respects prefers-reduced-motion." },
-  { id: "featureFlags", label: "Feature Flags", icon: Flag, blurb: "Toggle protected capabilities platform-wide (enforced server-side)." },
-  { id: "examSettings", label: "Exam & QBank Defaults", icon: Timer, blurb: "Platform-wide exam behavior — question count, timing, marking, navigation." },
-  { id: "bulkImport", label: "Bulk Import", icon: Upload, blurb: "Import policy — default status, review gate, duplicate strictness, file limits, allowed question types." },
-  { id: "overrides", label: "Scoped Overrides", icon: GitBranch, blurb: "University/exam/QBank-specific rules layered over the platform defaults." },
-  { id: "history", label: "Activity & History", icon: History, blurb: "Audit trail of settings changes with one-click restore." },
+// `category` groups nav items into SaaS-style sections.
+type SettingsCategory = "General" | "Design" | "Content & Exams" | "Users & Commerce" | "Communication" | "Platform" | "System";
+
+const GROUPS: { id: SettingsGroup | "history" | "overrides"; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; blurb: string; category: SettingsCategory }[] = [
+  { id: "general", label: "General", icon: Settings, blurb: "Site identity, homepage and regional defaults.", category: "General" },
+  { id: "branding", label: "Branding & Design", icon: Palette, blurb: "Elementor-style design tokens — colors, fonts, radius, logo.", category: "Design" },
+  { id: "animations", label: "Animations", icon: Sparkles, blurb: "Platform-wide motion — always respects prefers-reduced-motion.", category: "Design" },
+  { id: "examSettings", label: "Exam & QBank Defaults", icon: Timer, blurb: "Platform-wide exam behavior — question count, timing, marking, navigation.", category: "Content & Exams" },
+  { id: "content", label: "Content & QBanks", icon: BookOpen, blurb: "Default statuses and content workflow rules.", category: "Content & Exams" },
+  { id: "bulkImport", label: "Bulk Import", icon: Upload, blurb: "Import policy — default status, review gate, duplicate strictness, file limits, allowed question types.", category: "Content & Exams" },
+  { id: "overrides", label: "Scoped Overrides", icon: GitBranch, blurb: "University/exam/QBank-specific rules layered over the platform defaults.", category: "Content & Exams" },
+  { id: "registration", label: "Users & Registration", icon: UserPlus, blurb: "Registration policy and default roles.", category: "Users & Commerce" },
+  { id: "payments", label: "Payments", icon: CreditCard, blurb: "Currency, provider and pricing policy.", category: "Users & Commerce" },
+  { id: "notifications", label: "Notifications", icon: Bell, blurb: "Which events trigger email alerts.", category: "Communication" },
+  { id: "email", label: "Email", icon: Mail, blurb: "SMTP provider, sender identity and delivery policy.", category: "Communication" },
+  { id: "footer", label: "Footer & Social", icon: Link2, blurb: "Footer text, legal links and social platform links.", category: "Communication" },
+  { id: "security", label: "Security", icon: Shield, blurb: "MFA, sessions, passwords and maintenance mode.", category: "Platform" },
+  { id: "storage", label: "Storage & Uploads", icon: Database, blurb: "Upload limits and allowed file types.", category: "Platform" },
+  { id: "integrations", label: "Integrations", icon: Plug, blurb: "Analytics, SEO meta and custom head code.", category: "Platform" },
+  { id: "seo", label: "SEO", icon: Search, blurb: "Site title, meta, Open Graph, Twitter cards and robots.", category: "Platform" },
+  { id: "featureFlags", label: "Feature Flags", icon: Flag, blurb: "Toggle protected capabilities platform-wide (enforced server-side).", category: "Platform" },
+  { id: "history", label: "Activity & History", icon: History, blurb: "Audit trail of settings changes with one-click restore.", category: "System" },
 ];
+
+const CATEGORIES: SettingsCategory[] = ["General", "Design", "Content & Exams", "Users & Commerce", "Communication", "Platform", "System"];
 
 /* ── Feature Flags ─────────────────────────────────────────────────────── */
 
@@ -1201,6 +1206,7 @@ export default function AdminSettingsPage() {
   const [resetting, setResetting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importDiff, setImportDiff] = useState<Record<string, { old: any; new: any }> | null>(null);
+  const [settingsSearch, setSettingsSearch] = useState("");
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   const exportSettings = async () => {
@@ -1342,19 +1348,50 @@ export default function AdminSettingsPage() {
 
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Section nav */}
-        <nav className="lg:w-60 shrink-0 space-y-1">
-          {GROUPS.map((g) => {
-            const Icon = g.icon;
-            return (
-              <button key={g.id} onClick={() => setActive(g.id)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors",
-                  active === g.id ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "border-transparent hover:bg-muted/60",
-                )}>
-                <Icon size={16} className="shrink-0" />
-                <span className="flex-1">{g.label}</span>
-                <ChevronRight size={14} className={cn("text-muted-foreground", active === g.id && "text-primary")} />
+        <nav className="lg:w-64 shrink-0 space-y-1">
+          {/* Settings search */}
+          <div className="relative mb-2">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={settingsSearch}
+              onChange={(e) => setSettingsSearch(e.target.value)}
+              placeholder="Search settings…"
+              className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            {settingsSearch && (
+              <button onClick={() => setSettingsSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X size={13} />
               </button>
+            )}
+          </div>
+
+          {CATEGORIES.map((cat) => {
+            const items = GROUPS.filter((g) => g.category === cat);
+            const filtered = items.filter((g) =>
+              g.label.toLowerCase().includes(settingsSearch.toLowerCase()) ||
+              g.blurb.toLowerCase().includes(settingsSearch.toLowerCase())
+            );
+            if (filtered.length === 0) return null;
+            return (
+              <div key={cat} className="mb-1">
+                <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                  {cat}
+                </p>
+                {filtered.map((g) => {
+                  const Icon = g.icon;
+                  return (
+                    <button key={g.id} onClick={() => setActive(g.id)}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors",
+                        active === g.id ? "border-primary/40 bg-primary/5 font-semibold text-primary" : "border-transparent hover:bg-muted/60",
+                      )}>
+                      <Icon size={16} className="shrink-0" />
+                      <span className="flex-1">{g.label}</span>
+                      <ChevronRight size={14} className={cn("text-muted-foreground", active === g.id && "text-primary")} />
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
           <div className="pt-3 text-xs text-muted-foreground">

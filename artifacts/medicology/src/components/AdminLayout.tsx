@@ -41,6 +41,11 @@ interface NavItem {
   permission?: string;
 }
 
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { logout, user, can } = useAuth();
   const [, setLocation] = useLocation();
@@ -75,126 +80,64 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const navItems: NavItem[] = [
+  const navSections: NavSection[] = [
     {
-      label: 'Dashboard',
-      icon: <BarChart3 size={18} />,
-      path: '/admin',
+      title: 'Overview',
+      items: [
+        { label: 'Dashboard', icon: <BarChart3 size={18} />, path: '/admin' },
+      ],
     },
     {
-      label: 'Users',
-      icon: <Users size={18} />,
-      path: '/admin/users',
-      permission: 'users.view',
+      title: 'Content',
+      items: [
+        { label: 'Questions', icon: <BookOpen size={18} />, path: '/admin/questions', permission: 'questions.manage' },
+        { label: 'Spreadsheet Editor', icon: <Table2 size={18} />, path: '/admin/spreadsheet', permission: 'questions.manage' },
+        { label: 'Taxonomy', icon: <Network size={18} />, path: '/admin/taxonomy', permission: 'taxonomy.manage' },
+        { label: 'Bulk Import', icon: <UploadCloud size={18} />, path: '/admin/import', permission: 'import.run' },
+        { label: 'Review Queue', icon: <ClipboardCheck size={18} />, path: '/admin/review', badge: reviewBadge, permission: 'review.manage' },
+        { label: 'QBanks', icon: <Database size={18} />, path: '/admin/qbanks', permission: 'qbanks.manage' },
+        { label: 'Flashcards', icon: <Layers size={18} />, path: '/admin/flashcards', permission: 'flashcards.manage' },
+      ],
     },
     {
-      label: 'Roles & Permissions',
-      icon: <KeyRound size={18} />,
-      path: '/admin/roles',
-      permission: 'users.manage_roles',
+      title: 'Users & Access',
+      items: [
+        { label: 'Users', icon: <Users size={18} />, path: '/admin/users', permission: 'users.view' },
+        { label: 'Roles & Permissions', icon: <KeyRound size={18} />, path: '/admin/roles', permission: 'users.manage_roles' },
+        { label: 'Account Types', icon: <UserCog size={18} />, path: '/admin/user-types', permission: 'users.manage_types' },
+        { label: 'Permission Matrix', icon: <Shield size={18} />, path: '/admin/permissions', permission: 'users.manage_roles' },
+      ],
     },
     {
-      label: 'Account Types',
-      icon: <UserCog size={18} />,
-      path: '/admin/user-types',
-      permission: 'users.manage_types',
+      title: 'Communication',
+      items: [
+        { label: 'Announcements', icon: <Megaphone size={18} />, path: '/admin/announcements', permission: 'announcements.manage' },
+        { label: 'Email Templates', icon: <Mail size={18} />, path: '/admin/email', permission: 'email.manage' },
+        { label: 'Flags & Reports', icon: <AlertCircle size={18} />, path: '/admin/flags', permission: 'flags.manage' },
+      ],
     },
     {
-      label: 'Permission Matrix',
-      icon: <Shield size={18} />,
-      path: '/admin/permissions',
-      permission: 'users.manage_roles',
+      title: 'Platform',
+      items: [
+        { label: 'Settings', icon: <Settings size={18} />, path: '/admin/settings', permission: 'settings.manage' },
+        { label: 'Media Library', icon: <Images size={18} />, path: '/admin/media', permission: 'media.manage' },
+        { label: 'Coming Soon', icon: <Rocket size={18} />, path: '/admin/coming-soon', permission: 'coming_soon.manage' },
+      ],
     },
     {
-      label: 'Questions',
-      icon: <BookOpen size={18} />,
-      path: '/admin/questions',
-      permission: 'questions.manage',
-    },
-    {
-      label: 'Spreadsheet Editor',
-      icon: <Table2 size={18} />,
-      path: '/admin/spreadsheet',
-      permission: 'questions.manage',
-    },
-    {
-      label: 'Taxonomy',
-      icon: <Network size={18} />,
-      path: '/admin/taxonomy',
-      permission: 'taxonomy.manage',
-    },
-    {
-      label: 'Bulk Import',
-      icon: <UploadCloud size={18} />,
-      path: '/admin/import',
-      permission: 'import.run',
-    },
-    {
-      label: 'Review Queue',
-      icon: <ClipboardCheck size={18} />,
-      path: '/admin/review',
-      badge: reviewBadge,
-      permission: 'review.manage',
-    },
-    {
-      label: 'QBanks',
-      icon: <Database size={18} />,
-      path: '/admin/qbanks',
-      permission: 'qbanks.manage',
-    },
-    {
-      label: 'Flashcards',
-      icon: <Layers size={18} />,
-      path: '/admin/flashcards',
-      permission: 'flashcards.manage',
-    },
-    {
-      label: 'Announcements',
-      icon: <Megaphone size={18} />,
-      path: '/admin/announcements',
-      permission: 'announcements.manage',
-    },
-    {
-      label: 'Flags & Reports',
-      icon: <AlertCircle size={18} />,
-      path: '/admin/flags',
-      permission: 'flags.manage',
-    },
-    {
-      label: 'Media Library',
-      icon: <Images size={18} />,
-      path: '/admin/media',
-      permission: 'media.manage',
-    },
-    {
-      label: 'Coming Soon',
-      icon: <Rocket size={18} />,
-      path: '/admin/coming-soon',
-      permission: 'coming_soon.manage',
-    },
-    {
-      label: 'Email Templates',
-      icon: <Mail size={18} />,
-      path: '/admin/email',
-      permission: 'email.manage',
-    },
-    {
-      label: 'Audit Logs',
-      icon: <ScrollText size={18} />,
-      path: '/admin/audit',
-      permission: 'audit.view',
-    },
-    {
-      label: 'Settings',
-      icon: <Settings size={18} />,
-      path: '/admin/settings',
-      permission: 'settings.manage',
+      title: 'System',
+      items: [
+        { label: 'Audit Logs', icon: <ScrollText size={18} />, path: '/admin/audit', permission: 'audit.view' },
+      ],
     },
   ];
+
+  const navItems: NavItem[] = navSections.flatMap((s) => s.items);
 
   // ── Command center (Ctrl+K) ────────────────────────────────────────────
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [navQuery, setNavQuery] = useState('');
   const visibleNav = navItems.filter((item) => !item.permission || can(item.permission));
 
   useEffect(() => {
@@ -247,31 +190,57 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {visibleNav.map((item) => (
-            <button
-              key={item.path}
-              onClick={() => setLocation(item.path)}
-              className={clsx(
-                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium',
-                isActive(item.path)
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              )}
-              title={!sidebarOpen ? item.label : undefined}
-            >
-              <span className="flex-shrink-0">{item.icon}</span>
-              {sidebarOpen && (
-                <>
-                  <span className="flex-1 text-left">{item.label}</span>
-                  {item.badge && (
-                    <span className="bg-destructive text-destructive-foreground text-xs px-2 py-0.5 rounded-full">
-                      {item.badge}
-                    </span>
-                  )}
-                </>
-              )}
-            </button>
-          ))}
+          {sidebarOpen && (
+            <div className="px-2 pb-2">
+              <input
+                value={navQuery}
+                onChange={(e) => setNavQuery(e.target.value)}
+                placeholder="Filter sections…"
+                className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          )}
+          {navSections.map((section) => {
+            const items = section.items.filter((i) => !i.permission || can(i.permission));
+            const filtered = items.filter((i) =>
+              i.label.toLowerCase().includes(navQuery.toLowerCase()) || i.path.toLowerCase().includes(navQuery.toLowerCase())
+            );
+            if (filtered.length === 0) return null;
+            return (
+              <div key={section.title} className="pt-1">
+                {sidebarOpen && (
+                  <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                    {section.title}
+                  </p>
+                )}
+                {filtered.map((item) => (
+                  <button
+                    key={item.path}
+                    onClick={() => setLocation(item.path)}
+                    className={clsx(
+                      'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium',
+                      isActive(item.path)
+                        ? 'bg-primary/15 text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    )}
+                    title={!sidebarOpen ? item.label : undefined}
+                  >
+                    <span className="flex-shrink-0">{item.icon}</span>
+                    {sidebarOpen && (
+                      <>
+                        <span className="flex-1 text-left">{item.label}</span>
+                        {item.badge && (
+                          <span className="bg-destructive text-destructive-foreground text-xs px-2 py-0.5 rounded-full">
+                            {item.badge}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </nav>
 
         {/* User Info & Logout */}

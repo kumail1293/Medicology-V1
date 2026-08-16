@@ -5,9 +5,7 @@ import * as schema from '@workspace/db/schema';
 import { SEED_QUESTIONS } from './mock-seed.js';
 import { SEED_QBANKS, buildQbankQuestionMapping } from './mock-qbank-seed.js';
 import { PERMISSION_REGISTRY } from './utils/permission-registry.js';
-import { SEED_ACCOUNT_TYPES, SEED_ROLES, SEED_ORGANIZATIONS, SEED_TEAMS } from './utils/rbac-seed.js';
-import {
-  SEED_COUNTRIES,
+import { SEED_ACCOUNT_TYPES, SEED_ROLES, SEED_ORGANIZATIONS, SEED_TEAMS } from './utils/rbac-seed.js';import { SEED_COUNTRIES,
   SEED_EXAM_SYSTEMS,
   SEED_EXAMS,
   SEED_PROGRAMS,
@@ -17,6 +15,7 @@ import {
   SEED_TOPICS,
   SEED_SUBTOPICS,
 } from './mock-taxonomy-seed.js';
+import { SEED_CLINICAL_CASES } from './mock-cases-seed.js';
 
 // Check if we should use SQLite (for development)
 const useSQLite = process.env.DATABASE_URL?.startsWith('sqlite:') ||
@@ -116,6 +115,30 @@ if (useSQLite) {
     waitlist: [] as any[],
     announcements: [] as any[],
     announcement_templates: [] as any[],
+    // Clinical cases — seeded so the Clinical Cases page has content in dev.
+    clinical_cases: SEED_CLINICAL_CASES.map((c, i) => ({
+      id: i + 1,
+      title: c.title,
+      system: c.system,
+      difficulty: c.difficulty,
+      examType: c.examType,
+      estimatedMinutes: c.estimatedMinutes,
+      relatedSubject: c.relatedSubject,
+      chiefComplaint: c.chiefComplaint,
+      history: c.history,
+      examination: c.examination,
+      investigations: c.investigations,
+      diagnosisOptions: JSON.stringify(c.diagnosisOptions),
+      correctDiagnosis: c.correctDiagnosis,
+      explanation: c.explanation,
+      managementPlan: c.managementPlan,
+      keyLearningPoints: JSON.stringify(c.keyLearningPoints),
+      status: 'published',
+      createdBy: null,
+      createdAt: now,
+      updatedAt: now,
+    })),
+    case_completions: [] as any[],
   };
 
   // Map seeded questions to QBanks via their legacy tag fields, then backfill
@@ -184,6 +207,8 @@ if (useSQLite) {
     waitlist: 1,
     announcements: 1,
     announcement_templates: 1,
+    clinical_cases: SEED_CLINICAL_CASES.length + 1,
+    case_completions: 1,
   };
 
   const getTableName = (table: any): string => {
