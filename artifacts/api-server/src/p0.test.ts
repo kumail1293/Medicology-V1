@@ -2295,3 +2295,75 @@ test('bulk deck import: .apkg (Anki package) with media — notes, cloze, field 
   assert.equal(cards.length, 2);
   assert.ok(cards.some((c: any) => c.front.includes('/api/storage/uploads/')), 'card front keeps rewritten media URL');
 });
+
+test('bulk deck import: .apkg field map — noteTypes surfaced + front/back override honored', async () => {
+  const { db } = await import('./db.js');
+  const { usersTable } = await import('@workspace/db');
+  const { eq: drizzleEq } = await import('./utils/drizzle.js');
+  await db.update(usersTable).set({ role: 'superadmin' as any }).where(drizzleEq(usersTable.id, 1));
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const auth = { Authorization: `Bearer ${adminToken}` };
+
+  const JSZip = (await import('jszip')).default;
+  const initSqlJs = (await import('sql.js')).default;
+  const SQL = await initSqlJs();
+  const col = new SQL.Database();
+  col.run(`
+    CREATE TABLE col (id INTEGER PRIMARY KEY, crt INTEGER NOT NULL, mod INTEGER NOT NULL, scm INTEGER NOT NULL, ver INTEGER NOT NULL, dty INTEGER NOT NULL, usn INTEGER NOT NULL, ls INTEGER NOT NULL, conf TEXT NOT NULL, models TEXT NOT NULL, decks TEXT NOT NULL, dconf TEXT NOT NULL, tags TEXT NOT NULL);
+    CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT NOT NULL, mid INTEGER NOT NULL, mod INTEGER NOT NULL, usn INTEGER NOT NULL, tags TEXT NOT NULL, flds TEXT NOT NULL, sfld INTEGER NOT NULL, csum INTEGER NOT NULL, flags INTEGER NOT NULL, data TEXT NOT NULL);
+  `);
+  // Multi-field note type with NO conventionally-named front field, so the
+  // auto-guess lands on field 0 ("Prompt") and the map can move it to "Answer".
+  const models = {
+    '201': {
+      id: 201, name: 'Two-Way Card', type: 0, mod: 0, usn: 0, sortf: 0, did: 1,
+      flds: [
+        { name: 'Prompt', ord: 0 }, { name: 'Answer', ord: 1 }, { name: 'Extra Notes', ord: 2 },
+      ],
+      tmpls: [{ name: 'Card 1', ord: 0, qfmt: '{{Prompt}}', afmt: '{{Prompt}}<hr>{{Answer}}', bqfmt: '', bafmt: '', did: null, bfont: 'Arial', bsize: 20 }],
+    },
+  };
+  const decks = { '1': { id: 1, name: 'Field Map Deck', mtime: 0, usn: 0, desc: '', conf: 1 } };
+  col.run('INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (1, 0, 0, 0, 11, 0, 0, 0, ?, ?, ?, ?, ?)',
+    ['{}', JSON.stringify(models), JSON.stringify(decks), '{}', '{}']);
+  const sep = String.fromCharCode(31);
+  col.run('INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (1, ?, 201, 0, 0, ?, ?, 0, 0, 0, ?)',
+    ['g-m1', 'mapped', `What is the capital of France?${sep}Paris${sep}Also known as the City of Light`, '{}']);
+  const colBytes = Buffer.from(col.export());
+  col.close();
+  const zip = new JSZip();
+  zip.file('collection.anki2', colBytes);
+  zip.file('media', '{}');
+  const apkgBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+
+  // 1) Auto preview — noteTypes exposed, front = Prompt (field 0).
+  let form = new FormData();
+  form.append('file', new Blob([apkgBuffer], { type: 'application/octet-stream' }), 'field-map.apkg');
+  let res = await fetch(`${BASE}/flashcards/admin/decks/import/preview`, { method: 'POST', headers: auth, body: form });
+  let preview = (await res.json()) as any;
+  assert.equal(res.status, 200, JSON.stringify(preview).slice(0, 300));
+  assert.equal(preview.noteTypes.length, 1, 'one note type surfaced');
+  const nt = preview.noteTypes[0];
+  assert.equal(nt.mid, '201');
+  assert.deepEqual(nt.fieldNames, ['Prompt', 'Answer', 'Extra Notes']);
+  assert.equal(nt.frontIndex, 0, 'auto front = Prompt (field 0)');
+  assert.deepEqual(nt.backIndices, [1, 2]);
+  let row = preview.rows[0];
+  assert.ok(row.data.front.includes('What is the capital of France?'), 'auto front is the Prompt');
+  assert.ok(row.data.back.includes('Paris'), 'auto back includes Answer');
+
+  // 2) Override via fieldMap — front = Answer (field 1), back = Prompt + Extra.
+  form = new FormData();
+  form.append('file', new Blob([apkgBuffer], { type: 'application/octet-stream' }), 'field-map.apkg');
+  form.append('fieldMap', JSON.stringify({ '201': { front: 'Answer', back: ['Prompt', 'Extra Notes'] } }));
+  res = await fetch(`${BASE}/flashcards/admin/decks/import/preview`, { method: 'POST', headers: auth, body: form });
+  preview = (await res.json()) as any;
+  assert.equal(res.status, 200, JSON.stringify(preview).slice(0, 300));
+  assert.equal(preview.noteTypes[0].frontIndex, 1, 'override front = Answer (field 1)');
+  row = preview.rows[0];
+  assert.ok(row.data.front.includes('Paris'), 'override front is the Answer');
+  assert.ok(row.data.back.includes('What is the capital of France?'), 'override back includes Prompt');
+  assert.ok(row.data.back.includes('City of Light'), 'override back includes Extra Notes');
+  assert.ok(!row.data.front.includes('What is the capital'), 'Prompt no longer in front');
+});

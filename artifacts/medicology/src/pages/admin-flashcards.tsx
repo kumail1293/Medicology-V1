@@ -64,6 +64,9 @@ export default function AdminFlashcardsPage() {
   const [importing, setImporting] = useState(false);
   const [downloadTemplate, setDownloadTemplate] = useState<"xlsx" | "csv" | null>(null);
   const [importPreview, setImportPreview] = useState<any>(null);
+  // Per-note-type field mapping (only for .apkg previews): mid → { front, back[] }
+  // where values are field names (indices also accepted by the API).
+  const [fieldMap, setFieldMap] = useState<Record<string, { front: string; back: string[] }>>({});
   const importFileRef = useRef<HTMLInputElement>(null);
 
   const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
@@ -144,18 +147,36 @@ export default function AdminFlashcardsPage() {
     }
     setImportFile(file);
     setImportPreview(null);
+    setFieldMap({});
   };
 
-  const runImportPreview = async () => {
+  const runImportPreview = async (withFieldMap = true) => {
     if (!importFile) return;
     setImporting(true);
     try {
       const formData = new FormData();
       formData.append("file", importFile);
+      // Send the current per-note-type field mapping so .apkg previews respect
+      // the admin's front/back choices (field picker).
+      if (withFieldMap && Object.keys(fieldMap).length > 0) {
+        formData.append("fieldMap", JSON.stringify(fieldMap));
+      }
       const res = await apiFetch("/api/flashcards/admin/decks/import/preview", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Preview failed");
       setImportPreview(data);
+      // Seed the field picker from the resolved mapping (only when the user
+      // hasn't already picked fields for this file).
+      if (data.noteTypes?.length && Object.keys(fieldMap).length === 0) {
+        const seed: Record<string, { front: string; back: string[] }> = {};
+        for (const nt of data.noteTypes) {
+          seed[nt.mid] = {
+            front: nt.fieldNames[nt.frontIndex] ?? "",
+            back: (nt.backIndices ?? []).map((i: number) => nt.fieldNames[i]).filter(Boolean),
+          };
+        }
+        setFieldMap(seed);
+      }
     } catch (err) {
       toast({ title: "Error", description: err instanceof Error ? err.message : "Preview failed", variant: "destructive" });
     } finally {
@@ -591,6 +612,73 @@ export default function AdminFlashcardsPage() {
                     <div className="flex items-start gap-1.5 rounded-lg bg-amber-500/10 p-2 text-xs text-amber-600">
                       <AlertTriangle size={13} className="mt-0.5 shrink-0" />
                       <div>{importPreview.taxonomyNotes.slice(0, 6).map((n: string, i: number) => <p key={i}>{n}</p>)}</div>
+                    </div>
+                  )}
+
+                  {/* Per-note-type field picker (.apkg only) */}
+                  {importPreview.noteTypes?.length > 0 && (
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold">Field mapping — assign which Anki field becomes the card front / back per note type</p>
+                        {importPreview.format === "apkg" && (
+                          <button
+                            onClick={() => void runImportPreview()}
+                            disabled={importing}
+                            className="shrink-0 rounded-lg bg-primary px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+                            title="Re-run preview with the mapping above"
+                          >
+                            {importing ? "Reparsing…" : "Apply mapping"}
+                          </button>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        {importPreview.noteTypes.map((nt: any) => {
+                          const entry = fieldMap[nt.mid];
+                          return (
+                            <div key={nt.mid} className="rounded-lg border border-border bg-background p-2.5 text-xs">
+                              <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                                <span className="font-semibold">{nt.name}</span>
+                                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{nt.rowCount} note{nt.rowCount === 1 ? "" : "s"}</span>
+                                {nt.isCloze && <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-600">cloze</span>}
+                              </div>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <label className="block">
+                                  <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Front</span>
+                                  <select
+                                    value={entry?.front ?? ""}
+                                    onChange={(e) => setFieldMap((m) => ({ ...m, [nt.mid]: { ...(m[nt.mid] ?? { back: [] }), front: e.target.value } }))}
+                                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs outline-none"
+                                  >
+                                    {nt.fieldNames.map((f: string, i: number) => <option key={i} value={f}>{i}: {f}</option>)}
+                                  </select>
+                                </label>
+                                <div>
+                                  <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Back fields (multi-select)</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {nt.fieldNames.map((f: string, i: number) => {
+                                      const selected = entry?.back?.includes(f) ?? false;
+                                      return (
+                                        <button
+                                          key={i}
+                                          type="button"
+                                          onClick={() => setFieldMap((m) => {
+                                            const cur = m[nt.mid]?.back ?? [];
+                                            const next = selected ? cur.filter((x: string) => x !== f) : [...cur, f];
+                                            return { ...m, [nt.mid]: { ...(m[nt.mid] ?? { front: entry?.front ?? "" }), back: next } };
+                                          })}
+                                          className={`rounded-full border px-2 py-0.5 text-[10px] transition-colors ${selected ? "border-primary/50 bg-primary/15 font-medium text-primary" : "border-border text-muted-foreground hover:border-primary/30"}`}
+                                        >
+                                          {i}: {f}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                   <div className="max-h-48 overflow-y-auto divide-y divide-border">

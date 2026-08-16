@@ -83,10 +83,11 @@ bio/phone · `0014` user study aim (`studyAim` — AMBOSS-style goal) ·
 user_roles, user_permissions, organizations, teams, team_members,
 user_scopes, role_scopes) + `users.userType`.
 
-Tests: 58 integration tests (settings precedence, overrides, imports,
-bulk deck import incl. Anki .apkg with media, spreadsheet grid + bulk
-save, bulk review, media, coming soon, RBAC + Administration 2.0 +
-taxonomy-aware scope enforcement, email templates/renderer/
+Tests: 59 integration tests (settings precedence, overrides, imports,
+bulk deck import incl. Anki .apkg with media + per-note-type field
+mapping, spreadsheet grid + bulk save, bulk review, media, coming
+soon, RBAC + Administration 2.0 + taxonomy-aware scope enforcement,
+email templates/renderer/
 secret handling, sessions/revocation, export/import, audit gating,
 transactional sends, template seeding, forgot/reset password,
 announcement email, study aim + progress reset, announcement user
@@ -195,9 +196,12 @@ build, 18-check browser QA (RBAC pages + access drawer) — all green.
     — Anki `[sound:…]` tags, `<span class="sound">` and `<audio>`/`<source>`
     srcs are rewritten to served `/api/storage/uploads/…` URLs and the
     study session renders them as real `<audio>` players (not stripped);
-    preview with per-row validation, taxonomy auto-create,
-    duplicate-slug handling (reuses existing deck), audit-free card
-    insert with sort order.
+    **per-note-type field mapping** — the preview surfaces each note
+    type's fields (front + multi-select back picker) and a `fieldMap`
+    override re-runs the preview so admins can fix wrong auto-guesses
+    before importing; preview with per-row validation, taxonomy
+    auto-create, duplicate-slug handling (reuses existing deck),
+    audit-free card insert with sort order.
 -   **Deck template downloads** (`.xlsx` and `format=csv`) with example
     rows + guide for exam-specific decks.
 -   **Card image rendering fix**: deck links now render images

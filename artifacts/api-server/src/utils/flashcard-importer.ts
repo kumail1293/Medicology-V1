@@ -276,6 +276,68 @@ export function parseFlashcardFile(buffer: Buffer, fileName: string): { rows: Fl
 }
 
 /**
+ * Per-note-type metadata surfaced in the preview so the admin UI can offer a
+ * field picker. `frontIndex`/`backIndices` reflect the resolved mapping (the
+ * auto-guess or the caller's `fieldMap` override).
+ */
+export interface ApkgNoteTypeInfo {
+  mid: string;
+  name: string;
+  isCloze: boolean;
+  fieldNames: string[];
+  rowCount: number;
+  frontIndex: number;
+  backIndices: number[];
+}
+
+/**
+ * Resolve the front/back field split for one note type.
+ *
+ * Defaults: the conventionally-named front field (Text / Front / Question /
+ * FrontSide) or field 0 becomes the card front; everything else joins the
+ * back (AnKing note types carry lecture notes, missed questions and resource
+ * tags after the main front/extra fields).
+ *
+ * `fieldMap` (keyed by note-type id) overrides: `front` is a field name or
+ * index, `back` is a list of field names/indices to append to the back.
+ */
+function resolveFieldSplit(
+  model: { name: string; fieldNames: string[]; isCloze: boolean } | undefined,
+  fieldMap: Record<string, { front?: string | number; back?: Array<string | number> }> | undefined,
+  mid: string,
+): { frontIndex: number; backIndices: number[] } {
+  const fieldNames = model?.fieldNames ?? [];
+
+  // Resolve a name or index to an index.
+  const toIndex = (v: string | number): number => {
+    if (typeof v === 'number') return Math.max(0, Math.min(fieldNames.length - 1, Math.floor(v)));
+    const name = String(v).trim().toLowerCase();
+    const idx = fieldNames.findIndex((f) => f.trim().toLowerCase() === name);
+    return idx >= 0 ? idx : 0;
+  };
+
+  // Front: explicit map entry wins, else conventional name, else field 0.
+  let frontIndex = 0;
+  const mapEntry = fieldMap?.[mid];
+  if (mapEntry?.front !== undefined) {
+    frontIndex = toIndex(mapEntry.front);
+  } else if (fieldNames.length > 0) {
+    const named = fieldNames.findIndex((f) => /^(text|front|question|frontside)$/i.test(f.trim()));
+    if (named >= 0) frontIndex = named;
+  }
+
+  // Back: explicit map entry wins (in order), else every other field.
+  let backIndices: number[];
+  if (mapEntry?.back && Array.isArray(mapEntry.back) && mapEntry.back.length > 0) {
+    backIndices = [...new Set(mapEntry.back.map(toIndex))].filter((i) => i !== frontIndex);
+  } else {
+    backIndices = fieldNames.map((_, i) => i).filter((i) => i !== frontIndex);
+  }
+
+  return { frontIndex, backIndices };
+}
+
+/**
  * Parse an Anki .apkg package into import rows. The primary field of each
  * note type becomes the card front, the remaining fields form the back, and
  * embedded media is extracted into the shared media library with `<img>`
@@ -285,7 +347,14 @@ export async function parseApkgFile(
   buffer: Buffer,
   fileName: string,
   userId: number | null = null,
-): Promise<{ rows: FlashcardImportRow[]; deckMeta: Record<string, any>; format: string; mediaImported: number }> {
+  fieldMap?: Record<string, { front?: string | number; back?: Array<string | number> }>,
+): Promise<{
+  rows: FlashcardImportRow[];
+  deckMeta: Record<string, any>;
+  format: string;
+  mediaImported: number;
+  noteTypes: ApkgNoteTypeInfo[];
+}> {
   const { parseApkg, importApkgMedia, rewriteCardImages } = await import('./flashcard-apkg.js');
   const { db } = await import('../db.js');
   const { mediaTable } = await import('@workspace/db');
@@ -293,27 +362,25 @@ export async function parseApkgFile(
   const { notes, models, media, deckNameHint } = await parseApkg(buffer);
   const urlMap = await importApkgMedia(media, userId, db, mediaTable);
 
+  // Per-note-type resolved split (computed once, reused for every row + the
+  // noteTypes payload returned to the UI).
+  const splits = new Map<string, { frontIndex: number; backIndices: number[] }>();
+  for (const note of notes) {
+    if (!splits.has(note.mid)) {
+      splits.set(note.mid, resolveFieldSplit(models.get(note.mid), fieldMap, note.mid));
+    }
+  }
+
   const rows: FlashcardImportRow[] = [];
   let rowNumber = 1;
   for (const note of notes) {
     rowNumber++;
-    const model = models.get(note.mid);
     const fields = note.fields;
+    const { frontIndex, backIndices } = splits.get(note.mid)!;
 
-    // Pick the front field: the note type's first field, or a conventionally
-    // named front field (Text / Front / Question / FrontSide) when present.
-    let frontIdx = 0;
-    if (model && model.fieldNames.length > 0) {
-      const named = model.fieldNames.findIndex((f) => /^(text|front|question|frontside)$/i.test(f.trim()));
-      if (named >= 0) frontIdx = named;
-    }
-
-    const front = stringValue(fields[frontIdx]);
-    // Everything else becomes the back (AnKing note types carry lecture notes,
-    // missed questions and resource tags after the main front/extra fields).
-    const backParts = fields
-      .filter((_, i) => i !== frontIdx)
-      .map((f) => stringValue(f))
+    const front = stringValue(fields[frontIndex]);
+    const backParts = backIndices
+      .map((i) => stringValue(fields[i]))
       .filter(Boolean);
     const back = backParts.join('<br>');
 
@@ -331,11 +398,30 @@ export async function parseApkgFile(
   }
 
   const hint = stringValue(deckNameHint) || fileName.replace(/\.apkg$/i, '');
+
+  // Note-type metadata for the field picker (grouped counts per type).
+  const rowCounts = new Map<string, number>();
+  for (const note of notes) rowCounts.set(note.mid, (rowCounts.get(note.mid) ?? 0) + 1);
+  const noteTypes: ApkgNoteTypeInfo[] = [];
+  for (const [mid, split] of splits) {
+    const model = models.get(mid);
+    noteTypes.push({
+      mid,
+      name: model?.name || 'Unknown',
+      isCloze: model?.isCloze ?? false,
+      fieldNames: model?.fieldNames ?? [],
+      rowCount: rowCounts.get(mid) ?? 0,
+      frontIndex: split.frontIndex,
+      backIndices: split.backIndices,
+    });
+  }
+
   return {
     rows,
     deckMeta: { deckName: hint, deckSlug: slugify(hint) },
     format: 'apkg',
     mediaImported: urlMap.size,
+    noteTypes,
   };
 }
 
@@ -365,16 +451,18 @@ function validateCard(row: FlashcardImportRow): void {
 
 export interface FlashcardImportPreviewWithMedia extends FlashcardImportPreview {
   mediaImported?: number;
+  noteTypes?: ApkgNoteTypeInfo[];
 }
 
 export async function buildFlashcardImportPreview(
   buffer: Buffer,
   fileName: string,
   userId: number | null = null,
+  fieldMap?: Record<string, { front?: string | number; back?: Array<string | number> }>,
 ): Promise<FlashcardImportPreviewWithMedia> {
-  const { rows, deckMeta, format, mediaImported } = fileName.toLowerCase().endsWith('.apkg')
-    ? await parseApkgFile(buffer, fileName, userId)
-    : { ...parseFlashcardFile(buffer, fileName), mediaImported: 0 };
+  const { rows, deckMeta, format, mediaImported, noteTypes } = fileName.toLowerCase().endsWith('.apkg')
+    ? await parseApkgFile(buffer, fileName, userId, fieldMap)
+    : { ...parseFlashcardFile(buffer, fileName), mediaImported: 0, noteTypes: undefined };
   const taxonomyNotes: string[] = [];
 
   for (const row of rows) {
@@ -423,6 +511,7 @@ export async function buildFlashcardImportPreview(
     stats,
     taxonomyNotes: [...new Set(taxonomyNotes)].slice(0, 25),
     mediaImported,
+    noteTypes,
   };
 }
 

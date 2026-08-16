@@ -188,7 +188,13 @@ flashcardsRouter.post('/admin/decks/import/preview', authenticate, requirePermis
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     try {
-      const preview = await buildFlashcardImportPreview(req.file.buffer, req.file.originalname, req.user?.id ?? null);
+      // Optional fieldMap (JSON) overrides the auto front/back split per
+      // note type — sent by the admin field picker on re-preview.
+      let fieldMap: Record<string, { front?: string | number; back?: Array<string | number> }> | undefined;
+      if (req.body?.fieldMap) {
+        try { fieldMap = JSON.parse(String(req.body.fieldMap)); } catch { /* ignore malformed */ }
+      }
+      const preview = await buildFlashcardImportPreview(req.file.buffer, req.file.originalname, req.user?.id ?? null, fieldMap);
       res.json(preview);
     } catch (parseErr: any) {
       res.status(400).json({ error: parseErr.message });
