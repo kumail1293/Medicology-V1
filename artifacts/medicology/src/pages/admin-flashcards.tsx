@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Archive, Globe, FileText, ArrowLeft, Layers, CheckCircle2, Upload, Download, FileSpreadsheet, AlertTriangle, XCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Archive, Globe, FileText, ArrowLeft, Layers, CheckCircle2, Upload, Download, FileSpreadsheet, AlertTriangle, XCircle, Search, ChevronLeft, ChevronRight, SkipForward, RotateCcw, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import RichTextEditor from "@/components/RichTextEditor";
@@ -67,7 +67,12 @@ export default function AdminFlashcardsPage() {
   // Per-note-type field mapping (only for .apkg previews): mid → { front, back[] }
   // where values are field names (indices also accepted by the API).
   const [fieldMap, setFieldMap] = useState<Record<string, { front: string; back: string[] }>>({});
+  // Per-card review inside the preview: edit modal target + list controls.
+  const [editImportRow, setEditImportRow] = useState<any>(null); // { index, row }
+  const [previewSearch, setPreviewSearch] = useState("");
+  const [previewPage, setPreviewPage] = useState(0);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const PREVIEW_PAGE_SIZE = 20;
 
   const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
@@ -203,6 +208,9 @@ export default function AdminFlashcardsPage() {
       setImportOpen(false);
       setImportFile(null);
       setImportPreview(null);
+      setEditImportRow(null);
+      setPreviewSearch("");
+      setPreviewPage(0);
       if (importFileRef.current) importFileRef.current.value = "";
       await loadDecks();
     } catch (err) {
@@ -211,6 +219,58 @@ export default function AdminFlashcardsPage() {
       setImporting(false);
     }
   };
+
+  /* ── Per-card review inside the import preview ───────────────────── */
+  // Update one row's card fields in place (front/back/note/tags) and clear
+  // its error state so it can be imported.
+  const updateImportRow = (index: number, patch: Partial<any>) => {
+    setImportPreview((p: any) => {
+      if (!p || !p.rows[index]) return p;
+      const rows = p.rows.map((r: any, i: number) => {
+        if (i !== index) return r;
+        const next = { ...r, data: { ...r.data, ...patch } };
+        next.status = next.data.front ? "valid" : "error";
+        next.messages = next.data.front ? [] : ["Missing front text"];
+        return next;
+      });
+      return { ...p, rows };
+    });
+  };
+
+  // Toggle a row in/out of the import (skipped rows keep their data but are
+  // excluded from the execute step, which only imports status === 'valid').
+  const toggleImportRow = (index: number) => {
+    setImportPreview((p: any) => {
+      if (!p || !p.rows[index]) return p;
+      const rows = p.rows.map((r: any, i: number) => {
+        if (i !== index) return r;
+        const next = { ...r };
+        if (next.status === "skipped") {
+          next.status = next.data.front ? "valid" : "error";
+          next.messages = next.data.front ? [] : ["Missing front text"];
+        } else {
+          next.status = "skipped";
+        }
+        return next;
+      });
+      return { ...p, rows };
+    });
+  };
+
+  // Live counts from the (possibly edited) rows — recomputed so the summary
+  // and the Create-deck button reflect skips/edits.
+  const previewValid = importPreview?.rows?.filter((r: any) => r.status === "valid").length ?? 0;
+  const previewSkipped = importPreview?.rows?.filter((r: any) => r.status === "skipped").length ?? 0;
+
+  const filteredPreviewRows = (importPreview?.rows ?? []).filter((r: any) => {
+    const q = previewSearch.trim().toLowerCase();
+    if (!q) return true;
+    const hay = `${r.data?.front ?? ""} ${r.data?.back ?? ""} ${r.data?.tags ?? ""}`.toLowerCase();
+    return hay.includes(q);
+  });
+  const previewPageCount = Math.max(1, Math.ceil(filteredPreviewRows.length / PREVIEW_PAGE_SIZE));
+  const safePreviewPage = Math.min(previewPage, previewPageCount - 1);
+  const pageRows = filteredPreviewRows.slice(safePreviewPage * PREVIEW_PAGE_SIZE, (safePreviewPage + 1) * PREVIEW_PAGE_SIZE);
 
   const downloadDeckTemplate = async (format: "xlsx" | "csv") => {
     setDownloadTemplate(format);
@@ -605,7 +665,7 @@ export default function AdminFlashcardsPage() {
                     <span className="font-semibold">Deck: {importPreview.deck?.name}</span>
                     <span className="font-mono text-xs text-primary">{importPreview.deck?.slug}</span>
                     <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{importPreview.deck?.subject || "Other"}</span>
-                    <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600">{importPreview.stats?.valid ?? 0} valid</span>
+                    <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600">{previewValid} ready</span>
                     {importPreview.stats?.error > 0 && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-600">{importPreview.stats.error} errors</span>}
                   </div>
                   {importPreview.taxonomyNotes?.length > 0 && (
@@ -681,28 +741,137 @@ export default function AdminFlashcardsPage() {
                       </div>
                     </div>
                   )}
-                  <div className="max-h-48 overflow-y-auto divide-y divide-border">
-                    {importPreview.rows?.filter((r: any) => r.status === "error").map((r: any, i: number) => (
-                      <div key={i} className="flex items-start gap-2 py-1.5 text-xs">
-                        <XCircle size={13} className="mt-0.5 shrink-0 text-red-500" />
-                        <span className="text-muted-foreground">Row {r.rowNumber}: {r.messages.join("; ")}</span>
-                      </div>
-                    ))}
-                    {importPreview.rows?.filter((r: any) => r.status === "valid").slice(0, 3).map((r: any, i: number) => (
-                      <div key={i} className="flex items-start gap-2 py-1.5 text-xs">
-                        <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-emerald-500" />
-                        <span className="line-clamp-1">{r.data.front}</span>
-                      </div>
-                    ))}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-background px-2 py-1">
+                      <Search size={13} className="shrink-0 text-muted-foreground" />
+                      <input
+                        value={previewSearch}
+                        onChange={(e) => { setPreviewSearch(e.target.value); setPreviewPage(0); }}
+                        placeholder="Search front / back / tags…"
+                        className="w-full bg-transparent text-xs outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <button onClick={() => setPreviewPage(Math.max(0, safePreviewPage - 1))} disabled={safePreviewPage === 0} className="rounded-lg border border-border p-1 disabled:opacity-40"><ChevronLeft size={13} /></button>
+                      <span className="whitespace-nowrap">{safePreviewPage + 1}/{previewPageCount}</span>
+                      <button onClick={() => setPreviewPage(Math.min(previewPageCount - 1, safePreviewPage + 1))} disabled={safePreviewPage >= previewPageCount - 1} className="rounded-lg border border-border p-1 disabled:opacity-40"><ChevronRight size={13} /></button>
+                    </div>
                   </div>
-                  <div className="flex justify-end gap-2 pt-1">
-                    <button onClick={() => setImportPreview(null)} className="rounded-lg border border-border px-3 py-1.5 text-xs">Back</button>
-                    <button onClick={() => void runImportExecute()} disabled={importing || (importPreview.stats?.valid ?? 0) === 0} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50">
-                      {importing ? "Importing…" : `Create deck with ${importPreview.stats?.valid ?? 0} card(s)`}
-                    </button>
+
+                  {/* Editable row list */}
+                  <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+                    {pageRows.length === 0 && (
+                      <div className="p-4 text-center text-xs text-muted-foreground">No rows match.</div>
+                    )}
+                    {pageRows.map((r: any) => {
+                      const rowIndex = (importPreview.rows ?? []).indexOf(r);
+                      const skipped = r.status === "skipped";
+                      const invalid = r.status === "error";
+                      return (
+                        <div key={`${r.rowNumber}-${rowIndex}`} className={`flex items-start gap-2 p-2 text-xs ${skipped ? "opacity-50" : ""} ${invalid ? "bg-red-500/5" : ""}`}>
+                          <div className="mt-0.5 shrink-0 font-mono text-[10px] text-muted-foreground">{r.rowNumber}</div>
+                          <div className="min-w-0 flex-1">
+                            <p className="line-clamp-1 font-medium">{richTextToPlain(r.data?.front ?? "") || "<empty>"}</p>
+                            <p className="line-clamp-1 text-muted-foreground">{richTextToPlain(r.data?.back ?? "") || ""}</p>
+                            {invalid && <p className="text-red-500">{r.messages.join("; ")}</p>}
+                            {r.data?.tags?.length > 0 && (
+                              <div className="mt-0.5 flex flex-wrap gap-1">
+                                {r.data.tags.slice(0, 4).map((t: string, ti: number) => (
+                                  <span key={ti} className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">{t}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              onClick={() => setEditImportRow({ index: rowIndex, row: r })}
+                              title="Edit this card before importing"
+                              className="rounded-md border border-border p-1 text-muted-foreground hover:border-primary/40 hover:text-primary"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              onClick={() => toggleImportRow(rowIndex)}
+                              title={skipped ? "Include in import" : "Skip this card"}
+                              className={`rounded-md border p-1 ${skipped ? "border-primary/40 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}
+                            >
+                              <SkipForward size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-600">{previewValid} ready</span>
+                      {previewSkipped > 0 && <span className="rounded-full bg-muted px-2 py-0.5">{previewSkipped} skipped</span>}
+                      {(importPreview.stats?.error ?? 0) > 0 && <span className="rounded-full bg-red-500/15 px-2 py-0.5 font-medium text-red-600">{importPreview.stats.error} need attention</span>}
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => setImportPreview(null)} className="rounded-lg border border-border px-3 py-1.5 text-xs">Back</button>
+                      <button onClick={() => void runImportExecute()} disabled={importing || previewValid === 0} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+                        {importing ? "Importing…" : `Create deck with ${previewValid} card(s)`}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Per-card edit modal inside the import preview */}
+      {editImportRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-semibold">Edit Card {editImportRow.row?.rowNumber}</h3>
+              <button onClick={() => setEditImportRow(null)} className="text-muted-foreground hover:text-foreground">✕</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Front · Question / Term</label>
+                <RichTextEditor
+                  value={editImportRow.row?.data?.front ?? ""}
+                  onChange={(html) => updateImportRow(editImportRow.index, { front: html })}
+                  placeholder="Question / term — tables, images, flowcharts…"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Back · Answer / Definition</label>
+                <RichTextEditor
+                  value={editImportRow.row?.data?.back ?? ""}
+                  onChange={(html) => updateImportRow(editImportRow.index, { back: html })}
+                  placeholder="Answer / definition…"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Tags (comma separated)</label>
+                <input
+                  value={Array.isArray(editImportRow.row?.data?.tags) ? editImportRow.row.data.tags.join(", ") : ""}
+                  onChange={(e) => updateImportRow(editImportRow.index, { tags: e.target.value.split(",").map((t) => t.trim()).filter(Boolean) })}
+                  placeholder="cardiology, first-line"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <button
+                  onClick={() => toggleImportRow(editImportRow.index)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:text-primary"
+                >
+                  {editImportRow.row?.status === "skipped" ? <RotateCcw size={13} /> : <SkipForward size={13} />}
+                  {editImportRow.row?.status === "skipped" ? "Include in import" : "Skip this card"}
+                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => setEditImportRow(null)} className="rounded-lg border border-border px-4 py-2 text-sm">Cancel</button>
+                  <button onClick={() => setEditImportRow(null)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white">
+                    <Save size={14} /> Done
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

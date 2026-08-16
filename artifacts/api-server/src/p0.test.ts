@@ -2367,3 +2367,71 @@ test('bulk deck import: .apkg field map — noteTypes surfaced + front/back over
   assert.ok(row.data.back.includes('City of Light'), 'override back includes Extra Notes');
   assert.ok(!row.data.front.includes('What is the capital'), 'Prompt no longer in front');
 });
+
+test('bulk deck import: execute honors skipped + edited rows from the preview', async () => {
+  const { db } = await import('./db.js');
+  const { usersTable, flashcardDecksTable, flashcardsTable } = await import('@workspace/db');
+  const { eq: drizzleEq } = await import('./utils/drizzle.js');
+  await db.update(usersTable).set({ role: 'superadmin' as any }).where(drizzleEq(usersTable.id, 1));
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const auth = { Authorization: `Bearer ${adminToken}` };
+
+  const JSZip = (await import('jszip')).default;
+  const initSqlJs = (await import('sql.js')).default;
+  const SQL = await initSqlJs();
+  const col = new SQL.Database();
+  col.run(`
+    CREATE TABLE col (id INTEGER PRIMARY KEY, crt INTEGER NOT NULL, mod INTEGER NOT NULL, scm INTEGER NOT NULL, ver INTEGER NOT NULL, dty INTEGER NOT NULL, usn INTEGER NOT NULL, ls INTEGER NOT NULL, conf TEXT NOT NULL, models TEXT NOT NULL, decks TEXT NOT NULL, dconf TEXT NOT NULL, tags TEXT NOT NULL);
+    CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT NOT NULL, mid INTEGER NOT NULL, mod INTEGER NOT NULL, usn INTEGER NOT NULL, tags TEXT NOT NULL, flds TEXT NOT NULL, sfld INTEGER NOT NULL, csum INTEGER NOT NULL, flags INTEGER NOT NULL, data TEXT NOT NULL);
+  `);
+  const models = {
+    '201': {
+      id: 201, name: 'Two-Way Card', type: 0, mod: 0, usn: 0, sortf: 0, did: 1,
+      flds: [{ name: 'Prompt', ord: 0 }, { name: 'Answer', ord: 1 }, { name: 'Extra Notes', ord: 2 }],
+      tmpls: [{ name: 'Card 1', ord: 0, qfmt: '{{Prompt}}', afmt: '{{Prompt}}<hr>{{Answer}}', bqfmt: '', bafmt: '', did: null, bfont: 'Arial', bsize: 20 }],
+    },
+  };
+  const decks = { '1': { id: 1, name: 'Skip Deck', mtime: 0, usn: 0, desc: '', conf: 1 } };
+  col.run('INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (1, 0, 0, 0, 11, 0, 0, 0, ?, ?, ?, ?, ?)',
+    ['{}', JSON.stringify(models), JSON.stringify(decks), '{}', '{}']);
+  const sep = String.fromCharCode(31);
+  const noteRows = [
+    ['g-s1', 'keep-me', `Front One${sep}Back One${sep}Extra One`],
+    ['g-s2', 'skip-me', `Front Two${sep}Back Two${sep}Extra Two`],
+  ];
+  for (let i = 0; i < noteRows.length; i++) {
+    col.run('INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?, ?, 201, 0, 0, ?, ?, 0, 0, 0, ?)',
+      [i + 1, noteRows[i][0], noteRows[i][1], noteRows[i][2], '{}']);
+  }
+  const colBytes = Buffer.from(col.export());
+  col.close();
+  const zip = new JSZip();
+  zip.file('collection.anki2', colBytes);
+  zip.file('media', '{}');
+  const apkgBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+
+  const form = new FormData();
+  form.append('file', new Blob([apkgBuffer], { type: 'application/octet-stream' }), 'skip-edit.apkg');
+  const previewRes = await fetch(`${BASE}/flashcards/admin/decks/import/preview`, { method: 'POST', headers: auth, body: form });
+  const preview = (await previewRes.json()) as any;
+  assert.equal(preview.stats.valid, 2);
+
+  // Admin edits row 0's front, skips row 1, then executes.
+  const rows = preview.rows;
+  rows[0].data.front = 'Front One [EDITED]';
+  rows[1].status = 'skipped';
+  const deck = { ...preview.deck, slug: 'skip-edit-qa', name: 'Skip Edit QA' };
+
+  const execRes = await fetch(`${BASE}/flashcards/admin/decks/import/execute`, json(auth, { rows, deck, createMissingTaxonomy: true }, 'POST'));
+  const result = (await execRes.json()) as any;
+  assert.equal(execRes.status, 201, JSON.stringify(result).slice(0, 300));
+  assert.equal(result.inserted, 1, 'only the unskipped row is imported');
+
+  const [deckRow] = await db.select().from(flashcardDecksTable).where(drizzleEq(flashcardDecksTable.slug, 'skip-edit-qa'));
+  assert.ok(deckRow, 'deck persisted');
+  const cards = await db.select().from(flashcardsTable).where(drizzleEq(flashcardsTable.deckId, deckRow.id));
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].front, 'Front One [EDITED]', 'edited front persisted');
+  assert.equal(cards[0].back, 'Back One<br>Extra One', 'back fields intact');
+});
