@@ -38,9 +38,7 @@ export default function Dashboard() {
     const session = localStorage.getItem('medicology_session');
     const token = localStorage.getItem('medicology_token') || (session ? (JSON.parse(session) as { token?: string }).token : null);
     
-    // Show dashboard immediately with default data, load API data in background
-    setIsLoading(false);
-    
+    // Show skeletons while API data loads, then swap in real numbers.
     const load = async () => {
       try {
         const res = await fetch('/api/progress/analytics', { 
@@ -50,6 +48,8 @@ export default function Dashboard() {
         if (res.ok) setAnalytics(await res.json());
       } catch (e) {
         console.debug('Analytics load failed (expected with mock auth):', e);
+      } finally {
+        setIsLoading(false);
       }
     };
     
@@ -215,20 +215,26 @@ export default function Dashboard() {
       </AnimatePresence>
 
       {/* Top stats row with staggered animations */}
-      <motion.div 
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ staggerChildren: 0.1, delayChildren: 0.2 }}
-      >
-        <StatCard title="Questions Solved" value={formatNumber(stats.totalAttempted)} icon={<Target size={24} className="text-blue-500" />} bg="from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20" delay={0} />
-        <StatCard title="Overall Accuracy" value={`${Math.round(stats.accuracy)}%`} icon={<Activity size={24} className="text-green-500" />} bg="from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20" delay={0.1} />
-        <StatCard title="Current Streak" value={`${stats.streakDays}`} icon={<Flame size={24} className="text-orange-500" />} bg="from-orange-50 to-orange-100/50 dark:from-orange-950/30 dark:to-orange-900/20" delay={0.2} />
-        <StatCard title="Avg Time/Q" value={formatTime(stats.avgTimeSeconds)} icon={<Clock size={24} className="text-purple-500" />} bg="from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20" delay={0.3} />
-      </motion.div>
+      {isLoading ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((i) => <StatCardSkeleton key={i} />)}
+        </div>
+      ) : (
+        <motion.div 
+          className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ staggerChildren: 0.1, delayChildren: 0.2 }}
+        >
+          <StatCard title="Questions Solved" value={formatNumber(stats.totalAttempted)} icon={<Target size={24} className="text-blue-500" />} bg="from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20" delay={0} />
+          <StatCard title="Overall Accuracy" value={`${Math.round(stats.accuracy)}%`} icon={<Activity size={24} className="text-green-500" />} bg="from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20" delay={0.1} />
+          <StatCard title="Current Streak" value={`${stats.streakDays}`} icon={<Flame size={24} className="text-orange-500" />} bg="from-orange-50 to-orange-100/50 dark:from-orange-950/30 dark:to-orange-900/20" delay={0.2} />
+          <StatCard title="Avg Time/Q" value={formatTime(stats.avgTimeSeconds)} icon={<Clock size={24} className="text-purple-500" />} bg="from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20" delay={0.3} />
+        </motion.div>
+      )}
 
       {/* Exam Readiness Score */}
-      <ExamReadinessCard stats={stats} />
+      {isLoading ? <ReadinessCardSkeleton /> : <ExamReadinessCard stats={stats} />}
 
       {/* Score breakdown + QBank Usage */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -463,6 +469,36 @@ function StatCard({ title, value, icon, bg, delay = 0 }: { title: string; value:
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function StatCardSkeleton() {
+  return (
+    <div className="relative rounded-3xl overflow-hidden border border-border/50 bg-card p-6 animate-pulse">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 space-y-3">
+          <div className="h-3 w-20 rounded bg-muted" />
+          <div className="h-7 w-16 rounded bg-muted" />
+        </div>
+        <div className="h-12 w-12 rounded-2xl bg-muted" />
+      </div>
+    </div>
+  );
+}
+
+function ReadinessCardSkeleton() {
+  return (
+    <div className="rounded-3xl border border-border/50 bg-card p-6 animate-pulse">
+      <div className="flex flex-col sm:flex-row items-center gap-8">
+        <div className="h-[140px] w-[140px] shrink-0 rounded-full bg-muted" />
+        <div className="flex-1 w-full space-y-3">
+          <div className="h-5 w-48 rounded bg-muted" />
+          <div className="h-2 rounded bg-muted" />
+          <div className="h-2 rounded bg-muted" />
+          <div className="h-2 rounded bg-muted" />
+        </div>
+      </div>
+    </div>
   );
 }
 

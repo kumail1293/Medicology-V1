@@ -97,6 +97,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         { label: 'Review Queue', icon: <ClipboardCheck size={18} />, path: '/admin/review', badge: reviewBadge, permission: 'review.manage' },
         { label: 'QBanks', icon: <Database size={18} />, path: '/admin/qbanks', permission: 'qbanks.manage' },
         { label: 'Flashcards', icon: <Layers size={18} />, path: '/admin/flashcards', permission: 'flashcards.manage' },
+        { label: 'Notes Library', icon: <FileText size={18} />, path: '/admin/notes', permission: 'questions.manage' },
       ],
     },
     {

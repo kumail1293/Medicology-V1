@@ -79,6 +79,33 @@ errors.** What was found and fixed:
     Content & Exams / Users & Commerce / Communication / Platform /
     System) with a **"Search settings…"** box that filters groups live.
 
+### Student page polish pass — Aug 2026 (Notes Library, Review Hub, Dashboard)
+
+-   **Notes Library was UI-only** — the page called `/api/notes` (per-question
+    personal notes) expecting `title/subject/content/tags`, and its bookmark
+    route didn't exist. Built the real backend: `study_notes` +
+    `study_note_bookmarks` tables (migration `0018`), student
+    `GET /api/study-notes` (published only, subject/search filters, featured
+    first, per-user `bookmarked` flag) + `POST /api/study-notes/:id/bookmark`
+    toggle, and admin CRUD at `/api/admin/study-notes` (audited, permission
+    gated). Seeded 12 realistic faculty-style notes (cardiac AP, UMN/LMN,
+    antibiotics, cranial nerves, LFTs, acid-base, gram staining, immunity,
+    diabetes, vitamins, chest pain, renal). The page now reads real data,
+    bookmarks persist server-side, and the subject dropdown derives from live
+    taxonomy subjects.
+-   **New Admin → Notes Library manager** (`/admin/notes`) — stats header,
+    status filter chips, search, table with featured/status quick toggles,
+    and a create/edit modal with markdown content + auto-slug.
+-   **Review Hub** — tab bar now shows live counts, each list (bookmarks,
+    wrong, notes) has a search box with a "no matches" state, and notes can
+    be deleted. Fixed `GET /api/practice/wrong` (the Wrong Qs tab 404'd —
+    endpoint didn't exist): returns latest-attempt wrong questions with
+    subject/topic/limit filters. Also fixed a contract mismatch where the
+    generated client sent `noteText` but the notes PUT handler only read
+    `text` (saves silently stored nothing); it now accepts both.
+-   **Dashboard** — stat cards and the Exam Readiness ring show skeleton
+    loaders while analytics fetch instead of raw zeros.
+
 ### Admin page polish pass — Aug 2026 (lean pages)
 
 Upgraded the five leanest admin pages to the same quality bar as the
@@ -139,9 +166,10 @@ bio/phone · `0014` user study aim (`studyAim` — AMBOSS-style goal) ·
 `0015` RBAC (user_types, permissions, roles, role_permissions,
 user_roles, user_permissions, organizations, teams, team_members,
 user_scopes, role_scopes) + `users.userType` · `0016` flashcard deck
-taxonomy · `0017` clinical cases + case completions.
+taxonomy · `0017` clinical cases + case completions · `0018` study
+notes library (study_notes + study_note_bookmarks).
 
-Tests: 66 integration tests (settings precedence, overrides, imports,
+Tests: 69 integration tests (settings precedence, overrides, imports,
 bulk deck import incl. Anki .apkg with media + per-note-type field
 mapping + per-card edit/skip + oversized-execute-payload regression +
 previewId/delta execute flow,
@@ -152,7 +180,10 @@ secret handling, sessions/revocation, export/import, audit gating,
 transactional sends, template seeding, forgot/reset password,
 announcement email, study aim + progress reset, announcement user
 targeting, purchases shape,
-daily challenge shape, topic heat map, leaderboard, clinical cases),
+daily challenge shape, topic heat map, leaderboard, clinical cases,
+study notes library (list/filters/bookmark toggle per user, admin CRUD
+with draft visibility + note DELETE), review-hub wrong questions
+(latest attempt wins, filters, limit)),
 backend + frontend typecheck, production
 build, 36-page browser audit (no failing requests), RBAC pages +
 access drawer — all green.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageTransition } from '@/components/layout';
@@ -42,33 +42,38 @@ interface Note {
   subject: string;
   content: string;
   tags: string[];
-  isActive: boolean;
+  status: string;
+  featured: boolean;
+  bookmarked: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
+/**
+ * Bookmark state comes from the server (POST /api/study-notes/:id/bookmark
+ * toggles). We keep a local mirror so toggles feel instant; a reload re-syncs
+ * from the API's `bookmarked` flag.
+ */
 function useBookmarks() {
-  const [bookmarked, setBookmarked] = useState<number[]>(() => {
-    try { return JSON.parse(localStorage.getItem('medicology_note_bookmarks') || '[]'); } catch { return []; }
-  });
-  const save = (ids: number[]) => {
-    setBookmarked(ids);
-    localStorage.setItem('medicology_note_bookmarks', JSON.stringify(ids));
-  };
+  const [bookmarked, setBookmarked] = useState<number[]>([]);
   const toggle = async (id: number) => {
-    const next = bookmarked.includes(id) ? bookmarked.filter(x => x !== id) : [...bookmarked, id];
-    save(next);
-    if (!bookmarked.includes(id)) {
-      try {
-        const token = localStorage.getItem('medicology_token');
-        // TODO: implement on backend
-        await fetch(`/api/notes/bookmark/${id}`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      } catch {}
+    const was = bookmarked.includes(id);
+    setBookmarked((prev) => was ? prev.filter((x) => x !== id) : [...prev, id]);
+    try {
+      const token = localStorage.getItem('medicology_token');
+      const res = await fetch(`/api/study-notes/${id}/bookmark`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        // Revert on failure.
+        setBookmarked((prev) => was ? [...prev, id] : prev.filter((x) => x !== id));
+      }
+    } catch {
+      setBookmarked((prev) => was ? [...prev, id] : prev.filter((x) => x !== id));
     }
   };
-  return { bookmarked, toggle };
+  return { bookmarked, setBookmarked, toggle };
 }
 
 /* ─── Note Card ─────────────────────────────────────────────────────────────── */
@@ -246,7 +251,7 @@ function NoteSkeleton() {
 /* ─── Main Page ──────────────────────────────────────────────────────────────── */
 export default function NotesPage() {
   const { toast } = useToast();
-  const { bookmarked, toggle: toggleBookmark } = useBookmarks();
+  const { bookmarked, setBookmarked, toggle: toggleBookmark } = useBookmarks();
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -263,13 +268,14 @@ export default function NotesPage() {
       const params = new URLSearchParams();
       if (subjectFilter) params.set('subject', subjectFilter);
       if (search) params.set('search', search);
-      // TODO: implement on backend
-      const res = await fetch(`/api/notes?${params.toString()}`, {
+      const res = await fetch(`/api/study-notes?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
         setNotes(data.notes || []);
+        // Re-sync bookmark mirror from server truth.
+        setBookmarked(data.notes?.filter((n: Note) => n.bookmarked).map((n: Note) => n.id) ?? []);
       } else {
         setNotes([]);
       }
@@ -284,6 +290,13 @@ export default function NotesPage() {
     const t = setTimeout(fetchNotes, 300);
     return () => clearTimeout(t);
   }, [subjectFilter, search]);
+
+  // Subjects present in the loaded notes — union with the curated list so the
+  // dropdown always reflects what actually exists.
+  const availableSubjects = useMemo(() => {
+    const fromData = Array.from(new Set(notes.map((n) => n.subject)));
+    return Array.from(new Set([...SUBJECTS, ...fromData]));
+  }, [notes]);
 
   const displayedNotes = showBookmarkedOnly
     ? notes.filter(n => bookmarked.includes(n.id))
@@ -344,7 +357,7 @@ export default function NotesPage() {
               className="appearance-none pl-8 pr-8 py-2.5 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[180px]"
             >
               <option value="">All Subjects</option>
-              {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+              {availableSubjects.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
         </div>

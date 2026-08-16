@@ -2638,3 +2638,153 @@ test('clinical cases: /api/cases lists seeded cases with filters, and completion
   const body2: any = await done2.json();
   assert.equal(body2.alreadyCompleted, true, 'second completion is idempotent');
 });
+
+test('study notes: /api/study-notes lists published notes with filters, and bookmark toggles persist per user', async () => {
+  const { token } = await registerUser('notesaudit@test.com');
+
+  // Student list — seeded published notes with the client-expected shape.
+  const res = await fetch(`${BASE}/study-notes`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(res.status, 200);
+  const data: any = await res.json();
+  assert.ok(Array.isArray(data.notes) && data.notes.length > 0, 'seeded study notes exist');
+  const n = data.notes[0];
+  for (const k of ['id', 'title', 'slug', 'subject', 'content', 'tags', 'status', 'featured', 'bookmarked']) {
+    assert.ok(k in n, `note has ${k}`);
+  }
+  assert.ok(Array.isArray(n.tags), 'tags parsed to array');
+  assert.equal(n.status, 'published', 'students only see published notes');
+  assert.equal(n.bookmarked, false, 'not bookmarked yet');
+
+  // Subject + search filters.
+  const bySubject = await fetch(`${BASE}/study-notes?subject=${encodeURIComponent(n.subject)}`, { headers: { Authorization: `Bearer ${token}` } });
+  const sdata: any = await bySubject.json();
+  assert.ok(sdata.notes.every((x: any) => x.subject === n.subject));
+  const searched = await fetch(`${BASE}/study-notes?search=${encodeURIComponent(n.title.slice(0, 12))}`, { headers: { Authorization: `Bearer ${token}` } });
+  const qdata: any = await searched.json();
+  assert.ok(qdata.notes.length >= 1, 'search finds the note');
+
+  // Bookmark toggle → server-persisted, visible on the next list fetch.
+  const toggle1 = await fetch(`${BASE}/study-notes/${n.id}/bookmark`, json({ Authorization: `Bearer ${token}` }, {}));
+  const t1: any = await toggle1.json();
+  assert.equal(t1.bookmarked, true);
+  const after = await fetch(`${BASE}/study-notes`, { headers: { Authorization: `Bearer ${token}` } });
+  const adata: any = await after.json();
+  assert.ok(adata.notes.find((x: any) => x.id === n.id)?.bookmarked, 'bookmark persisted');
+
+  // Toggle off.
+  const toggle2 = await fetch(`${BASE}/study-notes/${n.id}/bookmark`, json({ Authorization: `Bearer ${token}` }, {}));
+  const t2: any = await toggle2.json();
+  assert.equal(t2.bookmarked, false);
+
+  // Another user does not inherit the bookmark.
+  const other = await registerUser('notesaudit2@test.com');
+  const otherList = await fetch(`${BASE}/study-notes`, { headers: { Authorization: `Bearer ${other.token}` } });
+  const odata: any = await otherList.json();
+  assert.ok(!odata.notes.find((x: any) => x.id === n.id)?.bookmarked, 'bookmarks are per-user');
+});
+
+test('study notes: admin CRUD creates/updates/archives notes, and notes DELETE removes a question note', async () => {
+  const admin = await registerUser('notesadmin@test.com');
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await adminLogin.json()) as any).token;
+
+  // Admin can create a note.
+  const created = await fetch(`${BASE}/admin/study-notes`, json({ Authorization: `Bearer ${adminToken}` }, {
+    title: 'QA Study Note',
+    subject: 'Medicine',
+    content: '# Heading\n\nBody text with **bold**.',
+    tags: ['qa', 'test'],
+    status: 'draft',
+  }));
+  assert.equal(created.status, 201);
+  const cdata: any = await created.json();
+  assert.equal(cdata.slug, 'qa-study-note', 'slug auto-generated from title');
+  assert.equal(cdata.status, 'draft');
+
+  // Draft is invisible to students.
+  const studentList = await fetch(`${BASE}/study-notes`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  const sdata: any = await studentList.json();
+  assert.ok(!sdata.notes.some((x: any) => x.id === cdata.id), 'draft hidden from students');
+
+  // Admin list shows all statuses; update to published makes it visible.
+  const adminList = await fetch(`${BASE}/admin/study-notes`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  const adata: any = await adminList.json();
+  assert.ok(adata.notes.some((x: any) => x.id === cdata.id), 'admin list shows drafts');
+
+  const updated = await fetch(`${BASE}/admin/study-notes/${cdata.id}`, json({ Authorization: `Bearer ${adminToken}` }, {
+    title: 'QA Study Note (v2)',
+    status: 'published',
+    featured: true,
+  }, 'PUT'));
+  assert.equal(updated.status, 200);
+  const udata: any = await updated.json();
+  assert.equal(udata.title, 'QA Study Note (v2)');
+  assert.equal(udata.status, 'published');
+  assert.equal(udata.featured, true);
+
+  // Non-admin cannot touch admin routes.
+  const forbidden = await fetch(`${BASE}/admin/study-notes`, { headers: { Authorization: `Bearer ${admin.token}` } });
+  assert.equal(forbidden.status, 403);
+
+  // Delete the note.
+  const deleted = await fetch(`${BASE}/admin/study-notes/${cdata.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${adminToken}` } });
+  assert.equal(deleted.status, 200);
+  const afterDelete = await fetch(`${BASE}/admin/study-notes`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  const ddata: any = await afterDelete.json();
+  assert.ok(!ddata.notes.some((x: any) => x.id === cdata.id), 'note removed');
+
+  // Per-question notes: PUT then DELETE via /api/notes/:questionId.
+  const qsRes = await fetch(`${BASE}/questions/free?limit=1`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  const qs: any = await qsRes.json();
+  const qid = (qs.questions ?? [])[0]?.id;
+  assert.ok(qid, 'a question exists for the note test');
+  const putNote = await fetch(`${BASE}/notes/${qid}`, json({ Authorization: `Bearer ${adminToken}` }, { noteText: 'my personal note' }, 'PUT'));
+  assert.equal(putNote.status, 200);
+  const listNotes = await fetch(`${BASE}/notes`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  const ndata: any = await listNotes.json();
+  assert.ok(ndata.notes.some((x: any) => x.questionId === qid && x.noteText === 'my personal note'));
+  const delNote = await fetch(`${BASE}/notes/${qid}`, { method: 'DELETE', headers: { Authorization: `Bearer ${adminToken}` } });
+  assert.equal(delNote.status, 200);
+  const listNotes2 = await fetch(`${BASE}/notes`, { headers: { Authorization: `Bearer ${adminToken}` } });
+  const ndata2: any = await listNotes2.json();
+  assert.ok(!ndata2.notes.some((x: any) => x.questionId === qid), 'note deleted');
+});
+
+test('review hub: /api/practice/wrong returns latest-attempt wrong questions with filters', async () => {
+  const { token } = await registerUser('wrongaudit@test.com');
+  const qsRes = await fetch(`${BASE}/questions/free?limit=2`, { headers: { Authorization: `Bearer ${token}` } });
+  const qs: any = await qsRes.json();
+  const qsArr = qs.questions ?? [];
+  assert.ok(qsArr.length >= 2, 'needs two questions for the wrong-answer test');
+
+  // Answer both wrong.
+  for (const q of qsArr) {
+    const opts = Object.keys(q.options ?? {});
+    const correct = q.correctAnswer;
+    const wrong = opts.find((o) => o !== correct) ?? 'A';
+    await fetch(`${BASE}/practice/submit`, json({ Authorization: `Bearer ${token}` }, {
+      questionId: q.id, selectedAnswer: wrong, timeTaken: 5, mode: 'practice',
+    }));
+  }
+
+  // Both should appear as wrong.
+  const res = await fetch(`${BASE}/practice/wrong`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(res.status, 200);
+  const data: any = await res.json();
+  assert.ok(Array.isArray(data.questions) && data.questions.length >= 2, 'wrong questions returned');
+  assert.equal(data.total, data.questions.length);
+
+  // Re-answer the first one correctly → it disappears from wrong (latest attempt wins).
+  const first = qsArr[0];
+  await fetch(`${BASE}/practice/submit`, json({ Authorization: `Bearer ${token}` }, {
+    questionId: first.id, selectedAnswer: first.correctAnswer, timeTaken: 5, mode: 'practice',
+  }));
+  const res2 = await fetch(`${BASE}/practice/wrong`, { headers: { Authorization: `Bearer ${token}` } });
+  const data2: any = await res2.json();
+  assert.ok(!data2.questions.some((x: any) => x.id === first.id), 'correctly re-answered question leaves wrong list');
+
+  // Limit filter.
+  const limited = await fetch(`${BASE}/practice/wrong?limit=1`, { headers: { Authorization: `Bearer ${token}` } });
+  const ldata: any = await limited.json();
+  assert.ok(ldata.questions.length <= 1);
+});

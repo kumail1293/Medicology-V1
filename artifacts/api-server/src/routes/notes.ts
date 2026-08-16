@@ -22,14 +22,24 @@ notesRouter.get('/:questionId', authenticate, async (req: AuthRequest, res: any)
 
 notesRouter.put('/:questionId', authenticate, async (req: AuthRequest, res: any) => {
   try {
-    const { text } = req.body;
+    // Accept both the generated client's `noteText` and the legacy `text` field.
+    const { text, noteText } = req.body;
+    const content = noteText ?? text;
     const existing = await db.select().from(notesTable).where(and(eq(notesTable.userId, req.user!.id), eq(notesTable.questionId, Number(req.params.questionId))));
     if (existing.length > 0) {
-      const [note] = await db.update(notesTable).set({ noteText: text }).where(and(eq(notesTable.userId, req.user!.id), eq(notesTable.questionId, Number(req.params.questionId)))).returning();
+      const [note] = await db.update(notesTable).set({ noteText: content }).where(and(eq(notesTable.userId, req.user!.id), eq(notesTable.questionId, Number(req.params.questionId)))).returning();
       res.json({ note });
     } else {
-      const [note] = await db.insert(notesTable).values({ userId: req.user!.id, questionId: Number(req.params.questionId), noteText: text }).returning();
+      const [note] = await db.insert(notesTable).values({ userId: req.user!.id, questionId: Number(req.params.questionId), noteText: content }).returning();
       res.json({ note });
     }
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Delete a note on a question.
+notesRouter.delete('/:questionId', authenticate, async (req: AuthRequest, res: any) => {
+  try {
+    await db.delete(notesTable).where(and(eq(notesTable.userId, req.user!.id), eq(notesTable.questionId, Number(req.params.questionId))));
+    res.json({ success: true });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

@@ -44,6 +44,7 @@ const AdminFlashcards  = lazy(() => import("./pages/admin-flashcards"));
 const AdminComingSoon  = lazy(() => import("./pages/admin-coming-soon"));
 const AdminEmail       = lazy(() => import("./pages/admin-email"));
 const AdminAudit       = lazy(() => import("./pages/admin-audit"));
+const AdminNotes       = lazy(() => import("./pages/admin-notes"));
 const FlashcardsPage   = lazy(() => import("./pages/flashcards"));
 const SettingsPage     = lazy(() => import("./pages/settings"));
 const CreateTestPage   = lazy(() => import("./pages/create-test"));
@@ -202,6 +203,9 @@ function Router() {
         </Route>
         <Route path="/admin/flashcards">
           {() => <AdminRoute component={() => <AdminLayout><AdminFlashcards /></AdminLayout>} />}
+        </Route>
+        <Route path="/admin/notes">
+          {() => <AdminRoute component={() => <AdminLayout><AdminNotes /></AdminLayout>} />}
         </Route>
 
         <Route path="/payment/callback" component={PaymentCallback} />

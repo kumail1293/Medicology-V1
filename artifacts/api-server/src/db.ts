@@ -16,6 +16,7 @@ import { SEED_ACCOUNT_TYPES, SEED_ROLES, SEED_ORGANIZATIONS, SEED_TEAMS } from '
   SEED_SUBTOPICS,
 } from './mock-taxonomy-seed.js';
 import { SEED_CLINICAL_CASES } from './mock-cases-seed.js';
+import { SEED_STUDY_NOTES } from './mock-notes-seed.js';
 
 // Check if we should use SQLite (for development)
 const useSQLite = process.env.DATABASE_URL?.startsWith('sqlite:') ||
@@ -139,6 +140,15 @@ if (useSQLite) {
       updatedAt: now,
     })),
     case_completions: [] as any[],
+    // Study Notes Library — curated notes so /notes has content in dev.
+    study_notes: SEED_STUDY_NOTES.map((n, i) => ({
+      id: i + 1,
+      ...n,
+      createdById: null,
+      createdAt: now,
+      updatedAt: now,
+    })),
+    study_note_bookmarks: [] as any[],
   };
 
   // Map seeded questions to QBanks via their legacy tag fields, then backfill
@@ -209,6 +219,8 @@ if (useSQLite) {
     announcement_templates: 1,
     clinical_cases: SEED_CLINICAL_CASES.length + 1,
     case_completions: 1,
+    study_notes: SEED_STUDY_NOTES.length + 1,
+    study_note_bookmarks: 1,
   };
 
   const getTableName = (table: any): string => {

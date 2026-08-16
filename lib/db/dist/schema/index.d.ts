@@ -31,4 +31,5 @@ export * from "./email_templates.js";
 export * from "./user_sessions.js";
 export * from "./rbac.js";
 export * from "./clinical_cases.js";
+export * from "./study_notes.js";
 //# sourceMappingURL=index.d.ts.map
