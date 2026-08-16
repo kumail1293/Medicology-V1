@@ -2464,3 +2464,73 @@ test('bulk deck import: execute accepts payloads over the default JSON body limi
   assert.equal(res.status, 400, `expected 400 (body parsed), got ${res.status}: ${JSON.stringify(data).slice(0, 200)}`);
   assert.match(String(data.error ?? ''), /rows/i);
 });
+
+test('bulk deck import: execute via previewId + small delta (edits/skips), no full deck re-send', async () => {
+  const { db } = await import('./db.js');
+  const { usersTable, flashcardDecksTable, flashcardsTable } = await import('@workspace/db');
+  const { eq: drizzleEq } = await import('./utils/drizzle.js');
+  await db.update(usersTable).set({ role: 'superadmin' as any }).where(drizzleEq(usersTable.id, 1));
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+  const auth = { Authorization: `Bearer ${adminToken}` };
+
+  const JSZip = (await import('jszip')).default;
+  const initSqlJs = (await import('sql.js')).default;
+  const SQL = await initSqlJs();
+  const col = new SQL.Database();
+  col.run(`
+    CREATE TABLE col (id INTEGER PRIMARY KEY, crt INTEGER NOT NULL, mod INTEGER NOT NULL, scm INTEGER NOT NULL, ver INTEGER NOT NULL, dty INTEGER NOT NULL, usn INTEGER NOT NULL, ls INTEGER NOT NULL, conf TEXT NOT NULL, models TEXT NOT NULL, decks TEXT NOT NULL, dconf TEXT NOT NULL, tags TEXT NOT NULL);
+    CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT NOT NULL, mid INTEGER NOT NULL, mod INTEGER NOT NULL, usn INTEGER NOT NULL, tags TEXT NOT NULL, flds TEXT NOT NULL, sfld INTEGER NOT NULL, csum INTEGER NOT NULL, flags INTEGER NOT NULL, data TEXT NOT NULL);
+  `);
+  const models = {
+    '301': {
+      id: 301, name: 'Basic', type: 0, mod: 0, usn: 0, sortf: 0, did: 1,
+      flds: [{ name: 'Front', ord: 0 }, { name: 'Back', ord: 1 }],
+      tmpls: [{ name: 'Card 1', ord: 0, qfmt: '{{Front}}', afmt: '{{Front}}<hr>{{Back}}', bqfmt: '', bafmt: '', did: null, bfont: 'Arial', bsize: 20 }],
+    },
+  };
+  const decks = { '1': { id: 1, name: 'Delta Deck', mtime: 0, usn: 0, desc: '', conf: 1 } };
+  col.run('INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) VALUES (1, 0, 0, 0, 11, 0, 0, 0, ?, ?, ?, ?, ?)',
+    ['{}', JSON.stringify(models), JSON.stringify(decks), '{}', '{}']);
+  col.run("INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (1, 'g-d1', 301, 0, 0, 'anki', 'Delta Front A' || X'1F' || 'Delta Back A', 0, 0, 0, '{}')");
+  col.run("INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (2, 'g-d2', 301, 0, 0, '', 'Delta Front B' || X'1F' || 'Delta Back B', 0, 0, 0, '{}')");
+  const colBytes = Buffer.from(col.export());
+  col.close();
+  const zip = new JSZip();
+  zip.file('collection.anki2', colBytes);
+  zip.file('media', '{}');
+  const apkgBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+
+  const form = new FormData();
+  form.append('file', new Blob([apkgBuffer], { type: 'application/octet-stream' }), 'delta.apkg');
+  const previewRes = await fetch(`${BASE}/flashcards/admin/decks/import/preview`, { method: 'POST', headers: auth, body: form });
+  const preview = (await previewRes.json()) as any;
+  assert.ok(preview.previewId, 'preview returns a previewId');
+  assert.equal(preview.stats.valid, 2);
+
+  // The execute body carries NO rows — only the previewId + a small delta.
+  const execRes = await fetch(`${BASE}/flashcards/admin/decks/import/execute`, json(auth, {
+    previewId: preview.previewId,
+    edits: { 0: { front: 'Delta Front A [EDITED]' } },
+    skipped: [1],
+    deck: { ...preview.deck, slug: 'delta-qa', name: 'Delta QA' },
+    createMissingTaxonomy: true,
+  }, 'POST'));
+  const result = (await execRes.json()) as any;
+  assert.equal(execRes.status, 201, JSON.stringify(result).slice(0, 300));
+  assert.equal(result.inserted, 1, 'only the un-skipped row is imported');
+
+  const [deckRow] = await db.select().from(flashcardDecksTable).where(drizzleEq(flashcardDecksTable.slug, 'delta-qa'));
+  assert.ok(deckRow, 'deck persisted');
+  const cards = await db.select().from(flashcardsTable).where(drizzleEq(flashcardsTable.deckId, deckRow.id));
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].front, 'Delta Front A [EDITED]', 'server-side edit applied to stored preview');
+  assert.equal(cards[0].back, 'Delta Back A', 'back unchanged');
+
+  // The preview is consumed — a second execute with the same id must fail.
+  const again = await fetch(`${BASE}/flashcards/admin/decks/import/execute`, json(auth, {
+    previewId: preview.previewId, edits: {}, skipped: [], deck: {}, createMissingTaxonomy: true,
+  }, 'POST'));
+  assert.equal(again.status, 400, 'preview is single-use');
+  assert.match(String(((await again.json()) as any).error ?? ''), /expired|re-validate/i);
+});

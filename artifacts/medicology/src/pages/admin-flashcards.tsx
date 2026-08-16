@@ -81,6 +81,10 @@ export default function AdminFlashcardsPage() {
   const [editImportRow, setEditImportRow] = useState<any>(null); // { index, row }
   const [previewSearch, setPreviewSearch] = useState("");
   const [previewPage, setPreviewPage] = useState(0);
+  // Baseline copy of the server-parsed rows at preview time — used to compute
+  // the execute delta (only edited rows + skipped indices are sent back, not
+  // the whole deck).
+  const baselineRowsRef = useRef<any[] | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
   const PREVIEW_PAGE_SIZE = 20;
 
@@ -180,6 +184,7 @@ export default function AdminFlashcardsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(apiError(data, "Preview failed"));
       setImportPreview(data);
+      baselineRowsRef.current = (data.rows ?? []).map((r: any) => ({ ...r, data: { ...(r.data ?? {}) } }));
       // Seed the field picker from the resolved mapping (only when the user
       // hasn't already picked fields for this file).
       if (data.noteTypes?.length && Object.keys(fieldMap).length === 0) {
@@ -203,11 +208,34 @@ export default function AdminFlashcardsPage() {
     if (!importPreview) return;
     setImporting(true);
     try {
+      // Build a small delta: only rows whose data changed from the baseline
+      // (per-row edits) plus the skipped indices. The server merges these into
+      // its own parsed copy — the full deck is never re-sent, so huge decks
+      // (e.g. AnKing) can't exceed the request body limit.
+      const baseline = baselineRowsRef.current ?? [];
+      const edits: Record<number, any> = {};
+      const skipped: number[] = [];
+      (importPreview.rows ?? []).forEach((r: any, i: number) => {
+        if (r.status === "skipped") {
+          skipped.push(i);
+          return;
+        }
+        const b = baseline[i]?.data ?? {};
+        const cur = r.data ?? {};
+        const changed =
+          (cur.front ?? "") !== (b.front ?? "") ||
+          (cur.back ?? "") !== (b.back ?? "") ||
+          (cur.note ?? "") !== (b.note ?? "") ||
+          JSON.stringify(cur.tags ?? []) !== JSON.stringify(b.tags ?? []);
+        if (changed) edits[i] = cur;
+      });
       const res = await apiFetch("/api/flashcards/admin/decks/import/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          rows: importPreview.rows,
+          previewId: importPreview.previewId,
+          edits,
+          skipped,
           deck: { ...importPreview.deck, slug: importPreview.deck.slug },
           createMissingTaxonomy: true,
         }),

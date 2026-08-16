@@ -28,7 +28,41 @@ import {
 } from '../utils/flashcard-importer.js';
 import { buildFlashcardTemplateWorkbook } from '../utils/flashcard-templates.js';
 
+import { randomBytes } from 'crypto';
+
 export const flashcardsRouter = Router();
+
+// ---------------------------------------------------------------------------
+// In-memory preview store.
+//
+// The deck-import execute step used to re-send every parsed card (full HTML)
+// back to the server as JSON — a real AnKing deck is tens of thousands of
+// cards, which blew past any reasonable body limit. Instead, the preview step
+// now stores the parsed result here keyed by a random ID, and execute sends
+// only a small delta (row edits + skipped indices). Entries expire after an
+// hour to avoid unbounded growth.
+// ---------------------------------------------------------------------------
+
+interface StoredPreview {
+  rows: any[];
+  deck: any;
+  noteTypes?: any[];
+  createdAt: number;
+}
+
+const previewStore = new Map<string, StoredPreview>();
+const PREVIEW_TTL = 60 * 60 * 1000;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, p] of previewStore) {
+    if (now - p.createdAt > PREVIEW_TTL) previewStore.delete(id);
+  }
+}, 10 * 60 * 1000).unref?.();
+
+function newPreviewId(): string {
+  return randomBytes(12).toString('hex');
+}
 
 // Flashcards are a protected capability — enforced server-side.
 flashcardsRouter.use(requireFeature('flashcards'));
@@ -173,7 +207,7 @@ flashcardsRouter.get('/admin/decks/template', authenticate, requirePermission('f
 
 const deckUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 60 * 1024 * 1024 }, // .apkg decks with media can be large
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // AnKing-style .apkg decks with media can be multi-GB
   fileFilter: (req, file, cb) => {
     const name = (file.originalname || '').toLowerCase();
     const ok = /(\.xlsx|\.xls|\.csv|\.tsv|\.txt|\.apkg)$/.test(name);
@@ -195,22 +229,56 @@ flashcardsRouter.post('/admin/decks/import/preview', authenticate, requirePermis
         try { fieldMap = JSON.parse(String(req.body.fieldMap)); } catch { /* ignore malformed */ }
       }
       const preview = await buildFlashcardImportPreview(req.file.buffer, req.file.originalname, req.user?.id ?? null, fieldMap);
-      res.json(preview);
+      // Store the parsed result server-side so execute only needs a small
+      // delta (edits + skips) instead of re-sending the entire deck.
+      const previewId = newPreviewId();
+      previewStore.set(previewId, {
+        rows: preview.rows,
+        deck: preview.deck,
+        noteTypes: preview.noteTypes,
+        createdAt: Date.now(),
+      });
+      res.json({ ...preview, previewId });
     } catch (parseErr: any) {
       res.status(400).json({ error: parseErr.message });
     }
   });
 });
 
-// Step 2: create the deck + insert the validated cards.
+// Step 2: create the deck + insert the validated cards. The body is small:
+// a previewId referencing the server-side parsed preview plus the admin's
+// per-row edits/skips (indices + patches), NOT the full deck payload.
 flashcardsRouter.post('/admin/decks/import/execute', authenticate, requirePermission('flashcards.manage'), async (req: any, res: any) => {
   try {
-    const { rows, deck, createMissingTaxonomy } = req.body ?? {};
-    if (!Array.isArray(rows) || rows.length === 0) {
+    const { previewId, rows, deck, createMissingTaxonomy, edits, skipped } = req.body ?? {};
+    let finalRows = rows;
+    if (previewId) {
+      const stored = previewStore.get(previewId);
+      if (!stored) {
+        return res.status(400).json({ error: 'Preview expired — re-validate the file before importing' });
+      }
+      // Start from the server-side parsed rows (never trust client rows).
+      finalRows = stored.rows.map((r: any) => ({ ...r, data: { ...r.data } }));
+      // Apply the admin's per-row edits (index → {front, back, note, tags}).
+      for (const [idxStr, patch] of Object.entries(edits ?? {})) {
+        const i = Number(idxStr);
+        const row = finalRows[i];
+        if (!row) continue;
+        row.data = { ...row.data, ...(patch as object) };
+        row.status = row.data.front ? 'valid' : 'error';
+        row.messages = row.data.front ? [] : ['Missing front text'];
+      }
+      // Apply skips (indices to exclude from the import).
+      for (const i of (skipped ?? []) as number[]) {
+        if (finalRows[i]) finalRows[i].status = 'skipped';
+      }
+      previewStore.delete(previewId);
+    }
+    if (!Array.isArray(finalRows) || finalRows.length === 0) {
       return res.status(400).json({ error: 'No card rows provided to import' });
     }
     const result = await executeFlashcardImport({
-      rows,
+      rows: finalRows,
       deck: deck ?? undefined,
       createMissingTaxonomy: Boolean(createMissingTaxonomy),
       userId: req.user?.id,

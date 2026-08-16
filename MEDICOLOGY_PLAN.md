@@ -83,9 +83,10 @@ bio/phone · `0014` user study aim (`studyAim` — AMBOSS-style goal) ·
 user_roles, user_permissions, organizations, teams, team_members,
 user_scopes, role_scopes) + `users.userType`.
 
-Tests: 61 integration tests (settings precedence, overrides, imports,
+Tests: 62 integration tests (settings precedence, overrides, imports,
 bulk deck import incl. Anki .apkg with media + per-note-type field
-mapping + per-card edit/skip + oversized-execute-payload regression,
+mapping + per-card edit/skip + oversized-execute-payload regression +
+previewId/delta execute flow,
 spreadsheet grid + bulk save, bulk
 review, media, coming soon, RBAC + Administration 2.0 + taxonomy-aware
 scope enforcement, email templates/renderer/
@@ -207,7 +208,12 @@ build, 18-check browser QA (RBAC pages + access drawer) — all green.
     persist into the imported cards; the execute endpoint has its own
     500mb JSON body limit (large decks exceed the global 50mb) and the
     admin UI normalizes backend errors so failures show a readable
-    message instead of `[object Object]`; preview with per-row validation,
+    message instead of `[object Object]`; **server-side preview store** —
+    the preview endpoint persists the parsed rows keyed by a single-use
+    `previewId` and the execute step sends only the small deltas (row
+    edits + skipped indices) instead of re-uploading every card's HTML,
+    so even multi-GB AnKing decks import without hitting body-size
+    limits; preview with per-row validation,
     taxonomy auto-create, duplicate-slug handling (reuses existing
     deck), audit-free card insert with sort order.
 -   **Deck template downloads** (`.xlsx` and `format=csv`) with example
