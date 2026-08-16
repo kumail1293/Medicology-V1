@@ -93,5 +93,6 @@ export function startEntitlementSweeper(): void {
   if (started) return;
   started = true;
   void sweepEntitlementExpiry();
-  setInterval(() => void sweepEntitlementExpiry(), SWEEP_INTERVAL_MS);
+  // unref() so the timer alone never keeps the process alive (tests / serverless).
+  setInterval(() => void sweepEntitlementExpiry(), SWEEP_INTERVAL_MS).unref();
 }

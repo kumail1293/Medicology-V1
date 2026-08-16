@@ -4,12 +4,13 @@ export function rateLimit(maxRequests: number, windowMs: number) {
   // Prune expired entries on an interval so the in-memory store doesn't grow
   // unbounded. Interval is capped at 60s even when windowMs is larger.
   const cleanupInterval = Math.min(windowMs, 60000);
+  // unref() so the cleanup timer alone never keeps the process alive (tests).
   setInterval(() => {
     const now = Date.now();
     for (const key of Object.keys(store)) {
       if (now > store[key].resetTime) delete store[key];
     }
-  }, cleanupInterval);
+  }, cleanupInterval).unref();
 
   return (req: any, res: any, next: any) => {
     const key = `${req.ip || req.socket?.remoteAddress}:${req.path}`;

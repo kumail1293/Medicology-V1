@@ -29,6 +29,15 @@ import {
   userTypesTable,
   userScopesTable,
   roleScopesTable,
+  countriesTable,
+  examsTable,
+  programsTable,
+  academicYearsTable,
+  subjectsTable,
+  systemsTable,
+  topicsTable,
+  subtopicsTable,
+  qbanksTable,
   type ScopeType,
 } from '@workspace/db';
 import { eq } from './drizzle.js';
@@ -56,8 +65,11 @@ const ALL_PERMISSION_KEYS = PERMISSION_REGISTRY.map((p) => p.key);
 
 /** Cache account-type + role lookups per request cycle (cleared by the caller). */
 let cache: Record<string, any> | null = null;
+/** Cache of taxonomy rows (table:id → row) for scope-ancestor traversal. */
+let taxonomyCache: Map<string, any> | null = null;
 export function clearAuthorizationCache() {
   cache = null;
+  taxonomyCache = null;
 }
 
 async function getCache() {
@@ -239,17 +251,148 @@ export function requireCan(permission: string) {
   };
 }
 
+// ============================================================================
+// Taxonomy-aware scope traversal.
+//
+// Scopes mirror the exam taxonomy and inherit DOWN the hierarchy:
+//
+//   country → exam → program → year      (exam branch)
+//   subject → system → topic             (content branch)
+//   qbank → program → exam → country     (qbank resolves to its program/exam)
+//
+// A user scoped to UHS (exam) automatically covers UHS → MBBS → 4th Year, and
+// a user scoped to Pathology (subject) covers Hematology → Anemia. Scopes are
+// OR'd — a question inside ANY of the user's scopes is in scope. A user with
+// NO scopes is unrestricted (legacy behavior); scopes act as restrictions.
+// ============================================================================
+
+export interface ScopeNode {
+  type: ScopeType;
+  id: number;
+}
+
+async function loadTaxonomyRow(table: string, id: number): Promise<any | undefined> {
+  if (!taxonomyCache) taxonomyCache = new Map();
+  const key = `${table}:${id}`;
+  if (taxonomyCache.has(key)) return taxonomyCache.get(key);
+  let rows: any[] = [];
+  if (table === 'country') rows = await db.select().from(countriesTable).where(eq(countriesTable.id, id));
+  else if (table === 'exam') rows = await db.select().from(examsTable).where(eq(examsTable.id, id));
+  else if (table === 'program') rows = await db.select().from(programsTable).where(eq(programsTable.id, id));
+  else if (table === 'year') rows = await db.select().from(academicYearsTable).where(eq(academicYearsTable.id, id));
+  else if (table === 'subject') rows = await db.select().from(subjectsTable).where(eq(subjectsTable.id, id));
+  else if (table === 'system') rows = await db.select().from(systemsTable).where(eq(systemsTable.id, id));
+  else if (table === 'topic') rows = await db.select().from(topicsTable).where(eq(topicsTable.id, id));
+  else if (table === 'subtopic') rows = await db.select().from(subtopicsTable).where(eq(subtopicsTable.id, id));
+  else if (table === 'qbank') rows = await db.select().from(qbanksTable).where(eq(qbanksTable.id, id));
+  const result = rows[0];
+  taxonomyCache.set(key, result);
+  return result;
+}
+
+/** Walk a scope node up its taxonomy parent chain (node itself included). */
+async function ancestorChain(type: ScopeType, id: number): Promise<ScopeNode[]> {
+  const chain: ScopeNode[] = [];
+  let currentType: ScopeType | null = type;
+  let currentId: number = Number(id);
+  while (currentType && currentType !== 'global' && currentId != null) {
+    const node: ScopeNode = { type: currentType, id: currentId };
+    if (chain.some((n) => n.type === node.type && n.id === node.id)) break; // cycle guard
+    chain.push(node);
+    const row = await loadTaxonomyRow(currentType, currentId);
+    if (!row) break;
+    if (currentType === 'exam' && row.countryId != null) {
+      currentType = 'country'; currentId = Number(row.countryId);
+    } else if (currentType === 'program' && row.examId != null) {
+      currentType = 'exam'; currentId = Number(row.examId);
+    } else if (currentType === 'year' && row.programId != null) {
+      currentType = 'program'; currentId = Number(row.programId);
+    } else if (currentType === 'system' && row.subjectId != null) {
+      currentType = 'subject'; currentId = Number(row.subjectId);
+    } else if (currentType === 'topic' && row.systemId != null) {
+      currentType = 'system'; currentId = Number(row.systemId);
+    } else if (currentType === 'qbank') {
+      if (row.programId != null) { currentType = 'program'; currentId = Number(row.programId); }
+      else if (row.examId != null) { currentType = 'exam'; currentId = Number(row.examId); }
+      else if (row.countryId != null) { currentType = 'country'; currentId = Number(row.countryId); }
+      else break;
+    } else {
+      break; // country / subject are roots
+    }
+  }
+  return chain;
+}
+
+/** Does the user's scope set cover a specific taxonomy node (with inheritance)? */
+async function scopeCoversNode(access: UserAccess, node: ScopeNode): Promise<boolean> {
+  if (access.isSuperadmin) return true;
+  if (access.scopes.length === 0) return true; // legacy: no scopes = unrestricted
+  if (access.scopes.some((s) => s.type === 'global')) return true;
+  const chain = await ancestorChain(node.type, node.id);
+  for (const s of access.scopes) {
+    for (const n of chain) {
+      if (s.type === n.type && (s.id == null || Number(s.id) === Number(n.id))) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Scope check: does the user's access include (or exceed) the given scope?
- * A global scope covers everything; a country scope covers its exams/programs,
- * etc. For v1 the check is exact-match (type+id) or global; taxonomy-parent
- * traversal is a documented follow-up.
+ * Async because ancestors are resolved from the taxonomy. `id` may be omitted
+ * to ask "any node of this type" — only global / wildcard scopes cover that.
  */
-export function hasScope(access: UserAccess, type: ScopeType, id?: number | null): boolean {
+export async function hasScope(access: UserAccess, type: ScopeType, id?: number | null): Promise<boolean> {
   if (access.isSuperadmin) return true;
-  for (const s of access.scopes) {
-    if (s.type === 'global') return true;
-    if (s.type === type && (id == null || s.id == null || Number(s.id) === Number(id))) return true;
+  if (access.scopes.length === 0) return true;
+  if (access.scopes.some((s) => s.type === 'global')) return true;
+  if (id == null) {
+    return access.scopes.some((s) => s.type === type && s.id == null);
+  }
+  return scopeCoversNode(access, { type, id: Number(id) });
+}
+
+/**
+ * Is a question inside the user's access scope? The question's taxonomy
+ * positions (countryId/examId/programId on the exam branch; subjectId/
+ * systemId/topicId/subtopicId on the content branch) are each checked with
+ * full parent inheritance — ANY covered position grants access.
+ */
+export async function questionInScope(
+  access: UserAccess,
+  question: {
+    countryId?: number | null;
+    examId?: number | null;
+    programId?: number | null;
+    subjectId?: number | null;
+    systemId?: number | null;
+    topicId?: number | null;
+    subtopicId?: number | null;
+  }
+): Promise<boolean> {
+  if (access.isSuperadmin) return true;
+  if (access.scopes.length === 0) return true; // legacy: no scopes = unrestricted
+  if (access.scopes.some((s) => s.type === 'global')) return true;
+
+  const positions: ScopeNode[] = [];
+  const push = (type: ScopeType, id?: number | null) => {
+    if (id != null) positions.push({ type, id: Number(id) });
+  };
+  push('country', question.countryId);
+  push('exam', question.examId);
+  push('program', question.programId);
+  push('subject', question.subjectId);
+  push('system', question.systemId);
+  push('topic', question.topicId);
+  if (question.subtopicId != null) {
+    // Subtopics aren't a scope type — resolve to their parent topic.
+    const st = await loadTaxonomyRow('subtopic', Number(question.subtopicId));
+    if (st?.topicId != null) positions.push({ type: 'topic', id: Number(st.topicId) });
+  }
+  if (positions.length === 0) return true; // no taxonomy position → cannot scope-restrict
+
+  for (const pos of positions) {
+    if (await scopeCoversNode(access, pos)) return true;
   }
   return false;
 }

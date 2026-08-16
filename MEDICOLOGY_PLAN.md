@@ -83,8 +83,9 @@ bio/phone · `0014` user study aim (`studyAim` — AMBOSS-style goal) ·
 user_roles, user_permissions, organizations, teams, team_members,
 user_scopes, role_scopes) + `users.userType`.
 
-Tests: 47 integration tests (settings precedence, overrides, imports,
-media, coming soon, RBAC + Administration 2.0, email templates/renderer/
+Tests: 52 integration tests (settings precedence, overrides, imports,
+media, coming soon, RBAC + Administration 2.0 + taxonomy-aware scope
+enforcement, email templates/renderer/
 secret handling, sessions/revocation, export/import, audit gating,
 transactional sends, template seeding, forgot/reset password,
 announcement email, study aim + progress reset, announcement user
@@ -216,7 +217,10 @@ Database-driven, layered authorization replacing the flat role-string model:
     request with deterministic precedence:
     `explicit denials > direct grants > role permissions > account-type default role > legacy/superadmin`.
     A denial always wins; `requireCan()` enforces every admin mutation server-side.
-    `hasScope()` supports global/country/…/qbank scoping (taxonomy-parent traversal = follow-up).
+    `hasScope()` / `questionInScope()` support taxonomy-aware scoping with
+    full parent inheritance — a country scope covers its exams/programs/years,
+    a subject scope covers its systems/topics, and `subtopic` resolves to its
+    parent topic. Enforced on the question review route (403 outside scope).
 -   **Organizations & teams** — `organizations` (university / exam_authority /
     institution / content_team / publisher / partner) + `teams` + `team_members`
     (user → team → role → scope), seeded with UHS / KMU / CPSP / PMDC.
@@ -227,9 +231,9 @@ Database-driven, layered authorization replacing the flat role-string model:
     assignment, direct grants/denials, scope builder, resolved permissions with
     provenance). All mutations audited.
 -   Seeded identically in mock DB and PostgreSQL (`utils/seed-rbac.ts`, idempotent).
--   **Remaining (next phases):** taxonomy-parent scope traversal, team-scoped
-    assignment UI, permission preview for arbitrary role combos, 2FA readiness,
-    configuration snapshots/import-export polish, system health page.
+-   **Remaining (next phases):** team-scoped assignment UI, permission preview
+    for arbitrary role combos, 2FA readiness, configuration snapshots/import-export
+    polish, system health page.
 
 ## P0.14 Branding `[PARTIAL]`
 

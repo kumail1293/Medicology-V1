@@ -2,7 +2,7 @@
 // booted in-process (no external server or database required).
 //
 //   node --import tsx/esm --test src/p0.test.ts
-import { test, before } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import XLSX from 'xlsx';
 
@@ -19,6 +19,19 @@ before(async () => {
   await import('./app.js');
   // Give the listener a moment to come up.
   await new Promise((r) => setTimeout(r, 500));
+});
+
+after(async () => {
+  // Close the listener so the test process can exit cleanly. fetch() keeps
+  // keep-alive sockets open, so force-close connections before server.close().
+  const { server } = await import('./app.js');
+  if (server) {
+    server.closeAllConnections?.();
+    await Promise.race([
+      new Promise<void>((resolve) => server.close(() => resolve())),
+      new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+    ]);
+  }
 });
 
 async function registerUser(email: string) {
@@ -1895,4 +1908,107 @@ test('RBAC: account type creation + organization + team', async () => {
 
   const orgs = await (await fetch(`${BASE}/admin/rbac/organizations`, { headers: { Authorization: `Bearer ${adminToken}` } })).json() as any;
   assert.ok(orgs.organizations.some((o: any) => o.slug === 'uhs'), 'seeded UHS org present');
+});
+
+test('RBAC scopes: country covers exams/programs/years, other countries excluded', async () => {
+  const { hasScope } = await import('./utils/authorization.js');
+  const access = { userId: 0, permissions: [], grantedPermissions: [], deniedPermissions: [], roles: [], scopes: [{ type: 'country', id: 1, label: 'Pakistan' }], isSuperadmin: false } as any;
+
+  // Exam 1 = UHS (countryId 1) → covered; exam 13 = USMLE (countryId 3) → not.
+  assert.equal(await hasScope(access, 'exam', 1), true, 'country scope covers its exam');
+  assert.equal(await hasScope(access, 'exam', 13), false, 'country scope excludes other-country exams');
+  assert.equal(await hasScope(access, 'program', 1), true, 'country covers program via exam');
+  assert.equal(await hasScope(access, 'year', 4), true, 'country covers year via program→exam');
+  assert.equal(await hasScope(access, 'year', 9), true, 'BDS year under UHS is also in PK');
+});
+
+test('RBAC scopes: exam scope covers its programs/years, sibling exams excluded', async () => {
+  const { hasScope } = await import('./utils/authorization.js');
+  const access = { userId: 0, permissions: [], grantedPermissions: [], deniedPermissions: [], roles: [], scopes: [{ type: 'exam', id: 1, label: 'UHS' }], isSuperadmin: false } as any;
+
+  assert.equal(await hasScope(access, 'exam', 1), true);
+  assert.equal(await hasScope(access, 'exam', 2), false, 'KMU not covered by UHS scope');
+  assert.equal(await hasScope(access, 'program', 1), true, 'MBBS under UHS covered');
+  assert.equal(await hasScope(access, 'program', 3), false, 'KMU MBBS excluded');
+  assert.equal(await hasScope(access, 'year', 4), true, '4th Year (UHS MBBS) covered');
+  assert.equal(await hasScope(access, 'country', 1), false, 'an exam scope is narrower than the country — no country-wide access');
+});
+
+test('RBAC scopes: subject covers systems/topics; content branch is separate from exam branch', async () => {
+  const { hasScope, questionInScope } = await import('./utils/authorization.js');
+  const access = { userId: 0, permissions: [], grantedPermissions: [], deniedPermissions: [], roles: [], scopes: [{ type: 'subject', id: 4, label: 'Pathology' }], isSuperadmin: false } as any;
+
+  assert.equal(await hasScope(access, 'system', 1), true, 'Hematology (Pathology) covered');
+  assert.equal(await hasScope(access, 'topic', 1), true, 'Anemia covered via system');
+  assert.equal(await hasScope(access, 'topic', 5), false, 'IHD (Medicine) excluded');
+  assert.equal(await hasScope(access, 'system', 9), false, 'Medicine CV system excluded');
+  assert.equal(await hasScope(access, 'exam', 1), false, 'subject scope does not cover exams');
+
+  assert.equal(await questionInScope(access, { systemId: 1 }), true);
+  assert.equal(await questionInScope(access, { topicId: 1 }), true);
+  assert.equal(await questionInScope(access, { subjectId: 4 }), true);
+  assert.equal(await questionInScope(access, { subtopicId: 1 }), true, 'subtopic resolves to its parent topic');
+  assert.equal(await questionInScope(access, { topicId: 5 }), false);
+  assert.equal(await questionInScope(access, { examId: 1 }), false);
+});
+
+test('RBAC scopes: questionInScope with exam-branch + global/empty/superadmin semantics', async () => {
+  const { questionInScope } = await import('./utils/authorization.js');
+  const uhs = { userId: 0, permissions: [], grantedPermissions: [], deniedPermissions: [], roles: [], scopes: [{ type: 'exam', id: 1, label: 'UHS' }], isSuperadmin: false } as any;
+  assert.equal(await questionInScope(uhs, { examId: 1 }), true);
+  assert.equal(await questionInScope(uhs, { programId: 1 }), true, 'MBBS program under UHS');
+  assert.equal(await questionInScope(uhs, { countryId: 1 }), false, 'a country-only tag is not tied to UHS');
+  assert.equal(await questionInScope(uhs, { examId: 13 }), false);
+  assert.equal(await questionInScope(uhs, { subjectId: 4 }), false, 'exam scope does not cover subjects');
+
+  const global = { ...uhs, scopes: [{ type: 'global', id: null }] } as any;
+  assert.equal(await questionInScope(global, { examId: 13 }), true);
+
+  const none = { ...uhs, scopes: [] } as any;
+  assert.equal(await questionInScope(none, { examId: 13 }), true, 'no scopes = unrestricted (legacy)');
+
+  const superadmin = { ...uhs, scopes: [], isSuperadmin: true } as any;
+  assert.equal(await questionInScope(superadmin, { examId: 13 }), true);
+});
+
+test('RBAC scopes: review route rejects out-of-scope questions (403) and allows in-scope', async () => {
+  const { db } = await import('./db.js');
+  const { questionsTable, usersTable } = await import('@workspace/db');
+  const { eq: drizzleEq } = await import('./utils/drizzle.js');
+
+  // Register a content-team user scoped to UHS (exam 1).
+  const email = `uhsadmin${Date.now()}@medicology.net`;
+  const reg = await fetch(`${BASE}/auth/register`, json({}, {
+    name: 'UHS Content Admin', email, password: 'UhsAdmin123',
+    college: 'Test', year: 'Year 4',
+  }));
+  const { user } = (await reg.json()) as any;
+
+  const login = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const adminToken = ((await login.json()) as any).token;
+
+  // Scope them to exam 1 (UHS) via the admin RBAC API.
+  const scoped = await fetch(`${BASE}/admin/rbac/users/${user.id}/scopes`, json({ Authorization: `Bearer ${adminToken}` }, {
+    scopes: [{ scopeType: 'exam', scopeId: 1, label: 'UHS' }],
+  }, 'PUT'));
+  assert.equal(scoped.status, 200);
+
+  // Promote to content_admin (passes requireAdmin + review.manage) and
+  // re-login so the JWT carries the new role.
+  await db.update(usersTable).set({ role: 'content_admin' as any }).where(drizzleEq(usersTable.id, user.id));
+  const relogin = await fetch(`${BASE}/auth/login`, json({}, { email, password: 'UhsAdmin123' }));
+  const reviewerToken = ((await relogin.json()) as any).token;
+  assert.ok(reviewerToken, 're-login issues a token with the promoted role');
+
+  // Two seeded questions: one in scope (UHS) and one out (USMLE, country 3).
+  await db.update(questionsTable).set({ examId: 1 as any, status: 'pending_review' as any }).where(drizzleEq(questionsTable.id, 1));
+  await db.update(questionsTable).set({ examId: 13 as any, status: 'pending_review' as any }).where(drizzleEq(questionsTable.id, 2));
+
+  const inScope = await fetch(`${BASE}/admin/questions/1/review`, json({ Authorization: `Bearer ${reviewerToken}` }, { action: 'start_review' }));
+  assert.equal(inScope.status, 200, 'in-scope UHS question reviewable');
+
+  const outScope = await fetch(`${BASE}/admin/questions/2/review`, json({ Authorization: `Bearer ${reviewerToken}` }, { action: 'start_review' }));
+  assert.equal(outScope.status, 403, 'out-of-scope USMLE question blocked');
+  const body = (await outScope.json()) as any;
+  assert.match(body.error, /outside your access scope/);
 });

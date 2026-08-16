@@ -644,6 +644,19 @@ adminRouter.post(
         return res.status(404).json({ error: 'Question not found' });
       }
 
+      // Scope enforcement: users carrying access scopes (e.g. an institutional
+      // content team scoped to UHS) may only review questions inside their
+      // taxonomy scope — including inherited parents (country → exam → program
+      // → year / subject → system → topic). Users without scopes are
+      // unrestricted (legacy).
+      if (req.access) {
+        const { questionInScope } = await import('../utils/authorization.js');
+        const inScope = await questionInScope(req.access, existing);
+        if (!inScope) {
+          return res.status(403).json({ error: 'Forbidden — question is outside your access scope' });
+        }
+      }
+
       if (!transition.from.includes(existing.status)) {
         return res.status(409).json({
           error: `Cannot ${action} a question in status "${existing.status}"`,

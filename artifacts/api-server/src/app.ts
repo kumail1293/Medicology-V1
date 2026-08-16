@@ -183,13 +183,13 @@ if (!process.env.VERCEL) {
     }
     try {
       const annSeeded = await seedAnnouncements();
-      const total = annSeeded.templates + annSeeded.generalAnnouncements + annSeeded.personalizedAnnouncements;
-      if (total > 0) console.log(`📢 Seeded ${annSeeded.templates} templates, ${annSeeded.generalAnnouncements} general + ${annSeeded.personalizedAnnouncements} personalized announcements`);
+      const total = annSeeded.templates + annSeeded.general + annSeeded.personalized;
+      if (total > 0) console.log(`📢 Seeded ${annSeeded.templates} templates, ${annSeeded.general} general + ${annSeeded.personalized} personalized announcements`);
     } catch (err: any) {
       console.warn('Announcement seeding skipped:', err.message);
     }
     startEntitlementSweeper();
-    app.listen(PORT, () => {
+    server = app.listen(PORT, () => {
       console.log(`✅ Medicology API running at http://localhost:${PORT}/api`);
     });
   });
@@ -201,3 +201,5 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
+
+export let server: import('node:http').Server | undefined;
