@@ -57,22 +57,10 @@ questionsRouter.get('/free', authenticate, async (req, res: any) => {
   }
 });
 
-// Get single question
-questionsRouter.get('/:id', authenticate, async (req, res: any) => {
-  try {
-    const [question] = await db.select().from(questionsTable)
-      .where(eq(questionsTable.id, Number(req.params.id)));
-    if (!question) {
-      return res.status(404).json({ error: 'Question not found' });
-    }
-    return res.json(question);
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// Get available filters
-questionsRouter.get('/meta/filters', authenticate, async (req, res: any) => {
+// Get available filters — served at both /meta/filters (documented) and
+// /filters (the generated client's URL) so the practice/exam filter UIs work.
+// Declared BEFORE /:id so "filters" is not captured as a question id.
+questionsRouter.get(['/filters', '/meta/filters'], authenticate, async (req, res: any) => {
   try {
     const subjects = await db.selectDistinct({ subject: questionsTable.subject }).from(questionsTable);
     const topics = await db.selectDistinct({ topic: questionsTable.topic }).from(questionsTable);
@@ -86,5 +74,19 @@ questionsRouter.get('/meta/filters', authenticate, async (req, res: any) => {
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single question
+questionsRouter.get('/:id', authenticate, async (req, res: any) => {
+  try {
+    const [question] = await db.select().from(questionsTable)
+      .where(eq(questionsTable.id, Number(req.params.id)));
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    return res.json(question);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });

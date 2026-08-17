@@ -106,6 +106,35 @@ errors.** What was found and fixed:
 -   **Dashboard** — stat cards and the Exam Readiness ring show skeleton
     loaders while analytics fetch instead of raw zeros.
 
+### Full-app walkthrough & link audit — Aug 2026
+
+Automated browser walkthrough of every page on both sides (35 admin
+routes + 19 student routes + public login/register), with console-error,
+failed-request and broken-link capture. Findings fixed:
+
+-   **`/api/questions/filters` 404** — the generated client calls
+    `/filters` but the backend only served `/meta/filters` (and the
+    `/:id` route swallowed it). Now served at both paths, declared before
+    `/:id`.
+-   **Dead footer links** — settings defaults pointed Support/Privacy/
+    Terms/Refunds at non-existent internal routes (`/support`, `/privacy`
+    ...). Defaults now point to real destinations
+    (`mailto:admin@medicology.net`, medicology.net pages) so they are never
+    dead links.
+-   **Seeded promo announcement CTA → `/premium`** (no route) — now points
+    to `/subscription`.
+-   **Social handles & icons** — defaults aligned to the real
+    `@medicologyworld` handles across all 7 platforms (Instagram, Facebook,
+    X, TikTok, YouTube, LinkedIn, WhatsApp); login footer now renders an
+    icon for every platform (added TikTok/WhatsApp icon mappings — brand
+    icons don't exist in the installed lucide-react version, so Music /
+    MessageCircle stand in).
+
+Verified clean after fixes: login (admin + fresh student registration with
+captcha) → all pages render, zero console errors, zero failed requests,
+zero broken links. Note: admin credentials are the env default
+`admin@medicology.net / admin123` (`ADMIN_PASSWORD` is empty in `.env`).
+
 ### Admin page polish pass — Aug 2026 (lean pages)
 
 Upgraded the five leanest admin pages to the same quality bar as the

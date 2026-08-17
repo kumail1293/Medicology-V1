@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { sanitizeInput, clientRateLimit } from '@/lib/security';
 import { mockAuthService } from '@/lib/mockAuth';
 import { usePlatformConfig } from '@/lib/platformConfig';
-import { Instagram, Facebook, Twitter, Linkedin, Youtube, Globe, Mail, HelpCircle } from 'lucide-react';
+import { Instagram, Facebook, Twitter, Linkedin, Youtube, Music, MessageCircle, Globe, Mail, HelpCircle } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('test@college.edu');
@@ -28,7 +28,8 @@ export default function Login() {
 
   const socialIcons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
     instagram: Instagram, facebook: Facebook, x: Twitter, twitter: Twitter,
-    linkedin: Linkedin, youtube: Youtube, website: Globe, support: HelpCircle,
+    linkedin: Linkedin, youtube: Youtube, tiktok: Music, whatsapp: MessageCircle,
+    website: Globe, support: HelpCircle,
   };
   const footerSocials = Array.isArray(footer?.socials) ? footer.socials : [];
 

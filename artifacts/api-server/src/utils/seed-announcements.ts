@@ -260,7 +260,7 @@ const PERSONALIZED_ANNOUNCEMENTS = [
 </ul>
 <p style="margin-top:10px">Your dedication deserves the best tools. Let us help you get there.</p>`,
     buttonText: 'Unlock Premium →',
-    buttonUrl: '/premium',
+    buttonUrl: '/subscription',
     targetUserIds: [1],
     priority: 'high',
     theme: 'success',

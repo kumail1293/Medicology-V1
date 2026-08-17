@@ -306,10 +306,10 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
   footer: {
     footerText: "Medicology — Master your medical knowledge.",
     copyright: "© 2026 Medicology. All rights reserved.",
-    supportLink: "/support",
-    privacyLink: "/privacy",
-    termsLink: "/terms",
-    refundLink: "/refunds",
+    supportLink: "mailto:admin@medicology.net",
+    privacyLink: "https://medicology.net/privacy",
+    termsLink: "https://medicology.net/terms",
+    refundLink: "https://medicology.net/refunds",
     socials: [
       { platform: "instagram", url: "https://instagram.com/medicologyworld" },
       { platform: "facebook", url: "https://facebook.com/medicologyworld" },
