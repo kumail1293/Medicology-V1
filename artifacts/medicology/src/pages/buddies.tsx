@@ -1,10 +1,28 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { PageTransition } from "@/components/layout";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Search, UserPlus, UserCheck, UserX, Inbox, ChevronRight, GraduationCap } from "lucide-react";
+import { Users, Search, UserPlus, UserCheck, UserX, Inbox, ChevronRight, GraduationCap, RefreshCw, AlertCircle, UserRound } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+
+function BuddyCardSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {Array.from({ length: 2 }).map((_, i) => (
+        <div key={i} className="rounded-3xl border border-border p-5 animate-pulse">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-muted shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-muted rounded-md w-1/2" />
+              <div className="h-3 bg-muted rounded-md w-3/4" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface BuddyUser {
   id: number;
@@ -33,6 +51,7 @@ export default function BuddiesPage() {
   const [isActing, setIsActing] = useState(false);
   const [activeTab, setActiveTab] = useState<"buddies" | "search" | "requests">("buddies");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const { toast } = useToast();
   const token = localStorage.getItem("medicology_token");
 
@@ -41,21 +60,25 @@ export default function BuddiesPage() {
     return res.json();
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const [buddiesData, reqData] = await Promise.all([
         api("/api/buddies"),
         api("/api/buddies/requests"),
       ]);
+      if (buddiesData.error || reqData.error) throw new Error(buddiesData.error || reqData.error);
       setBuddies(buddiesData.buddies || []);
       setRequests(reqData.requests || []);
+    } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     if (!search.trim() || search.length < 2) { setSearchResults([]); return; }
@@ -97,20 +120,64 @@ export default function BuddiesPage() {
   };
 
   const removeBuddy = async (buddyRelId: number) => {
-    await api(`/api/buddies/${buddyRelId}`, { method: "DELETE" });
-    toast({ title: "Removed from buddies" });
-    await load();
+    if (!window.confirm("Remove this buddy?")) return;
+    try {
+      const data = await api(`/api/buddies/${buddyRelId}`, { method: "DELETE" });
+      if (data.error) { toast({ title: data.error, variant: "destructive" }); return; }
+      toast({ title: "Removed from buddies" });
+      await load();
+    } catch {
+      toast({ title: "Couldn't remove buddy. Try again.", variant: "destructive" });
+    }
+  };
+
+  const removeRequest = async (buddyRelId: number) => {
+    if (!window.confirm("Decline this request?")) return;
+    try {
+      const data = await api(`/api/buddies/${buddyRelId}`, { method: "DELETE" });
+      if (data.error) { toast({ title: data.error, variant: "destructive" }); return; }
+      toast({ title: "Request declined" });
+      await load();
+    } catch {
+      toast({ title: "Couldn't decline request. Try again.", variant: "destructive" });
+    }
   };
 
   const pendingCount = requests.length;
 
   return (
     <PageTransition className="space-y-6 max-w-4xl mx-auto pb-20">
-      <div>
-        <h1 className="text-3xl font-display font-extrabold tracking-tight">Study Buddies</h1>
-        <p className="text-muted-foreground mt-1">Connect with students studying the same QBank</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-display font-extrabold tracking-tight">Study Buddies</h1>
+          <p className="text-muted-foreground mt-1">Connect with students studying the same QBank</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 text-xs font-semibold bg-primary/10 text-primary px-3 py-2 rounded-xl">
+            <UserCheck size={14} /> {buddies.length} {buddies.length === 1 ? "buddy" : "buddies"}
+          </div>
+          {pendingCount > 0 && (
+            <div className="flex items-center gap-2 text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-2 rounded-xl">
+              <Inbox size={14} /> {pendingCount} request{pendingCount === 1 ? "" : "s"}
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* Load error state */}
+      {loadError && !loading && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <AlertCircle className="h-10 w-10 mx-auto text-destructive mb-3" />
+            <p className="font-semibold mb-1">Couldn't load your buddies</p>
+            <p className="text-sm text-muted-foreground mb-5">Check your connection and try again.</p>
+            <Button onClick={load} className="gap-2"><RefreshCw size={15} /> Try Again</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!loadError && (
+      <>
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-muted rounded-2xl">
         {[
@@ -139,7 +206,7 @@ export default function BuddiesPage() {
       {activeTab === "buddies" && (
         <>
           {loading ? (
-            <div className="text-center text-muted-foreground py-12 animate-pulse">Loading…</div>
+            <BuddyCardSkeleton />
           ) : buddies.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center">
@@ -174,7 +241,7 @@ export default function BuddiesPage() {
                         <UserCheck size={13} className="text-green-500" /> Connected
                       </div>
                       <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 h-7 text-xs"
-                        onClick={() => removeBuddy(buddy.id)}>
+                        onClick={() => removeBuddy(buddy.buddyId ?? buddy.id)}>
                         Remove
                       </Button>
                     </div>
@@ -199,7 +266,19 @@ export default function BuddiesPage() {
             />
           </div>
 
-          {searching && <div className="text-center text-muted-foreground py-4 animate-pulse text-sm">Searching…</div>}
+          {searching && (
+            <div className="space-y-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="rounded-3xl border border-border p-4 animate-pulse flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-muted shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 bg-muted rounded-md w-1/3" />
+                    <div className="h-3 bg-muted rounded-md w-2/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {!searching && searchResults.length > 0 && (
             <div className="space-y-3">
@@ -241,7 +320,9 @@ export default function BuddiesPage() {
       {/* Requests */}
       {activeTab === "requests" && (
         <div className="space-y-3">
-          {requests.length === 0 ? (
+          {loading ? (
+            <BuddyCardSkeleton />
+          ) : requests.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center">
                 <Inbox className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
@@ -272,6 +353,8 @@ export default function BuddiesPage() {
             ))
           )}
         </div>
+      )}
+      </>
       )}
     </PageTransition>
   );

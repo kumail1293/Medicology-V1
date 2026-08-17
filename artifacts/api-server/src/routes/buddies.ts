@@ -102,11 +102,17 @@ buddiesRouter.put('/:id/respond', authenticate, async (req: AuthRequest, res: an
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-// Remove buddy
+// Remove buddy / decline request — must own the relationship (either side)
 buddiesRouter.delete('/:id', authenticate, async (req: AuthRequest, res: any) => {
   try {
-    await db.delete(studyBuddiesTable)
-      .where(eq(studyBuddiesTable.id, Number(req.params.id)));
+    const id = Number(req.params.id);
+    const [existing] = await db.select().from(studyBuddiesTable)
+      .where(eq(studyBuddiesTable.id, id));
+    if (!existing) return res.status(404).json({ error: 'Relationship not found' });
+    if (existing.requesterId !== req.user!.id && existing.recipientId !== req.user!.id) {
+      return res.status(403).json({ error: 'Not allowed to modify this relationship' });
+    }
+    await db.delete(studyBuddiesTable).where(eq(studyBuddiesTable.id, id));
     res.json({ success: true });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

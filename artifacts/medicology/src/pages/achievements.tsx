@@ -1,11 +1,30 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { PageTransition } from "@/components/layout";
 import { useToast } from "@/hooks/use-toast";
-import { Trophy, Share2, Download, Twitter, MessageCircle, Linkedin, Copy, Lock, Star, Zap, Target, Brain, Flame, BookOpen, CheckCircle, Gift, AlertCircle } from "lucide-react";
+import { Trophy, Share2, Download, Twitter, MessageCircle, Linkedin, Copy, Lock, Star, Zap, Target, Brain, Flame, BookOpen, CheckCircle, Gift, AlertCircle, RefreshCw, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+
+function AchievementSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="rounded-3xl border border-border p-5 animate-pulse">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-muted shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-muted rounded-md w-2/3" />
+              <div className="h-3 bg-muted rounded-md w-full" />
+              <div className="h-3 bg-muted rounded-md w-1/2" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface Achievement {
   id: string;
@@ -199,42 +218,85 @@ export default function AchievementsPage() {
   const [analytics, setAnalytics] = useState<Analytics>({});
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [shareTarget, setShareTarget] = useState<Achievement | null>(null);
   const [rewardPoints, setRewardPoints] = useState<number>(0);
   const [errataCount, setErrataCount] = useState<number>(0);
   const { toast } = useToast();
   const token = localStorage.getItem("medicology_token");
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [anaRes, sesRes, errRes] = await Promise.all([
-          fetch("/api/progress/analytics", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch("/api/sessions", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch("/api/errata/my", { headers: { Authorization: `Bearer ${token}` } }),
-        ]);
-        const [anaData, sesData, errData] = await Promise.all([anaRes.json(), sesRes.json(), errRes.json()]);
-        setAnalytics(anaData || {});
-        setSessions(sesData.sessions || []);
-        const errata = errData.errata || [];
-        setErrataCount(errata.length);
-        const totalPts = errata.reduce((sum: number, e: any) => sum + (e.rewardPoints || 0), 0);
-        setRewardPoints(totalPts);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const [anaRes, sesRes, errRes] = await Promise.all([
+        fetch("/api/progress/analytics", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/sessions", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/errata/my", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (!anaRes.ok || !sesRes.ok || !errRes.ok) throw new Error("one or more requests failed");
+      const [anaData, sesData, errData] = await Promise.all([anaRes.json(), sesRes.json(), errRes.json()]);
+      setAnalytics(anaData || {});
+      setSessions(sesData.sessions || []);
+      const errata = errData.errata || [];
+      setErrataCount(errata.length);
+      const totalPts = errata.reduce((sum: number, e: any) => sum + (e.rewardPoints || 0), 0);
+      setRewardPoints(totalPts);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { load(); }, [load]);
 
   const achievements = computeAchievements(analytics, sessions);
   const unlocked = achievements.filter(a => a.unlocked);
   const locked = achievements.filter(a => !a.unlocked);
 
+  /* Nearest locked achievement + its progress hint */
+  const nextUp = (() => {
+    const { totalAnswered = 0, testsCompleted = 0 } = analytics;
+    const candidates: { ach: Achievement; progress: number; hint: string }[] = [
+      { ach: achievements.find(a => a.id === "first_10")!, progress: Math.min(100, (totalAnswered / 10) * 100), hint: `${Math.max(0, 10 - totalAnswered)} more questions to unlock` },
+      { ach: achievements.find(a => a.id === "century")!, progress: Math.min(100, (totalAnswered / 100) * 100), hint: `${Math.max(0, 100 - totalAnswered)} more questions to unlock` },
+      { ach: achievements.find(a => a.id === "consistent")!, progress: Math.min(100, (testsCompleted / 10) * 100), hint: `${Math.max(0, 10 - testsCompleted)} more tests to unlock` },
+      { ach: achievements.find(a => a.id === "scholar")!, progress: Math.min(100, (totalAnswered / 500) * 100), hint: `${Math.max(0, 500 - totalAnswered)} more questions to unlock` },
+    ].filter(c => c.ach && !c.ach.unlocked);
+    candidates.sort((a, b) => b.progress - a.progress);
+    return candidates[0];
+  })();
+
   if (loading) return (
-    <div className="flex items-center justify-center min-h-64">
-      <div className="text-muted-foreground animate-pulse">Computing achievements…</div>
-    </div>
+    <PageTransition className="space-y-8 max-w-4xl mx-auto pb-20">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-display font-extrabold tracking-tight">Achievements</h1>
+          <p className="text-muted-foreground mt-1 animate-pulse">Loading your progress…</p>
+        </div>
+      </div>
+      <div className="h-2.5 bg-muted rounded-full overflow-hidden w-full animate-pulse" />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="h-24 rounded-2xl bg-muted animate-pulse" />
+        <div className="h-24 rounded-2xl bg-muted animate-pulse" />
+      </div>
+      <AchievementSkeleton />
+    </PageTransition>
+  );
+
+  if (loadError) return (
+    <PageTransition className="space-y-8 max-w-4xl mx-auto pb-20">
+      <h1 className="text-3xl font-display font-extrabold tracking-tight">Achievements</h1>
+      <Card>
+        <CardContent className="p-12 text-center">
+          <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+          <p className="font-semibold text-lg mb-2">Couldn't load your achievements</p>
+          <p className="text-muted-foreground text-sm mb-6">Something went wrong while fetching your progress.</p>
+          <Button onClick={load} className="gap-2"><RefreshCw size={15} /> Try Again</Button>
+        </CardContent>
+      </Card>
+    </PageTransition>
   );
 
   return (
@@ -255,8 +317,8 @@ export default function AchievementsPage() {
           style={{ width: `${(unlocked.length / achievements.length) * 100}%` }} />
       </div>
 
-      {/* Reward Points Card */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Reward Points / Streak / Reports */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-gradient-to-br from-amber-500/15 to-amber-600/5 border border-amber-500/30 rounded-2xl p-5 flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-amber-500/15 flex items-center justify-center shrink-0">
             <Gift size={22} className="text-amber-500" />
@@ -265,6 +327,16 @@ export default function AchievementsPage() {
             <p className="text-xs font-semibold text-muted-foreground">Reward Points</p>
             <p className="text-2xl font-extrabold text-amber-500">{rewardPoints}</p>
             <p className="text-[10px] text-muted-foreground">from erratum reports</p>
+          </div>
+        </div>
+        <div className="bg-gradient-to-br from-orange-500/10 to-orange-600/5 border border-orange-500/20 rounded-2xl p-5 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center shrink-0">
+            <Flame size={22} className="text-orange-500" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground">Current Streak</p>
+            <p className="text-2xl font-extrabold text-orange-500">{analytics.streakDays ?? 0} day{(analytics.streakDays ?? 0) === 1 ? "" : "s"}</p>
+            <p className="text-[10px] text-muted-foreground">consecutive study days</p>
           </div>
         </div>
         <div className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/20 rounded-2xl p-5 flex items-center gap-4">
@@ -278,6 +350,25 @@ export default function AchievementsPage() {
           </div>
         </div>
       </div>
+
+      {/* Next up hint */}
+      {nextUp && (
+        <div className="bg-card border border-primary/20 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 text-primary">
+            <TrendingUp size={20} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Next Achievement</p>
+            <p className="font-bold text-sm mt-0.5">{nextUp.ach.title} <span className="text-muted-foreground font-normal">— {nextUp.hint}</span></p>
+          </div>
+          <div className="w-full sm:w-40 shrink-0">
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-primary to-amber-400 rounded-full transition-all duration-700" style={{ width: `${Math.min(100, Math.round(nextUp.progress))}%` }} />
+            </div>
+            <p className="text-[10px] text-muted-foreground text-right mt-1">{Math.min(100, Math.round(nextUp.progress))}%</p>
+          </div>
+        </div>
+      )}
 
       {/* Unlocked achievements */}
       {unlocked.length > 0 && (

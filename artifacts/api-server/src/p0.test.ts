@@ -2788,3 +2788,47 @@ test('review hub: /api/practice/wrong returns latest-attempt wrong questions wit
   const ldata: any = await limited.json();
   assert.ok(ldata.questions.length <= 1);
 });
+
+test('study buddies: request flow works and DELETE enforces relationship ownership', async () => {
+  const a = await registerUser('buddy_a@test.com');
+  const b = await registerUser('buddy_b@test.com');
+  const c = await registerUser('buddy_c@test.com');
+  const ha = { Authorization: `Bearer ${a.token}` };
+  const hb = { Authorization: `Bearer ${b.token}` };
+  const hc = { Authorization: `Bearer ${c.token}` };
+
+  // A sends a request to B.
+  const req = await fetch(`${BASE}/buddies/request`, json(ha, { recipientId: b.user.id }));
+  assert.equal(req.status, 201);
+
+  // Duplicate request is rejected.
+  const dup = await fetch(`${BASE}/buddies/request`, json(ha, { recipientId: b.user.id }));
+  assert.equal(dup.status, 400);
+
+  // B sees the pending request.
+  const pending = await fetch(`${BASE}/buddies/requests`, { headers: hb });
+  const pd: any = await pending.json();
+  assert.equal(pd.requests.length, 1);
+  const relId = pd.requests[0].id;
+
+  // C (a stranger) cannot delete A↔B's relationship.
+  const forbidden = await fetch(`${BASE}/buddies/${relId}`, json(hc, undefined, 'DELETE'));
+  assert.equal(forbidden.status, 403);
+
+  // B accepts.
+  const accept = await fetch(`${BASE}/buddies/${relId}/respond`, json(hb, { action: 'accept' }, 'PUT'));
+  assert.equal(accept.status, 200);
+
+  // Both see each other as buddies; the returned buddyId is the relationship id.
+  const listA = await fetch(`${BASE}/buddies`, { headers: ha });
+  const la: any = await listA.json();
+  assert.equal(la.buddies.length, 1);
+  assert.equal(la.buddies[0].buddyId, relId);
+
+  // A removes the buddy using the relationship id.
+  const rm = await fetch(`${BASE}/buddies/${relId}`, json(ha, undefined, 'DELETE'));
+  assert.equal(rm.status, 200);
+  const listA2 = await fetch(`${BASE}/buddies`, { headers: ha });
+  const la2: any = await listA2.json();
+  assert.equal(la2.buddies.length, 0);
+});

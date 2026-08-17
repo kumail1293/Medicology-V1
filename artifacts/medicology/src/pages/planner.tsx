@@ -4,7 +4,8 @@ import { useGetAnalytics } from '@workspace/api-client-react';
 import { PageTransition } from '@/components/layout';
 import {
   Calendar, Clock, Target, Play, CheckCircle2, Circle, ChevronLeft,
-  ChevronRight, Pencil, BookOpen, Zap, AlertTriangle,
+  ChevronRight, Pencil, BookOpen, Zap, AlertTriangle, RefreshCw, Trash2,
+  Sparkles, TrendingUp,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -439,6 +440,8 @@ function WeekView({
     return `${m.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${e.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
   })();
 
+  const weekDone = weekDays.filter(d => completion[toDateStr(d)]).length;
+
   return (
     <div className="bg-card border border-border rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
       {/* Week nav */}
@@ -450,6 +453,9 @@ function WeekView({
           <ChevronLeft size={16} />
         </button>
         <span className="flex-1 text-center font-bold text-sm">{weekLabel}</span>
+        <span className="text-xs font-semibold text-muted-foreground shrink-0" title="Completed days in this week">
+          {weekDone}/7 done
+        </span>
         <button
           onClick={() => setWeekOffset(o => o + 1)}
           className="p-2 rounded-xl border border-border hover:bg-muted transition-colors text-muted-foreground"
@@ -544,13 +550,70 @@ function WeekView({
 
 /* ── Main Page ──────────────────────────────────────────────────────────────── */
 
+/* ── Next-7-days strip ──────────────────────────────────────────────────────── */
+
+function NextDaysStrip({ schedule, completion }: { schedule: DayEntry[]; completion: Completion }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const next = schedule.filter(e => e.dateStr >= todayStr()).slice(0, 7);
+  if (next.length === 0) return null;
+
+  return (
+    <div className="bg-card border border-border rounded-3xl p-5 sm:p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-base flex items-center gap-2">
+          <Sparkles size={16} className="text-primary" /> Next 7 Days
+        </h3>
+        <span className="text-xs text-muted-foreground">{next.length} sessions scheduled</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        {next.map(e => {
+          const d = dateFromStr(e.dateStr);
+          const done = !!completion[e.dateStr];
+          const isToday = e.dateStr === todayStr();
+          return (
+            <div
+              key={e.dateStr}
+              className={clsx(
+                'rounded-2xl border p-3 flex flex-col gap-1.5 transition-all',
+                isToday ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:border-primary/30',
+                done && 'opacity-60'
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className={clsx(
+                  'text-[10px] font-bold uppercase tracking-wide',
+                  isToday ? 'text-primary' : 'text-muted-foreground'
+                )}>
+                  {d.toLocaleDateString('en-US', { weekday: 'short' })}
+                </span>
+                <span className="text-[10px] font-bold text-muted-foreground">{d.getDate()}</span>
+              </div>
+              <span className={clsx('text-[11px] font-bold px-1.5 py-0.5 rounded-md border leading-tight truncate', subjectColor(e.subject))}>
+                {e.subject}
+              </span>
+              <span className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>{e.questions}q</span>
+                {done && <CheckCircle2 size={12} className="text-green-500" />}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main Page ──────────────────────────────────────────────────────────────── */
+
 export default function PlannerPage() {
   const [, setLocation] = useLocation();
-  const { data: analytics } = useGetAnalytics();
+  const { data: analytics, isPending: analyticsLoading, isError: analyticsError } = useGetAnalytics();
 
   const [plan, setPlan]       = useState<StudyPlan | null>(loadPlan);
   const [completion, setCompletion] = useState<Completion>(loadCompletion);
   const [editing, setEditing] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const countdown = useCountdown(plan?.examDate);
 
@@ -587,6 +650,14 @@ export default function PlannerPage() {
 
   const handleStart = () => {
     if (todayEntry) setLocation(`/create-test?subject=${encodeURIComponent(todayEntry.subject)}`);
+  };
+
+  const handleReset = () => {
+    localStorage.removeItem(PLAN_KEY);
+    localStorage.removeItem(COMPLETION_KEY);
+    setPlan(null);
+    setCompletion({});
+    setConfirmReset(false);
   };
 
   /* Days/hours countdown */
@@ -636,6 +707,31 @@ export default function PlannerPage() {
           >
             <Pencil size={13} /> Edit Plan
           </button>
+          {confirmReset ? (
+            <div className="flex items-center gap-2 bg-card border border-destructive/40 rounded-xl px-3 py-1.5 shadow-sm">
+              <span className="text-xs font-semibold text-muted-foreground">Reset all progress?</span>
+              <button
+                onClick={handleReset}
+                className="text-xs font-bold text-destructive hover:underline"
+              >
+                Yes, reset
+              </button>
+              <button
+                onClick={() => setConfirmReset(false)}
+                className="text-xs font-semibold text-muted-foreground hover:underline"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmReset(true)}
+              title="Reset plan and progress"
+              className="flex items-center gap-1.5 text-sm border border-border px-3 py-2 rounded-xl hover:bg-destructive/10 hover:border-destructive/40 transition-colors text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 size={13} /> Reset
+            </button>
+          )}
         </div>
       </div>
 
@@ -667,6 +763,24 @@ export default function PlannerPage() {
         </div>
       )}
 
+      {/* Weak-area analytics notice */}
+      {analyticsLoading && (
+        <div className="bg-card border border-border rounded-2xl px-5 py-3.5 flex items-center gap-3">
+          <RefreshCw size={15} className="text-primary animate-spin shrink-0" />
+          <p className="text-sm text-muted-foreground">
+            Analysing your weak areas to personalise the schedule…
+          </p>
+        </div>
+      )}
+      {analyticsError && (
+        <div className="bg-amber-500/5 border border-amber-400/30 rounded-2xl px-5 py-3.5 flex items-center gap-3">
+          <TrendingUp size={15} className="text-amber-500 shrink-0" />
+          <p className="text-sm text-muted-foreground">
+            Couldn't load your analytics — the schedule uses balanced subject weights for now.
+          </p>
+        </div>
+      )}
+
       {daysLeft === 0 && (
         <div className="bg-amber-500/5 border border-amber-400/30 rounded-2xl px-5 py-4 flex items-center gap-3">
           <AlertTriangle size={18} className="text-amber-500 shrink-0" />
@@ -684,6 +798,9 @@ export default function PlannerPage() {
         onToggle={() => toggleCompletion(today)}
         onStart={handleStart}
       />
+
+      {/* Next 7 days strip */}
+      <NextDaysStrip schedule={schedule} completion={completion} />
 
       {/* Progress bar */}
       <PlanProgress schedule={schedule} completion={completion} />

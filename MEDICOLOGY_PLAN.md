@@ -79,6 +79,29 @@ errors.** What was found and fixed:
     Content & Exams / Users & Commerce / Communication / Platform /
     System) with a **"Search settings…"** box that filters groups live.
 
+### Student page polish pass 2 — Aug 2026 (Study Planner, Achievements, Buddies)
+
+-   **Study Planner** — added a **Next 7 Days** strip (compact per-day cards
+    with subject, question target, completion check), **week progress**
+    (`X/7 done` in the week-view header), a **Reset Plan** action with
+    inline confirm, and loading/error notices while analytics fetch (schedule
+    gracefully falls back to balanced subject weights when analytics fail).
+-   **Achievements** — skeleton grid while loading (instead of a pulsing
+    text line), a **full error state with Try Again** (the old code had no
+    catch — a failed fetch left the page hung), a **Current Streak** stat
+    card, and a **Next Achievement** hint with a progress bar toward the
+    closest locked achievement (visible even at 0% for new users).
+-   **Study Buddies** — skeleton cards while loading, an **error state with
+    Try Again** (the old code showed a misleading "No buddies yet" when the
+    API failed), a stats header (buddy + pending-request counts), a confirm
+    before removing a buddy / declining a request, and error toasts on
+    failure. **Fixed a real bug**: Remove used `buddy.id` (the user id) but
+    the DELETE endpoint expects the relationship id (`buddy.buddyId`) —
+    removals were deleting the wrong row or silently failing. **Hardened the
+    backend**: `DELETE /api/buddies/:id` now verifies the caller is a party
+    to the relationship (403 otherwise) instead of letting any authenticated
+    user delete any relationship.
+
 ### Student page polish pass — Aug 2026 (Notes Library, Review Hub, Dashboard)
 
 -   **Notes Library was UI-only** — the page called `/api/notes` (per-question
@@ -198,7 +221,7 @@ user_scopes, role_scopes) + `users.userType` · `0016` flashcard deck
 taxonomy · `0017` clinical cases + case completions · `0018` study
 notes library (study_notes + study_note_bookmarks).
 
-Tests: 69 integration tests (settings precedence, overrides, imports,
+Tests: 70 integration tests (settings precedence, overrides, imports,
 bulk deck import incl. Anki .apkg with media + per-note-type field
 mapping + per-card edit/skip + oversized-execute-payload regression +
 previewId/delta execute flow,
