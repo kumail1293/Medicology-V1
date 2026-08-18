@@ -739,9 +739,19 @@
 }
 
 /* The opt-in utility: add class="anim" to animate on mount with the
-   platform-configured effect. */
+   platform-configured effect.
+
+   Fill mode is `backwards` (not `both`/`forwards`) on purpose: every effect's
+   final keyframe equals the element's natural state (opacity 1, no transform),
+   so there is zero visual difference after the animation ends — but a
+   `forwards` fill would permanently retain the end-state `transform`
+   (e.g. translateY(0) / scale(1)). A retained transform makes this element a
+   containing block for `position: fixed` descendants AND a stacking context,
+   which traps full-screen overlays (reading views, modals) inside the page and
+   lets the z-40 sidebar paint over them. `backwards` only applies the `from`
+   keyframe during the delay, then releases the element completely. */
 .anim {
-  animation: var(--anim-name, anim-fade) var(--anim-duration) var(--anim-delay) var(--anim-iterations) ease-out both;
+  animation: var(--anim-name, anim-fade) var(--anim-duration) var(--anim-delay) var(--anim-iterations) ease-out backwards;
 }
 
 html.anim-on .anim {

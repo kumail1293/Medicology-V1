@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/layout";
@@ -527,16 +528,23 @@ export default function NotesPage() {
         )}
       </PageTransition>
 
-      <AnimatePresence>
-        {selectedNote && (
-          <NoteReadingView
-            note={selectedNote}
-            isBookmarked={bookmarked.includes(selectedNote.id)}
-            onBookmark={() => toggleBookmark(selectedNote.id)}
-            onClose={() => setSelectedNote(null)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Portal the reading view to document.body so its `fixed inset-0` is
+          always resolved against the viewport — never trapped by a page
+          wrapper's transform/stacking context (e.g. the `.anim` animation
+          wrapper), which would let the app sidebar paint over the reader. */}
+      {createPortal(
+        <AnimatePresence>
+          {selectedNote && (
+            <NoteReadingView
+              note={selectedNote}
+              isBookmarked={bookmarked.includes(selectedNote.id)}
+              onBookmark={() => toggleBookmark(selectedNote.id)}
+              onClose={() => setSelectedNote(null)}
+            />
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }

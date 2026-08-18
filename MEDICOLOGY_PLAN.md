@@ -178,6 +178,36 @@ assets for social sharing.
     exports, and the branded PDF window — zero console errors besides
     benign Google-Fonts CORS noise during headless PNG font-embedding.
 
+### Notes reading-view overlap fix — animation stacking-context trap (Aug 2026)
+
+Reported: the app sidebar (z-40) painted **over** the notes reading view,
+hiding the left portion of the reader. Root-caused with browser probes
+(`elementsFromPoint` + computed-style chains):
+
+-   The page wrapper in `AppLayout` carries the `anim` class, which runs
+    the platform-configured CSS mount animation with
+    `animation-fill-mode: both`. For every effect except `fade`
+    (slide/scale/zoom/bounce) the final keyframe is a non-`none`
+    `transform` (`translateY(0)` / `scale(1)`), and `both` retains it
+    forever. A retained transform makes that wrapper a **containing block
+    for `position: fixed` descendants** and a stacking context — so the
+    reader's `fixed inset-0 z-50` resolved against the wrapper's box
+    (inside `main`, starting at x=270) instead of the viewport, and its
+    z-index lost to the sidebar in the root stacking context.
+-   Fix 1 (systemic): `animation-fill-mode` changed `both` → `backwards`
+    on `.anim`. Every effect's end keyframe equals the element's natural
+    state (opacity 1, no transform), so there is zero visual difference
+    after the animation — but no retained transform, so no trap for *any*
+    fixed overlay under *any* effect. (Also strictly better for
+    marquee/typewriter, which settle at their natural state.)
+-   Fix 2 (guarantee): the notes reading view is now rendered through a
+    React portal to `document.body`, so it always resolves against the
+    viewport regardless of wrappers.
+-   Verified in-browser with `anim-effect-slide` forced: overlay rect now
+    covers the full viewport (x:0, w:1280) and wins the hit test over the
+    sidebar (previously x:270 / sidebar span won). Regression: 70/70 API,
+    84/84 frontend, typecheck + production build clean.
+
 ### Full-app walkthrough & link audit — Aug 2026
 
 Automated browser walkthrough of every page on both sides (35 admin
