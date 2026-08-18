@@ -15,17 +15,24 @@ import {
   sortedElements,
   resizeCanvas,
   serializeDesign,
+  groupElements,
+  ungroupElements,
+  alignElements,
   CANVAS_PRESETS,
+  CANVAS_TEMPLATES,
   type CanvasDesign,
   type CanvasElement,
   type CanvasElementType,
   type CanvasShapeKind,
+  type CanvasBranding,
 } from "@/lib/canvas-design";
 import { useToast } from "@/hooks/use-toast";
 import {
   MousePointer2, Type, Heading1, ImagePlus, Shapes, MoveRight, Sigma, List,
   Undo2, Redo2, ZoomIn, ZoomOut, Maximize2, Download, Trash2, Copy, Layers,
-  ChevronUp, ChevronDown, X, GripVertical,
+  ChevronUp, ChevronDown, X, GripVertical, Grid3X3, AlignLeft, AlignCenter,
+  AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical,
+  Group, Ungroup, Stamp, SunMedium, Droplets,
 } from "lucide-react";
 
 const FONTS = ["DM Sans", "Outfit", "Georgia", "Trebuchet MS", "JetBrains Mono"];
@@ -238,15 +245,17 @@ function CanvasSurfaceElement({ el, selected, showHandles, onPatch }: {
 // Properties panel
 // ---------------------------------------------------------------------------
 
-function SelectedProps({ el, design, patch, styleField, colorField, onRemove, onDuplicate, onOpenMedia }: {
+function SelectedProps({ el, design, patch, commit, styleField, colorField, onRemove, onDuplicate, onOpenMedia, toast }: {
   el: CanvasElement;
   design: CanvasDesign;
   patch: (p: Partial<CanvasElement>) => void;
+  commit: (d: CanvasDesign) => void;
   styleField: (label: string, node: React.ReactNode) => React.ReactNode;
   colorField: (label: string, value: string | undefined, onChangeVal: (v: string) => void) => React.ReactNode;
   onRemove: () => void;
   onDuplicate: () => void;
   onOpenMedia: () => void;
+  toast: (opts: { title?: React.ReactNode; description?: React.ReactNode; variant?: "default" | "destructive" | null }) => void;
 }) {
   const s = el.style;
   return (
@@ -386,6 +395,108 @@ function SelectedProps({ el, design, patch, styleField, colorField, onRemove, on
         <div>
           <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Items (one per line)</span>
           <textarea className={clsx(inputCls, "min-h-[80px] resize-y")} value={(el.items ?? []).join("\n")} onChange={(e) => patch({ items: e.target.value.split("\n") })} />
+        </div>
+      )}
+
+      {/* ── Shadow ── */}
+      <details className="group">
+        <summary className="mb-1 flex cursor-pointer items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+          <SunMedium size={11} /> Shadow
+        </summary>
+        <div className="space-y-1.5">
+          {styleField("Box shadow", (
+            <select className={inputCls} value={s.shadow ?? "none"} onChange={(e) => patch({ style: { ...s, shadow: e.target.value } })}>
+              <option value="none">None</option>
+              <option value="0 1px 3px rgba(0,0,0,0.12)">Small</option>
+              <option value="0 4px 12px rgba(0,0,0,0.15)">Medium</option>
+              <option value="0 8px 30px rgba(0,0,0,0.2)">Large</option>
+              <option value="0 12px 40px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.1)">Extra large</option>
+              <option value="0 0 20px rgba(13,148,136,0.3)">Primary glow</option>
+            </select>
+          ))}
+          {(el.type === "heading" || el.type === "text") && (
+            styleField("Text shadow", (
+              <select className={inputCls} value={s.textShadow ?? "none"} onChange={(e) => patch({ style: { ...s, textShadow: e.target.value } })}>
+                <option value="none">None</option>
+                <option value="1px 1px 2px rgba(0,0,0,0.15)">Subtle</option>
+                <option value="2px 2px 4px rgba(0,0,0,0.2)">Medium</option>
+                <option value="0 0 10px rgba(13,148,136,0.3)">Glow</option>
+              </select>
+            ))
+          )}
+        </div>
+      </details>
+
+      {/* ── Border style ── */}
+      {(el.type === "shape" || el.type === "arrow" || el.type === "image") && (
+        styleField("Border style", (
+          <select className={inputCls} value={s.borderStyle ?? "solid"} onChange={(e) => patch({ style: { ...s, borderStyle: e.target.value as any } })}>
+            <option value="solid">Solid</option>
+            <option value="dashed">Dashed</option>
+            <option value="dotted">Dotted</option>
+          </select>
+        ))
+      )}
+
+      {/* ── Background gradient for shapes ── */}
+      {el.type === "shape" && (
+        <details className="group">
+          <summary className="mb-1 flex cursor-pointer items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+            <Droplets size={11} /> Gradient fill
+          </summary>
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
+              <label className="block"><span className="mb-0.5 block text-[10px] font-bold text-muted-foreground">From</span>
+                <input type="color" className="h-7 w-full rounded border border-border" value={s.backgroundGradient?.from ?? s.background ?? "#0d9488"}
+                  onChange={(e) => patch({ style: { ...s, backgroundGradient: { from: e.target.value, to: s.backgroundGradient?.to ?? s.background ?? "#0f766e", angle: s.backgroundGradient?.angle ?? 135 } } })} />
+              </label>
+              <label className="block"><span className="mb-0.5 block text-[10px] font-bold text-muted-foreground">To</span>
+                <input type="color" className="h-7 w-full rounded border border-border" value={s.backgroundGradient?.to ?? s.background ?? "#0f766e"}
+                  onChange={(e) => patch({ style: { ...s, backgroundGradient: { from: s.backgroundGradient?.from ?? s.background ?? "#0d9488", to: e.target.value, angle: s.backgroundGradient?.angle ?? 135 } } })} />
+              </label>
+            </div>
+            {styleField("Angle°", <input type="number" min={0} max={360} className={inputCls} value={s.backgroundGradient?.angle ?? 135} onChange={(e) => patch({ style: { ...s, backgroundGradient: { ...(s.backgroundGradient ?? { from: "#0d9488", to: "#0f766e" }), angle: Number(e.target.value) } } })} />)}
+            <button onClick={() => patch({ style: { ...s, backgroundGradient: undefined } })} className="w-full text-[11px] text-destructive hover:underline">Remove gradient</button>
+          </div>
+        </details>
+      )}
+
+      {/* ── Image filters ── */}
+      {el.type === "image" && el.src && (
+        <details className="group">
+          <summary className="mb-1 flex cursor-pointer items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+            <SunMedium size={11} /> Image filters
+          </summary>
+          <div className="space-y-1.5">
+            {([
+              ["brightness", "Brightness", 0, 2, 1, 0.05],
+              ["contrast", "Contrast", 0, 2, 1, 0.05],
+              ["saturate", "Saturation", 0, 2, 1, 0.05],
+              ["blur", "Blur", 0, 20, 0, 1],
+              ["grayscale", "Grayscale", 0, 1, 0, 0.05],
+              ["sepia", "Sepia", 0, 1, 0, 0.05],
+            ] as const).map(([key, label, min, max, def, step]) => (
+              <label key={key} className="block">
+                <span className="mb-0.5 flex items-center justify-between text-[10px] font-bold text-muted-foreground">
+                  {label}
+                  <span className="font-mono text-foreground">{(el.filters as any)?.[key] ?? def}</span>
+                </span>
+                <input type="range" min={min} max={max} step={step} value={(el.filters as any)?.[key] ?? def}
+                  onChange={(e) => patch({ filters: { ...(el.filters ?? {}), [key]: Number(e.target.value) } })}
+                  className="w-full accent-[var(--color-primary)]" />
+              </label>
+            ))}
+            <button onClick={() => patch({ filters: undefined })} className="w-full text-[11px] text-destructive hover:underline">Reset filters</button>
+          </div>
+        </details>
+      )}
+
+      {/* ── Group / Ungroup ── */}
+      {design.elements.filter((e) => e.groupId === el.groupId && el.groupId).length > 1 && (
+        <div>
+          <button onClick={() => { if (el.groupId) { commit(ungroupElements(design, el.groupId)); toast({ title: "Ungrouped" }); } }} className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted">
+            <Ungroup size={12} /> Ungroup ({design.elements.filter((e) => e.groupId === el.groupId).length} items)
+          </button>
         </div>
       )}
     </div>
@@ -672,6 +783,21 @@ export default function CanvasEditor({ value, onChange }: { value: string; onCha
 
         <div className="mx-1 h-5 w-px bg-border" />
 
+        {/* Alignment buttons — visible when 2+ elements selected via shift-click (future) or all when one selected */}
+        {selectedId && (
+          <div className="flex items-center gap-0.5">
+            <button onClick={() => commit(alignElements(designRef.current, [selectedId], "left", null))} title="Align left" className={smallBtn}><AlignLeft size={13} /></button>
+            <button onClick={() => commit(alignElements(designRef.current, [selectedId], "center", null))} title="Align center" className={smallBtn}><AlignCenter size={13} /></button>
+            <button onClick={() => commit(alignElements(designRef.current, [selectedId], "right", null))} title="Align right" className={smallBtn}><AlignRight size={13} /></button>
+            <div className="mx-0.5 h-4 w-px bg-border" />
+            <button onClick={() => commit(alignElements(designRef.current, [selectedId], null, "top"))} title="Align top" className={smallBtn}><AlignStartVertical size={13} /></button>
+            <button onClick={() => commit(alignElements(designRef.current, [selectedId], null, "middle"))} title="Align middle" className={smallBtn}><AlignCenterVertical size={13} /></button>
+            <button onClick={() => commit(alignElements(designRef.current, [selectedId], null, "bottom"))} title="Align bottom" className={smallBtn}><AlignEndVertical size={13} /></button>
+            <div className="mx-0.5 h-4 w-px bg-border" />
+            <button onClick={() => { const sameGroup = designRef.current.elements.filter((e) => e.groupId && e.groupId === designRef.current.elements.find((x) => x.id === selectedId)?.groupId); if (sameGroup.length > 1) { commit(ungroupElements(designRef.current, sameGroup[0].groupId!)); toast({ title: "Ungrouped" }); } else { const others = designRef.current.elements.filter((e) => e.id !== selectedId).slice(0, 4); if (others.length > 0) { commit(groupElements(designRef.current, [selectedId, ...others.map((e) => e.id)])); toast({ title: "Grouped" }); } } }} title="Group / ungroup" className={smallBtn}><Group size={13} /></button>
+          </div>
+        )}
+
         <select value={`${design.width}x${design.height}`}
           onChange={(e) => { const [w, h] = e.target.value.split("x").map(Number); changePreset(w, h); }}
           className={clsx(inputCls, "w-auto")} title="Canvas size">
@@ -762,6 +888,20 @@ export default function CanvasEditor({ value, onChange }: { value: string; onCha
           {!selected ? (
             <div className="space-y-3">
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Canvas</p>
+              {/* ── Templates ── */}
+              <div>
+                <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground"><Stamp size={11} className="mr-1 inline" /> Templates</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {CANVAS_TEMPLATES.map((tpl) => (
+                    <button key={tpl.id} onClick={() => commit({ ...design, width: tpl.width, height: tpl.height, elements: tpl.elements.map((e) => ({ ...e, id: `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}` })), background: tpl.background ?? design.background })} className="rounded-lg border border-border bg-background p-2 text-left transition-all hover:border-primary/50 hover:shadow-sm">
+                      <span className="block text-[10px] font-bold text-foreground">{tpl.name}</span>
+                      <span className="block text-[9px] text-muted-foreground line-clamp-1">{tpl.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Background ── */}
               {styleField("Background", (
                 <div className="space-y-2">
                   {colorField("Color", design.background.color ?? "#ffffff", (c) => commit(updateBackground(designRef.current, { color: c })))}
@@ -777,15 +917,63 @@ export default function CanvasEditor({ value, onChange }: { value: string; onCha
                   </button>
                 </div>
               ))}
+
+              {/* ── Pattern overlay ── */}
+              <div>
+                <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground"><Grid3X3 size={11} className="mr-1 inline" /> Pattern</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(["none", "grid", "dots", "lines", "diagonal"] as const).map((p) => (
+                    <button key={p} onClick={() => commit(updateBackground(designRef.current, { pattern: p === "none" ? undefined : p }))} className={clsx("rounded-md border px-2.5 py-1 text-[10px] font-medium capitalize", (design.background.pattern ?? "none") === p ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>{p}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Branding ── */}
+              <details className="group">
+                <summary className="mb-1 flex cursor-pointer items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                  <Stamp size={11} /> Branding
+                </summary>
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+                    <input type="checkbox" checked={!!design.branding?.enabled} onChange={(e) => commit({ ...designRef.current, branding: { ...(designRef.current.branding ?? {}), enabled: e.target.checked } })} className="h-3.5 w-3.5" />
+                    Show branding watermark
+                  </label>
+                  {design.branding?.enabled && (
+                    <>
+                      <label className="block"><span className="mb-0.5 block text-[10px] font-bold text-muted-foreground">Logo URL</span>
+                        <input className={inputCls} value={design.branding?.logo ?? ""} onChange={(e) => commit({ ...designRef.current, branding: { ...designRef.current.branding!, logo: e.target.value } })} placeholder="https://…" />
+                      </label>
+                      <label className="block"><span className="mb-0.5 block text-[10px] font-bold text-muted-foreground">Name</span>
+                        <input className={inputCls} value={design.branding?.name ?? ""} onChange={(e) => commit({ ...designRef.current, branding: { ...designRef.current.branding!, name: e.target.value } })} placeholder="Medicology" />
+                      </label>
+                      <label className="block"><span className="mb-0.5 block text-[10px] font-bold text-muted-foreground">Social handle</span>
+                        <input className={inputCls} value={design.branding?.social ?? ""} onChange={(e) => commit({ ...designRef.current, branding: { ...designRef.current.branding!, social: e.target.value } })} placeholder="@medicologyworld" />
+                      </label>
+                      <label className="block"><span className="mb-0.5 block text-[10px] font-bold text-muted-foreground">Position</span>
+                        <select className={inputCls} value={design.branding?.position ?? "bottom-right"} onChange={(e) => commit({ ...designRef.current, branding: { ...designRef.current.branding!, position: e.target.value as any } })}>
+                          <option value="top-left">Top left</option>
+                          <option value="top-right">Top right</option>
+                          <option value="bottom-left">Bottom left</option>
+                          <option value="bottom-right">Bottom right</option>
+                          <option value="bottom-center">Bottom center</option>
+                        </select>
+                      </label>
+                      {styleField("Opacity", <input type="range" min={0} max={1} step={0.05} value={design.branding?.opacity ?? 0.7} onChange={(e) => commit({ ...designRef.current, branding: { ...designRef.current.branding!, opacity: Number(e.target.value) } })} className="w-full" />)}
+                    </>
+                  )}
+                </div>
+              </details>
+
               <div className="rounded-lg border border-dashed border-border p-3 text-center text-[11px] leading-relaxed text-muted-foreground">
                 Pick a tool from the toolbar and click the canvas to place elements. Drag to move, use the handles to resize or rotate, and drag connector endpoints to draw arrows.
               </div>
             </div>
           ) : (
-            <SelectedProps el={selected} design={design} patch={patchSelected} styleField={styleField} colorField={colorField}
+            <SelectedProps el={selected} design={design} patch={patchSelected} commit={commit} styleField={styleField} colorField={colorField}
               onRemove={() => { commit(removeElement(designRef.current, selected.id)); setSelectedId(null); }}
               onDuplicate={() => commit(duplicateElement(designRef.current, selected.id))}
               onOpenMedia={() => { setMediaTarget(selected.id); setMediaOpen(true); }}
+              toast={toast}
             />
           )}
         </div>

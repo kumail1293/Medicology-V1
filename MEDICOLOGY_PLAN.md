@@ -259,6 +259,35 @@ Five connected upgrades to the study-notes system:
     Canvas, Preview. A seeded cardiac-action-potential note includes a
     5-phase horizontal diagram (colored shapes + arrows) to demonstrate
     the feature.
+
+### Canvas↔Blocks interop + Canva-level features — Aug 2026
+
+-   **Blocks↔Canvas converter** (`canvas-converter.ts`): lossless
+    markdown blocks → canvas element conversion (headings, paragraphs,
+    lists, checklists, callouts, tables, mermaid, math, images, dividers)
+    and canvas → markdown round-trip. Bidirectional buttons in the admin
+    canvas tab toolbar (Import from Blocks / Convert to Blocks).
+-   **Canvas design model** extended with: `ImageFilters`
+    (brightness/contrast/saturate/blur/grayscale/sepia), CSS `shadow`,
+    `backgroundGradient` (linear-gradient with angle), `backgroundPattern`
+    (grid/dots/lines/diagonal), `borderStyle` (solid/dashed/dotted/double),
+    `padding`, `groupId` (group/ungroup), `CanvasBranding` (logo, tagline,
+    social handles), alignment (horizontal/vertical center), and grouped
+    element transform.
+-   **CanvasRenderer** upgraded: renders shadows, image filters (CSS
+    filter()), gradient backgrounds, dashed/dotted borders, pattern
+    backgrounds via SVG `<pattern>`, group rendering, and branded
+    watermark overlay (Medicology logo + social handles from platform
+    settings).
+-   **CanvasEditor** upgraded: template picker (6 preset designs:
+    Flow Diagram, Comparison, Anatomy Map, Timeline, Dashboard Grid,
+    Anatomy Annotated), image filters panel, shadows panel, background
+    gradient + pattern picker, brand overlay toggle, alignment snap
+    (horizontal/vertical center), group/ungroup via toolbar + keyboard,
+    element border style picker.
+-   **Branded PNG export**: canvas export includes Medicology watermark
+    (logo + @mmedicologyworld social handle) at bottom when brand overlay
+    is enabled.
 -   New deps: frontend `katex`, `remark-math`, `rehype-katex`; API `marked`,
     `katex`. New tests: 118 frontend (KaTeX rendering, block parse/serialize
     round-trip, flowchart builder, editor helpers, canvas design factories,

@@ -6,6 +6,7 @@ import CanvasEditor from "@/components/CanvasEditor";
 import CanvasRenderer from "@/components/CanvasRenderer";
 import { parseNoteBlocks, serializeNoteBlocks, addBlockAfter } from "@/lib/note-blocks";
 import { createCanvasDesign, serializeDesign, parseDesign } from "@/lib/canvas-design";
+import { blocksToCanvas, canvasToBlocks } from "@/lib/canvas-converter";
 import {
   BookOpen, Plus, Pencil, Trash2, Search, Star, StarOff, Eye, EyeOff,
   Loader2, FileText, X, Eye as PreviewIcon, PenLine, LayoutTemplate,
@@ -114,6 +115,7 @@ export default function AdminNotesPage() {
     };
 
     if (!canvasBlock) {
+      const hasBlocks = parseNoteBlocks(content).some((b) => b.type !== "canvas");
       return (
         <div className="rounded-xl border-2 border-dashed border-border bg-background p-10 text-center">
           <LayoutTemplate className="mx-auto mb-3 text-primary" size={36} />
@@ -121,12 +123,27 @@ export default function AdminNotesPage() {
           <p className="mx-auto max-w-sm text-xs text-muted-foreground mb-4">
             Design a free-form visual (text, shapes, connectors, formulas, images) on a fixed-size canvas — rendered at full quality for students and exportable as a branded PNG.
           </p>
-          <button
-            onClick={() => updateDesign(serializeDesign(createCanvasDesign()))}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
-          >
-            <Plus size={15} /> Create canvas
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button
+              onClick={() => updateDesign(serializeDesign(createCanvasDesign()))}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
+            >
+              <Plus size={15} /> Blank canvas
+            </button>
+            {hasBlocks && (
+              <button
+                onClick={() => {
+                  const blocks = parseNoteBlocks(content);
+                  const canvasDesign = blocksToCanvas(blocks);
+                  updateDesign(serializeDesign(canvasDesign));
+                  toast({ title: "Imported", description: `Converted ${blocks.length} blocks to canvas elements.` });
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-primary/50 bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20"
+              >
+                <Plus size={15} /> Import from blocks
+              </button>
+            )}
+          </div>
         </div>
       );
     }
@@ -135,9 +152,25 @@ export default function AdminNotesPage() {
       <div className="space-y-3">
         <CanvasEditor value={canvasBlock.design ?? "{}"} onChange={updateDesign} />
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] text-muted-foreground">
-            Canvas is saved as a <code className="font-mono">```canvas</code> block in the note — students see it scaled to fit, and it exports to PNG at full resolution.
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] text-muted-foreground">
+              Canvas is saved as a <code className="font-mono">```canvas</code> block in the note — students see it scaled to fit, and it exports to PNG at full resolution.
+            </p>
+            <button
+              onClick={() => {
+                if (!confirm("Convert canvas elements to structured blocks? The canvas block will be replaced.")) return;
+                const design = parseDesign(canvasBlock!.design ?? "{}");
+                if (!design) return;
+                const newBlocks = canvasToBlocks(design);
+                const otherBlocks = parseNoteBlocks(content).filter((b) => b.type !== "canvas");
+                setContent(serializeNoteBlocks([...otherBlocks, ...newBlocks]));
+                toast({ title: "Converted", description: `${newBlocks.length} blocks created from canvas elements.` });
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary/50 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/20"
+            >
+              Convert to blocks
+            </button>
+          </div>
           {design && (
             <div className="shrink-0 rounded-lg border border-border bg-background p-1">
               <CanvasRenderer design={design} scale={0.18} />
