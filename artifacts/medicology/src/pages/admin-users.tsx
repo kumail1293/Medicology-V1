@@ -20,6 +20,7 @@ import {
   Layers,
 } from 'lucide-react';
 import UserAccessDrawer from '@/components/UserAccessDrawer';
+import { UserAvatar } from '@/components/UserAvatar';
 import { clsx } from 'clsx';
 import { useAuth } from '@/lib/auth';
 
@@ -36,6 +37,7 @@ interface AdminUser {
   year: number;
   role: string;
   isAdmin: boolean;
+  avatarUrl?: string | null;
   createdAt: string;
 }
 
@@ -350,7 +352,12 @@ function UserManagementPage() {
                 <tbody>
                   {users.map((user) => (
                     <tr key={user.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                      <td className="px-6 py-4 text-sm font-medium">{user.name}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <UserAvatar name={user.name} src={user.avatarUrl} size={36} />
+                          <span className="text-sm font-medium">{user.name}</span>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">{user.email}</td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">{user.college}</td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">Year {user.year}</td>

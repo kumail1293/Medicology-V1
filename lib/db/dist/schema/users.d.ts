@@ -171,6 +171,23 @@ export declare const usersTable: import("drizzle-orm/pg-core").PgTableWithColumn
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        avatarUrl: import("drizzle-orm/pg-core").PgColumn<{
+            name: "avatar_url";
+            tableName: "users";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         studyAim: import("drizzle-orm/pg-core").PgColumn<{
             name: "study_aim";
             tableName: "users";
@@ -368,6 +385,7 @@ export declare const insertUserSchema: z.ZodObject<{
     year: z.ZodInt;
     bio: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     phone: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    avatarUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     studyAim: z.ZodOptional<z.ZodNullable<z.ZodType<StudyAim, StudyAim, z.core.$ZodTypeInternals<StudyAim, StudyAim>>>>;
     isAdmin: z.ZodOptional<z.ZodBoolean>;
     role: z.ZodOptional<z.ZodString>;

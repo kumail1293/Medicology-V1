@@ -17,6 +17,7 @@ leaderboardRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
       name: usersTable.name,
       college: usersTable.college,
       university: usersTable.university,
+      avatarUrl: usersTable.avatarUrl,
       rewardPoints: usersTable.rewardPoints,
     }).from(usersTable);
 
@@ -61,6 +62,7 @@ leaderboardRouter.get('/', authenticate, async (req: AuthRequest, res: any) => {
           name: u.name,
           college: u.college,
           university: u.university,
+          avatarUrl: u.avatarUrl ?? null,
           accuracy: Math.round((agg.correct / agg.solved) * 1000) / 10,
           questionsSolved: agg.solved,
           rewardPoints: u.rewardPoints,

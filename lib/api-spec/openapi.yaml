@@ -1923,6 +1923,13 @@ components:
           type: string
         year:
           type: integer
+        bio:
+          type: string
+        phone:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
         currentPassword:
           type: string
         newPassword:

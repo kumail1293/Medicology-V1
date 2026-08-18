@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/lib/auth';
+import { UserAvatar } from '@/components/UserAvatar';
 import { useSettings } from '@/lib/settings';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -200,11 +201,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="px-4 pb-2">
-              <div className="bg-gradient-to-br from-primary/10 to-accent/10 p-4 rounded-2xl border border-primary/20 mb-2 transition-all duration-300 hover:border-primary/40 hover:shadow-md">
-                <p className="text-sm font-semibold text-foreground truncate">{user?.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.college}</p>
-                <div className="mt-2 inline-block bg-gradient-to-r from-primary/20 to-accent/20 text-primary font-bold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider border border-primary/20">
-                  Year {user?.year}
+              <div className="bg-gradient-to-br from-primary/10 to-accent/10 p-4 rounded-2xl border border-primary/20 mb-2 transition-all duration-300 hover:border-primary/40 hover:shadow-md flex items-center gap-3">
+                <UserAvatar name={user?.name} src={(user as any)?.avatarUrl} size={44} ring />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground truncate">{user?.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.college}</p>
+                  <div className="mt-1.5 inline-block bg-gradient-to-r from-primary/20 to-accent/20 text-primary font-bold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider border border-primary/20">
+                    Year {user?.year}
+                  </div>
                 </div>
               </div>
             </div>

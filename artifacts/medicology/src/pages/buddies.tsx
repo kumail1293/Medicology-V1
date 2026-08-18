@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { PageTransition } from "@/components/layout";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Search, UserPlus, UserCheck, UserX, Inbox, ChevronRight, GraduationCap, RefreshCw, AlertCircle, UserRound } from "lucide-react";
+import { UserAvatar } from "@/components/UserAvatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,7 @@ interface BuddyUser {
   university?: string;
   year: number;
   email?: string;
+  avatarUrl?: string | null;
   buddyStatus?: string | null;
   buddyId?: number | null;
 }
@@ -222,9 +224,7 @@ export default function BuddiesPage() {
                 <Card key={buddy.id} className="group hover:border-primary/40 transition-all">
                   <CardContent className="p-5">
                     <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-lg font-extrabold text-primary shrink-0">
-                        {buddy.name[0].toUpperCase()}
-                      </div>
+                      <UserAvatar name={buddy.name} src={buddy.avatarUrl} size={48} />
                       <div className="flex-1 min-w-0">
                         <h3 className="font-bold text-base truncate">{buddy.name}</h3>
                         <p className="text-xs text-muted-foreground truncate">{buddy.college}</p>
@@ -285,9 +285,7 @@ export default function BuddiesPage() {
               {searchResults.map(user => (
                 <Card key={user.id} className="hover:border-primary/40 transition-all">
                   <CardContent className="p-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-extrabold text-primary shrink-0">
-                      {user.name[0].toUpperCase()}
-                    </div>
+                    <UserAvatar name={user.name} src={user.avatarUrl} size={40} />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm">{user.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{user.college} · Year {user.year}</p>
@@ -333,9 +331,7 @@ export default function BuddiesPage() {
             requests.map(req => (
               <Card key={req.id} className="hover:border-primary/40 transition-all">
                 <CardContent className="p-4 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-extrabold text-primary shrink-0">
-                    {req.requester?.name?.[0]?.toUpperCase() || "?"}
-                  </div>
+                  <UserAvatar name={req.requester?.name} src={req.requester?.avatarUrl} size={40} />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm">{req.requester?.name || "Unknown"}</p>
                     <p className="text-xs text-muted-foreground truncate">{req.requester?.college} · Year {req.requester?.year}</p>

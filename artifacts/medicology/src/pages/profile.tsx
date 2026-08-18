@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../lib/auth";
 import { useUpdateCurrentUser } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
-import { User, Save, Lock, GraduationCap, Mail, Phone, BadgeCheck, Shield, UserRound } from "lucide-react";
+import { User, Save, Lock, GraduationCap, Mail, Phone, BadgeCheck, Shield, Camera, Loader2, Trash2, Gift, Calendar, Pencil } from "lucide-react";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const YEAR_LABELS: Record<number, string> = {
   1: "1st Year (Pre-Clinical)",
@@ -36,6 +37,7 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const updateUser = useUpdateCurrentUser();
   const hasInitialized = React.useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
@@ -44,11 +46,13 @@ export default function ProfilePage() {
   const [year, setYear] = useState<number>(user?.year ?? 1);
   const [bio, setBio] = useState((user as any)?.bio ?? "");
   const [phone, setPhone] = useState((user as any)?.phone ?? "");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>((user as any)?.avatarUrl ?? null);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (user && !hasInitialized.current) {
@@ -59,9 +63,61 @@ export default function ProfilePage() {
       setYear(user.year);
       setBio((user as any)?.bio ?? "");
       setPhone((user as any)?.phone ?? "");
+      setAvatarUrl((user as any)?.avatarUrl ?? null);
       hasInitialized.current = true;
     }
   }, [user]);
+
+  const refreshUser = (res: any) => {
+    if (res?.token && res?.user) login(res.token, res.user);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Please choose an image file", variant: "destructive" });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "Image must be under 10 MB", variant: "destructive" });
+      return;
+    }
+    const token = localStorage.getItem("medicology_token");
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/storage/avatar", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setAvatarUrl(data.url);
+      // Persist the URL on the user record and refresh auth state.
+      const upd = await updateUser.mutateAsync({ data: { avatarUrl: data.url } });
+      refreshUser(upd);
+      toast({ title: "Profile picture updated" });
+    } catch (err: any) {
+      toast({ title: err?.message ?? "Failed to upload picture", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    try {
+      const upd = await updateUser.mutateAsync({ data: { avatarUrl: null } });
+      setAvatarUrl(null);
+      refreshUser(upd);
+      toast({ title: "Profile picture removed" });
+    } catch {
+      toast({ title: "Failed to remove picture", variant: "destructive" });
+    }
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,9 +133,7 @@ export default function ProfilePage() {
           phone: phone.trim() || undefined,
         },
       });
-      if (res.token && res.user) {
-        login(res.token, res.user);
-      }
+      refreshUser(res);
       toast({ title: "Profile updated successfully" });
     } catch (err: any) {
       toast({ title: err?.message ?? "Failed to update profile", variant: "destructive" });
@@ -98,14 +152,9 @@ export default function ProfilePage() {
     }
     try {
       const res = await updateUser.mutateAsync({
-        data: {
-          currentPassword,
-          newPassword,
-        },
+        data: { currentPassword, newPassword },
       });
-      if (res.token && res.user) {
-        login(res.token, res.user);
-      }
+      refreshUser(res);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -118,18 +167,69 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
+  const inputCls = "w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all";
+  const labelCls = "text-xs font-medium text-muted-foreground uppercase tracking-wide";
+  const memberSince = user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-PK", { year: "numeric", month: "long" }) : "—";
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-      <div className="flex items-center gap-4 mb-2">
-        <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center">
-          <span className="text-3xl font-bold text-primary">{user.name.charAt(0).toUpperCase()}</span>
+    <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      {/* Header card with avatar upload */}
+      <div className="relative overflow-hidden bg-card border border-border rounded-3xl shadow-sm">
+        <div className="h-24 bg-gradient-to-r from-primary/25 via-accent/20 to-primary/10 border-b border-border/50" />
+        <div className="px-6 pb-6 -mt-10 flex flex-col sm:flex-row sm:items-end gap-4">
+          <div className="relative shrink-0">
+            <UserAvatar name={user.name} src={avatarUrl} size={88} ring />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              title="Upload profile picture"
+              className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg border-2 border-card hover:bg-primary/90 transition-colors disabled:opacity-60"
+            >
+              {uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+          </div>
+          <div className="flex-1 min-w-0 pb-1">
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              {user.name}
+              {role !== "user" && <BadgeCheck size={18} className="text-primary" />}
+            </h1>
+            <p className="text-muted-foreground text-sm">{user.email}</p>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full ${ROLE_COLORS[role] ?? ROLE_COLORS.user}`}>
+                <Shield size={10} /> {ROLE_LABELS[role] ?? role}
+              </span>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                <GraduationCap size={10} /> Year {user.year}
+              </span>
+              {avatarUrl && (
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                >
+                  <Trash2 size={10} /> Remove photo
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{user.name}</h1>
-          <p className="text-muted-foreground text-sm">{user.email}</p>
-          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full mt-1.5 ${ROLE_COLORS[role] ?? ROLE_COLORS.user}`}>
-            <Shield size={10} /> {ROLE_LABELS[role] ?? role}
-          </span>
+
+        {/* Stats strip */}
+        <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
+          <div className="px-6 py-4">
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Gift size={11} /> Reward Points</p>
+            <p className="mt-1 text-lg font-extrabold text-primary">{(user as any).rewardPoints ?? 0} pts</p>
+          </div>
+          <div className="px-6 py-4">
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar size={11} /> Member Since</p>
+            <p className="mt-1 text-lg font-extrabold">{memberSince}</p>
+          </div>
+          <div className="px-6 py-4">
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Pencil size={11} /> Profile</p>
+            <p className="mt-1 text-lg font-extrabold truncate">{bio ? "Completed" : "Add a bio"}</p>
+          </div>
         </div>
       </div>
 
@@ -142,58 +242,26 @@ export default function ProfilePage() {
         <form onSubmit={handleSaveProfile} className="p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Full Name</label>
-              <input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                required
-                className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="Dr. John Doe"
-              />
+              <label className={labelCls}>Full Name</label>
+              <input value={name} onChange={e => setName(e.target.value)} required className={inputCls} placeholder="Dr. John Doe" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                <Mail size={10} /> Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="you@example.com"
-              />
+              <label className={labelCls + " flex items-center gap-1"}><Mail size={10} /> Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className={inputCls} placeholder="you@example.com" />
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-              <GraduationCap size={10} /> Medical College
-            </label>
-            <input
-              value={college}
-              onChange={e => setCollege(e.target.value)}
-              required
-              className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="King Edward Medical University"
-            />
+            <label className={labelCls + " flex items-center gap-1"}><GraduationCap size={10} /> Medical College</label>
+            <input value={college} onChange={e => setCollege(e.target.value)} required className={inputCls} placeholder="King Edward Medical University" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">University / Affiliation</label>
-              <input
-                value={university}
-                onChange={e => setUniversity(e.target.value)}
-                className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="University of Health Sciences"
-              />
+              <label className={labelCls}>University / Affiliation</label>
+              <input value={university} onChange={e => setUniversity(e.target.value)} className={inputCls} placeholder="University of Health Sciences" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Academic Year</label>
-              <select
-                value={year}
-                onChange={e => setYear(Number(e.target.value))}
-                className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
+              <label className={labelCls}>Academic Year</label>
+              <select value={year} onChange={e => setYear(Number(e.target.value))} className={inputCls}>
                 {Object.entries(YEAR_LABELS).map(([y, label]) => (
                   <option key={y} value={y}>{label}</option>
                 ))}
@@ -202,26 +270,12 @@ export default function ProfilePage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                <Phone size={10} /> Phone
-              </label>
-              <input
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="+92 300 1234567"
-              />
+              <label className={labelCls + " flex items-center gap-1"}><Phone size={10} /> Phone</label>
+              <input value={phone} onChange={e => setPhone(e.target.value)} className={inputCls} placeholder="+92 300 1234567" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                <UserRound size={10} /> About me
-              </label>
-              <input
-                value={bio}
-                onChange={e => setBio(e.target.value)}
-                className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="Final year MBBS, passionate about cardiology"
-              />
+              <label className={labelCls + " flex items-center gap-1"}>About me</label>
+              <input value={bio} onChange={e => setBio(e.target.value)} className={inputCls} placeholder="Final year MBBS, passionate about cardiology" />
             </div>
           </div>
           <div className="flex justify-end pt-2">
@@ -252,39 +306,17 @@ export default function ProfilePage() {
         {showPasswordSection && (
           <form onSubmit={handleChangePassword} className="p-6 space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Current Password</label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={e => setCurrentPassword(e.target.value)}
-                required
-                className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="Enter current password"
-              />
+              <label className={labelCls}>Current Password</label>
+              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required className={inputCls} placeholder="Enter current password" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">New Password</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="Min. 6 characters"
-                />
+                <label className={labelCls}>New Password</label>
+                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} className={inputCls} placeholder="Min. 6 characters" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Confirm New Password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  required
-                  className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="Re-enter new password"
-                />
+                <label className={labelCls}>Confirm New Password</label>
+                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required className={inputCls} placeholder="Re-enter new password" />
               </div>
             </div>
             <div className="flex justify-end pt-2">
@@ -299,22 +331,6 @@ export default function ProfilePage() {
             </div>
           </form>
         )}
-      </div>
-
-      <div className="bg-muted/30 border border-border rounded-2xl px-6 py-4">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
-          <BadgeCheck size={12} /> Account Info
-        </h3>
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <span className="text-muted-foreground">Member since</span>
-            <p className="font-medium">{user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-PK", { year: "numeric", month: "long" }) : "—"}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Reward Points</span>
-            <p className="font-medium text-primary">{(user as any).rewardPoints ?? 0} pts</p>
-          </div>
-        </div>
       </div>
     </div>
   );

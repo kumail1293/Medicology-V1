@@ -1406,7 +1406,7 @@ export declare const userScopesTable: import("drizzle-orm/pg-core").PgTableWithC
             tableName: "user_scopes";
             dataType: "string";
             columnType: "PgText";
-            data: "year" | "global" | "country" | "exam" | "program" | "subject" | "system" | "topic" | "qbank";
+            data: "year" | "subject" | "system" | "global" | "country" | "exam" | "program" | "topic" | "qbank";
             driverParam: string;
             notNull: true;
             hasDefault: false;
@@ -1418,7 +1418,7 @@ export declare const userScopesTable: import("drizzle-orm/pg-core").PgTableWithC
             identity: undefined;
             generated: undefined;
         }, {}, {
-            $type: "year" | "global" | "country" | "exam" | "program" | "subject" | "system" | "topic" | "qbank";
+            $type: "year" | "subject" | "system" | "global" | "country" | "exam" | "program" | "topic" | "qbank";
         }>;
         scopeId: import("drizzle-orm/pg-core").PgColumn<{
             name: "scope_id";
@@ -1534,7 +1534,7 @@ export declare const roleScopesTable: import("drizzle-orm/pg-core").PgTableWithC
             tableName: "role_scopes";
             dataType: "string";
             columnType: "PgText";
-            data: "year" | "global" | "country" | "exam" | "program" | "subject" | "system" | "topic" | "qbank";
+            data: "year" | "subject" | "system" | "global" | "country" | "exam" | "program" | "topic" | "qbank";
             driverParam: string;
             notNull: true;
             hasDefault: false;
@@ -1546,7 +1546,7 @@ export declare const roleScopesTable: import("drizzle-orm/pg-core").PgTableWithC
             identity: undefined;
             generated: undefined;
         }, {}, {
-            $type: "year" | "global" | "country" | "exam" | "program" | "subject" | "system" | "topic" | "qbank";
+            $type: "year" | "subject" | "system" | "global" | "country" | "exam" | "program" | "topic" | "qbank";
         }>;
         scopeId: import("drizzle-orm/pg-core").PgColumn<{
             name: "scope_id";
@@ -1622,10 +1622,10 @@ export declare const roleScopesTable: import("drizzle-orm/pg-core").PgTableWithC
 export declare const insertUserTypeSchema: z.ZodObject<{
     name: z.ZodString;
     slug: z.ZodString;
+    status: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     icon: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     color: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    status: z.ZodOptional<z.ZodString>;
     registrationAllowed: z.ZodOptional<z.ZodBoolean>;
     requiresApproval: z.ZodOptional<z.ZodBoolean>;
     invitationOnly: z.ZodOptional<z.ZodBoolean>;
@@ -1654,11 +1654,11 @@ export type Permission = typeof permissionsTable.$inferSelect;
 export declare const insertRoleSchema: z.ZodObject<{
     name: z.ZodString;
     slug: z.ZodString;
-    description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     status: z.ZodOptional<z.ZodString>;
+    createdBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
+    description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     systemRole: z.ZodOptional<z.ZodBoolean>;
     template: z.ZodOptional<z.ZodBoolean>;
-    createdBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
 }, {
     out: {};
     in: {};
@@ -1676,9 +1676,9 @@ export declare const insertRolePermissionSchema: z.ZodObject<{
 export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
 export type RolePermission = typeof rolePermissionsTable.$inferSelect;
 export declare const insertUserRoleSchema: z.ZodObject<{
+    userId: z.ZodInt;
     roleId: z.ZodInt;
     grantedBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
-    userId: z.ZodInt;
 }, {
     out: {};
     in: {};
@@ -1686,9 +1686,9 @@ export declare const insertUserRoleSchema: z.ZodObject<{
 export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
 export type UserRoleRow = typeof userRolesTable.$inferSelect;
 export declare const insertUserPermissionSchema: z.ZodObject<{
+    userId: z.ZodInt;
     permissionKey: z.ZodString;
     grantedBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
-    userId: z.ZodInt;
     allowed: z.ZodOptional<z.ZodBoolean>;
 }, {
     out: {};
@@ -1699,8 +1699,8 @@ export type UserPermission = typeof userPermissionsTable.$inferSelect;
 export declare const insertOrganizationSchema: z.ZodObject<{
     name: z.ZodString;
     slug: z.ZodString;
-    description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     status: z.ZodOptional<z.ZodString>;
+    description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     metadata: z.ZodOptional<z.ZodNullable<z.ZodType<Record<string, any>, Record<string, any>, z.core.$ZodTypeInternals<Record<string, any>, Record<string, any>>>>>;
     logo: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     organizationType: z.ZodOptional<z.ZodString>;
@@ -1724,9 +1724,9 @@ export declare const insertTeamSchema: z.ZodObject<{
 export type InsertTeam = z.infer<typeof insertTeamSchema>;
 export type Team = typeof teamsTable.$inferSelect;
 export declare const insertTeamMemberSchema: z.ZodObject<{
+    userId: z.ZodInt;
     roleId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     grantedBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
-    userId: z.ZodInt;
     teamId: z.ZodInt;
     scope: z.ZodOptional<z.ZodNullable<z.ZodType<Record<string, any>, Record<string, any>, z.core.$ZodTypeInternals<Record<string, any>, Record<string, any>>>>>;
 }, {
@@ -1736,8 +1736,8 @@ export declare const insertTeamMemberSchema: z.ZodObject<{
 export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
 export type TeamMember = typeof teamMembersTable.$inferSelect;
 export declare const insertUserScopeSchema: z.ZodObject<{
-    grantedBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     userId: z.ZodInt;
+    grantedBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     scopeType: z.ZodString;
     scopeId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     label: z.ZodOptional<z.ZodNullable<z.ZodString>>;

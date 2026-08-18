@@ -441,13 +441,11 @@ export declare const caseCompletionsTable: import("drizzle-orm/pg-core").PgTable
     dialect: "pg";
 }>;
 export declare const insertClinicalCaseSchema: z.ZodObject<{
-    status: z.ZodOptional<z.ZodString>;
-    createdBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
-    system: z.ZodString;
-    explanation: z.ZodString;
-    examType: z.ZodOptional<z.ZodString>;
-    difficulty: z.ZodOptional<z.ZodString>;
     title: z.ZodString;
+    status: z.ZodOptional<z.ZodString>;
+    system: z.ZodString;
+    difficulty: z.ZodOptional<z.ZodString>;
+    examType: z.ZodOptional<z.ZodString>;
     estimatedMinutes: z.ZodOptional<z.ZodInt>;
     relatedSubject: z.ZodString;
     chiefComplaint: z.ZodString;
@@ -456,8 +454,10 @@ export declare const insertClinicalCaseSchema: z.ZodObject<{
     investigations: z.ZodString;
     diagnosisOptions: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     correctDiagnosis: z.ZodString;
+    explanation: z.ZodString;
     managementPlan: z.ZodString;
     keyLearningPoints: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    createdBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
 }, {
     out: {};
     in: {};

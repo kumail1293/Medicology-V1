@@ -531,6 +531,7 @@ export interface UpdateProfileRequest {
   year?: number;
   bio?: string;
   phone?: string;
+  avatarUrl?: string | null;
   currentPassword?: string;
   newPassword?: string;
 }

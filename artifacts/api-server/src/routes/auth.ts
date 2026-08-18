@@ -134,7 +134,7 @@ authRouter.get('/me', authenticate, async (req: AuthRequest, res: any) => {
 // Update profile
 authRouter.put('/me', authenticate, async (req: AuthRequest, res: any) => {
   try {
-    const { name, email, college, university, year, bio, phone } = req.body;
+    const { name, email, college, university, year, bio, phone, avatarUrl } = req.body;
     const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
     const [user] = await db.update(usersTable)
       .set({
@@ -145,6 +145,7 @@ authRouter.put('/me', authenticate, async (req: AuthRequest, res: any) => {
         year: year !== undefined ? Number(year) : undefined,
         bio: bio !== undefined ? (bio ? String(bio).trim() : null) : undefined,
         phone: phone !== undefined ? (phone ? String(phone).trim() : null) : undefined,
+        avatarUrl: avatarUrl !== undefined ? (avatarUrl ? String(avatarUrl).trim() : null) : undefined,
       })
       .where(eq(usersTable.id, req.user!.id))
       .returning();

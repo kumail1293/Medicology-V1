@@ -628,14 +628,19 @@ export declare const flashcardsTable: import("drizzle-orm/pg-core").PgTableWithC
     dialect: "pg";
 }>;
 export declare const insertFlashcardDeckSchema: z.ZodObject<{
-    slug: z.ZodString;
     name: z.ZodString;
-    subject: z.ZodOptional<z.ZodString>;
-    description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    status: z.ZodOptional<z.ZodString>;
-    cardCount: z.ZodOptional<z.ZodInt>;
     year: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    slug: z.ZodString;
+    subject: z.ZodOptional<z.ZodString>;
+    status: z.ZodOptional<z.ZodString>;
+    system: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     createdBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
+    description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    country: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    exam: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    program: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    topic: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    cardCount: z.ZodOptional<z.ZodInt>;
     countryId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     examId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     programId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
@@ -644,24 +649,19 @@ export declare const insertFlashcardDeckSchema: z.ZodObject<{
     systemId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     topicId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     subtopicId: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
-    country: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    exam: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    program: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    system: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    topic: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     subtopic: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }, {
     out: {};
     in: {};
 }>;
 export declare const insertFlashcardSchema: z.ZodObject<{
+    tags: z.ZodOptional<z.ZodNullable<z.ZodType<string[], string[], z.core.$ZodTypeInternals<string[], string[]>>>>;
     createdBy: z.ZodOptional<z.ZodNullable<z.ZodInt>>;
     sortOrder: z.ZodOptional<z.ZodInt>;
     deckId: z.ZodInt;
     front: z.ZodString;
     back: z.ZodOptional<z.ZodString>;
     note: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    tags: z.ZodOptional<z.ZodNullable<z.ZodType<string[], string[], z.core.$ZodTypeInternals<string[], string[]>>>>;
     image: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }, {
     out: {};

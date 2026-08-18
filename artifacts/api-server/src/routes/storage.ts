@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import { db } from '../db.js';
-import { mediaTable } from '@workspace/db';
+import { mediaTable, usersTable } from '@workspace/db';
 import { eq, desc } from '../utils/drizzle.js';
 import { mergeSettings } from '../utils/settings-defaults.js';
 import { appSettingsTable } from '@workspace/db';
@@ -103,7 +103,7 @@ function imageDimensions(buf: Buffer): { width: number; height: number } | null 
   return null;
 }
 
-const MEDIA_CATEGORIES = ['logo', 'icon', 'announcement', 'qbank_cover', 'flashcard', 'rich_content', 'seo', 'other'];
+const MEDIA_CATEGORIES = ['logo', 'icon', 'announcement', 'qbank_cover', 'flashcard', 'rich_content', 'seo', 'avatar', 'other'];
 
 // ---------------------------------------------------------------------------
 // Media library (admin settings plan item 18).
@@ -146,6 +146,42 @@ storageRouter.post('/media', authenticate, requireContentEditor, upload.single('
     });
 
     return res.status(201).json({ media });
+  } catch (err: any) {
+    if (req.file) fs.rmSync(req.file.path, { force: true });
+    return res.status(400).json({ error: err.message === 'File type not allowed' ? 'File type not allowed' : err.message });
+  }
+});
+
+// Upload a profile avatar — any authenticated user (own picture only).
+// Stores the file like any media asset, records it in the library under the
+// 'avatar' category, and points the user's avatar_url at the served URL so
+// every surface (sidebar, leaderboard, buddies, admin users) shows it.
+storageRouter.post('/avatar', authenticate, upload.single('file'), async (req: AuthRequest, res: any) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const file = req.file;
+    const dims = imageDimensions(fs.readFileSync(file.path));
+    const url = `/api/storage/uploads/${file.filename}`;
+
+    const [me] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.id));
+    const [media] = await db.insert(mediaTable).values({
+      filename: file.filename,
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      sizeBytes: file.size,
+      width: dims?.width ?? null,
+      height: dims?.height ?? null,
+      url,
+      altText: `Avatar of ${me?.name ?? 'user'}`,
+      category: 'avatar',
+      uploadedBy: req.user?.id ?? null,
+    }).returning();
+
+    await db.update(usersTable)
+      .set({ avatarUrl: url })
+      .where(eq(usersTable.id, req.user!.id));
+
+    return res.status(201).json({ url, media });
   } catch (err: any) {
     if (req.file) fs.rmSync(req.file.path, { force: true });
     return res.status(400).json({ error: err.message === 'File type not allowed' ? 'File type not allowed' : err.message });

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { PageTransition } from "@/components/layout";
 import { Trophy, Medal, Users, BookOpen, Target } from "lucide-react";
+import { UserAvatar } from "@/components/UserAvatar";
 import { clsx } from "clsx";
 
 type LeaderboardEntry = {
@@ -11,6 +12,7 @@ type LeaderboardEntry = {
   name: string;
   college: string;
   university?: string;
+  avatarUrl?: string | null;
   accuracy: number;
   questionsSolved: number;
   rewardPoints: number;
@@ -34,26 +36,8 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
-function AvatarCircle({ name }: { name: string }) {
-  const initials = name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
-  const colors = [
-    "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
-    "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
-    "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
-    "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300",
-    "bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300",
-    "bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300",
-  ];
-  const color = colors[name.charCodeAt(0) % colors.length];
-  return (
-    <div className={clsx("w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0", color)}>
-      {initials || "?"}
-    </div>
-  );
+function AvatarCircle({ name, src }: { name: string; src?: string | null }) {
+  return <UserAvatar name={name} src={src} size={36} />;
 }
 
 function SkeletonRow() {
@@ -83,7 +67,7 @@ function PodiumCard({ entry }: { entry: LeaderboardEntry }) {
   return (
     <div className={clsx("flex-1 bg-gradient-to-br rounded-2xl border p-4 text-center", highlights[entry.rank - 1])}>
       <div className="text-3xl mb-2">{medals[entry.rank - 1]}</div>
-      <AvatarCircle name={entry.name} />
+      <AvatarCircle name={entry.name} src={entry.avatarUrl} />
       <p className="font-semibold text-sm text-foreground mt-2 leading-tight line-clamp-1">{entry.name}</p>
       <p className="text-[11px] text-muted-foreground line-clamp-1 mb-2">{entry.college}</p>
       <p className="text-lg font-bold text-primary">{entry.accuracy.toFixed(1)}%</p>
@@ -226,7 +210,7 @@ export default function LeaderboardPage() {
                     <div className="w-8 flex items-center justify-center">
                       <RankBadge rank={entry.rank} />
                     </div>
-                    <AvatarCircle name={entry.name} />
+                    <AvatarCircle name={entry.name} src={entry.avatarUrl} />
                     <div className="flex-1 min-w-0">
                       <p className={clsx("text-sm font-semibold truncate", isMe && "text-primary")}>
                         {entry.name} {isMe && <span className="text-xs font-normal">(You)</span>}
