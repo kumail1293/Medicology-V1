@@ -246,11 +246,25 @@ Five connected upgrades to the study-notes system:
     live student preview pane, a raw-markdown Source tab, and a mermaid
     **connector builder** that edits flowchart nodes/edges (id, label,
     shape, edge labels) visually and regenerates the source.
+--   **Canva-style canvas editor** (3rd editor mode) — a full free-form
+    design canvas with: drag/move/resize/rotate elements, 8 preset sizes
+    (Note card, Square, Story, Landscape, Document), shapes (rect, round,
+    circle, diamond, triangle, line), arrows (connectors with draggable
+    endpoints + labels), text/heading/image/list/math elements, layered
+    z-ordering (bring forward / send backward), zoom, undo/redo, PNG export,
+    and element property editing. Canvas designs are stored inside notes as
+    a `` ```canvas `` fenced block (lossless round-trip through
+    `note-blocks.ts`) and rendered at scale in the student reader via
+    `CanvasRenderer`. The admin note editor now has three tabs: Blocks,
+    Canvas, Preview. A seeded cardiac-action-potential note includes a
+    5-phase horizontal diagram (colored shapes + arrows) to demonstrate
+    the feature.
 -   New deps: frontend `katex`, `remark-math`, `rehype-katex`; API `marked`,
-    `katex`. New tests: 21 frontend (KaTeX rendering, block parse/serialize
-    round-trip, flowchart builder, editor helpers) + 2 API (export contract,
-    HTML escaping / href sanitization). Browser-verified end to end with zero
-    console errors.
+    `katex`. New tests: 118 frontend (KaTeX rendering, block parse/serialize
+    round-trip, flowchart builder, editor helpers, canvas design factories,
+    transform helpers, serialization round-trip, canvas block in note
+    markdown) + 72 API (export contract, HTML escaping / href sanitization).
+    Browser-verified end to end with zero console errors.
 
 ### Full-app walkthrough & link audit — Aug 2026
 

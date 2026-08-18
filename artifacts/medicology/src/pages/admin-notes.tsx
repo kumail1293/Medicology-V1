@@ -2,9 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import MarkdownNote from "@/components/MarkdownNote";
 import NoteBlockEditor from "@/components/NoteBlockEditor";
+import CanvasEditor from "@/components/CanvasEditor";
+import CanvasRenderer from "@/components/CanvasRenderer";
+import { parseNoteBlocks, serializeNoteBlocks, addBlockAfter } from "@/lib/note-blocks";
+import { createCanvasDesign, serializeDesign, parseDesign } from "@/lib/canvas-design";
 import {
   BookOpen, Plus, Pencil, Trash2, Search, Star, StarOff, Eye, EyeOff,
-  Loader2, FileText, X, Eye as PreviewIcon, PenLine,
+  Loader2, FileText, X, Eye as PreviewIcon, PenLine, LayoutTemplate,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { apiFetch } from "@/lib/api";
@@ -47,7 +51,7 @@ export default function AdminNotesPage() {
   const [editing, setEditing] = useState<StudyNote | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editorTab, setEditorTab] = useState<"write" | "preview">("write");
+  const [editorTab, setEditorTab] = useState<"write" | "preview" | "canvas">("write");
 
   // Form state
   const [title, setTitle] = useState("");
@@ -88,6 +92,61 @@ export default function AdminNotesPage() {
     setEditorTab("write");
     setShowForm(true);
   };
+
+  // ── Canvas tab — Canva-style free-form design editor. The design is stored
+  // as a ```canvas fenced block inside the note content; the student reader
+  // renders it at full quality, scaled to fit. ──────────────────────────────
+  const canvasTab = (() => {
+    const blocks = parseNoteBlocks(content);
+    const canvasBlock = blocks.find((b) => b.type === "canvas");
+    const design = canvasBlock?.design ? parseDesign(canvasBlock.design) : null;
+
+    const updateDesign = (json: string) => {
+      // Re-place the (first) canvas block's design and re-serialize.
+      const next = parseNoteBlocks(content);
+      const idx = next.findIndex((b) => b.type === "canvas");
+      if (idx === -1) {
+        setContent(serializeNoteBlocks(addBlockAfter(next, null, { type: "canvas", design: json })));
+      } else {
+        next[idx] = { ...next[idx], design: json };
+        setContent(serializeNoteBlocks(next));
+      }
+    };
+
+    if (!canvasBlock) {
+      return (
+        <div className="rounded-xl border-2 border-dashed border-border bg-background p-10 text-center">
+          <LayoutTemplate className="mx-auto mb-3 text-primary" size={36} />
+          <h4 className="text-base font-bold mb-1">Canvas design</h4>
+          <p className="mx-auto max-w-sm text-xs text-muted-foreground mb-4">
+            Design a free-form visual (text, shapes, connectors, formulas, images) on a fixed-size canvas — rendered at full quality for students and exportable as a branded PNG.
+          </p>
+          <button
+            onClick={() => updateDesign(serializeDesign(createCanvasDesign()))}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
+          >
+            <Plus size={15} /> Create canvas
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        <CanvasEditor value={canvasBlock.design ?? "{}"} onChange={updateDesign} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[11px] text-muted-foreground">
+            Canvas is saved as a <code className="font-mono">```canvas</code> block in the note — students see it scaled to fit, and it exports to PNG at full resolution.
+          </p>
+          {design && (
+            <div className="shrink-0 rounded-lg border border-border bg-background p-1">
+              <CanvasRenderer design={design} scale={0.18} />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  })();
 
   const save = async () => {
     if (!title.trim() || !subject.trim() || !content.trim()) {
@@ -309,11 +368,15 @@ export default function AdminNotesPage() {
               {/* Rich content editor — visual block editor with live preview */}
               <div>
                 <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-muted-foreground">Content * — visual editor</span>
+                  <span className="text-xs font-medium text-muted-foreground">Content * — editor</span>
                   <div className="flex rounded-lg border border-border p-0.5">
                     <button onClick={() => setEditorTab("write")}
                       className={clsx("flex items-center gap-1 rounded-md px-3 py-1 text-xs font-semibold", editorTab === "write" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
-                      <PenLine size={12} /> Edit
+                      <PenLine size={12} /> Blocks
+                    </button>
+                    <button onClick={() => setEditorTab("canvas")}
+                      className={clsx("flex items-center gap-1 rounded-md px-3 py-1 text-xs font-semibold", editorTab === "canvas" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+                      <LayoutTemplate size={12} /> Canvas
                     </button>
                     <button onClick={() => setEditorTab("preview")}
                       className={clsx("flex items-center gap-1 rounded-md px-3 py-1 text-xs font-semibold", editorTab === "preview" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
@@ -324,17 +387,19 @@ export default function AdminNotesPage() {
 
                 {editorTab === "write" ? (
                   <NoteBlockEditor value={content} onChange={setContent} />
+                ) : editorTab === "canvas" ? (
+                  canvasTab
                 ) : (
                   <div className="max-h-[520px] overflow-y-auto rounded-lg border border-border bg-background p-4">
                     {content.trim() ? (
                       <MarkdownNote content={content} />
                     ) : (
-                      <p className="py-8 text-center text-xs text-muted-foreground">Nothing to preview yet — switch to Edit and add content.</p>
+                      <p className="py-8 text-center text-xs text-muted-foreground">Nothing to preview yet — switch to Blocks and add content.</p>
                     )}
                   </div>
                 )}
                 <p className="mt-1 text-[11px] text-muted-foreground/70">
-                  Drag blocks to reorder · headings, lists, callouts, tables, mermaid diagrams (with a visual connector builder), LaTeX math &amp; Media Library images all render on the student side.
+                  Blocks for structured notes · Canvas for free-form designs · Tables, callouts, mermaid diagrams, LaTeX math, images and canvas designs all render on the student side.
                 </p>
               </div>
 

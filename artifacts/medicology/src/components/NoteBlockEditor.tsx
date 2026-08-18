@@ -25,13 +25,16 @@ import {
   type NoteBlockType,
   type FlowShape,
 } from "@/lib/note-blocks";
+import { createCanvasDesign, serializeDesign } from "@/lib/canvas-design";
 import type { CalloutTone } from "@/lib/note-utils";
 import {
   GripVertical, ArrowUp, ArrowDown, Copy, Trash2, Plus, Type, Heading2,
   List, ListChecks, Quote, Table2, GitBranch, Sigma, ImagePlus, Minus,
-  Code2, Eye, PenLine, Upload, X,
+  Code2, Eye, PenLine, Upload, X, LayoutTemplate,
 } from "lucide-react";
 import type { MediaItem } from "@/lib/media";
+import CanvasRenderer from "./CanvasRenderer";
+import { parseDesign } from "@/lib/canvas-design";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Small building blocks
@@ -49,9 +52,10 @@ const BLOCK_META: Record<NoteBlockType, { label: string; icon: React.ComponentTy
   image: { label: "Image", icon: ImagePlus, hint: "Media library or URL" },
   divider: { label: "Divider", icon: Minus, hint: "Horizontal rule" },
   code: { label: "Code", icon: Code2, hint: "Code block" },
+  canvas: { label: "Canvas", icon: LayoutTemplate, hint: "Free-form design" },
 };
 
-const ADD_ORDER: NoteBlockType[] = ["heading", "paragraph", "list", "checklist", "callout", "table", "mermaid", "math", "image", "divider", "code"];
+const ADD_ORDER: NoteBlockType[] = ["heading", "paragraph", "list", "checklist", "callout", "table", "mermaid", "math", "image", "divider", "code", "canvas"];
 
 const inputCls = "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
 const textareaCls = `${inputCls} resize-y font-mono text-xs leading-relaxed`;
@@ -340,6 +344,30 @@ function BlockEditor({ block, onChange, onOpenMedia }: {
           <textarea className={textareaCls} rows={4} value={block.code ?? ""} onChange={(e) => onChange({ code: e.target.value })} placeholder="// code" />
         </div>
       );
+    case "canvas": {
+      const design = block.design ? parseDesign(block.design) : null;
+      if (!design) {
+        return (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+            <span>Empty canvas design.</span>
+            <span className="font-semibold text-primary">Edit in the Canvas tab</span>
+          </div>
+        );
+      }
+      return (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold">Free-form canvas design</p>
+            <p className="text-[11px] text-muted-foreground">
+              {design.elements.length} element{design.elements.length !== 1 ? "s" : ""} · {design.width}×{design.height}px — open the <span className="font-semibold text-primary">Canvas</span> tab to edit visually.
+            </p>
+          </div>
+          <div className="shrink-0 rounded-lg border border-border bg-background p-1">
+            <CanvasRenderer design={design} scale={0.12} />
+          </div>
+        </div>
+      );
+    }
     default:
       return null;
   }
@@ -399,6 +427,7 @@ export default function NoteBlockEditor({ value, onChange }: { value: string; on
     if (type === "checklist") blank.items = ["- [ ] First task"];
     if (type === "list") blank.items = ["Item one"];
     if (type === "math") blank.text = "x^2 + y^2 = z^2";
+    if (type === "canvas") blank.design = serializeDesign(createCanvasDesign());
     commit(addBlockAfter(blocks, blocks.length ? blocks[blocks.length - 1].id : null, blank));
     setShowPalette(false);
   };

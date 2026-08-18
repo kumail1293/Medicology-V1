@@ -22,7 +22,8 @@ export type NoteBlockType =
   | "math"
   | "image"
   | "divider"
-  | "code";
+  | "code"
+  | "canvas";
 
 export interface NoteBlock {
   id: string;
@@ -49,6 +50,8 @@ export interface NoteBlock {
   src?: string;
   alt?: string;
   caption?: string;
+  /** canvas design (serialized JSON from the Canva-style editor). */
+  design?: string;
 }
 
 let _id = 0;
@@ -93,7 +96,7 @@ export function parseNoteBlocks(markdown: string): NoteBlock[] {
     // Blank lines separate blocks.
     if (isBlank(line)) { i += 1; continue; }
 
-    // Fenced code (mermaid or generic).
+    // Fenced code (mermaid / canvas / generic).
     const fence = /^```(\S*)\s*$/.exec(t);
     if (fence) {
       const lang = fence[1];
@@ -106,6 +109,8 @@ export function parseNoteBlocks(markdown: string): NoteBlock[] {
       i += 1; // closing fence
       if (lang === "mermaid") {
         push({ type: "mermaid", code: body.join("\n") });
+      } else if (lang === "canvas") {
+        push({ type: "canvas", design: body.join("\n") });
       } else {
         push({ type: "code", code: body.join("\n"), lang });
       }
@@ -269,6 +274,8 @@ function serializeBlock(block: NoteBlock): string {
       return block.markdown ?? "";
     case "mermaid":
       return "```mermaid\n" + (block.code ?? "") + "\n```";
+    case "canvas":
+      return "```canvas\n" + (block.design ?? "{}") + "\n```";
     case "math":
       if (block.display) return "$$\n" + (block.text ?? "") + "\n$$";
       return `$${(block.text ?? "").trim()}$`;

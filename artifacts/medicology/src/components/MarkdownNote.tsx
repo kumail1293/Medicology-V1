@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -6,6 +6,8 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { clsx } from "clsx";
 import MermaidDiagram from "./MermaidDiagram";
+import CanvasRenderer from "./CanvasRenderer";
+import { parseDesign } from "@/lib/canvas-design";
 import {
   classifyCallout,
   slugify,
@@ -262,12 +264,50 @@ const components: any = {
 };
 
 export default function MarkdownNote({ content, className }: { content: string; className?: string }) {
+  // Measure the body width so ```canvas designs scale to fit the column.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const update = () => setWidth(el.clientWidth || 0);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const componentsWithCanvas = {
+    ...components,
+    pre: ({ children }: any) => {
+      const child = React.Children.toArray(children)[0] as React.ReactElement | undefined;
+      const childProps = (child?.props ?? {}) as any;
+      const lang = /language-(\w+)/.exec(String(childProps.className ?? ""))?.[1];
+      if (lang === "mermaid") {
+        return <MermaidDiagram code={String(childProps.children ?? "").replace(/\n$/, "")} />;
+      }
+      if (lang === "canvas") {
+        const design = parseDesign(String(childProps.children ?? "").replace(/\n$/, ""));
+        if (design && width > 0) {
+          const scale = Math.min(1, (width - 16) / design.width);
+          return (
+            <div className="my-4 flex justify-center">
+              <CanvasRenderer design={design} scale={scale} />
+            </div>
+          );
+        }
+      }
+      return <pre className="my-4 overflow-x-auto rounded-xl border border-border bg-muted/50 p-4 text-[13px] leading-relaxed">{children}</pre>;
+    },
+  };
+
   return (
-    <div className={clsx("note-body", className)}>
+    <div ref={rootRef} className={clsx("note-body", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
-        components={components}
+        components={componentsWithCanvas}
       >
         {content}
       </ReactMarkdown>
