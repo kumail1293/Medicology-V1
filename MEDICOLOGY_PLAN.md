@@ -205,8 +205,52 @@ hiding the left portion of the reader. Root-caused with browser probes
     viewport regardless of wrappers.
 -   Verified in-browser with `anim-effect-slide` forced: overlay rect now
     covers the full viewport (x:0, w:1280) and wins the hit test over the
-    sidebar (previously x:270 / sidebar span won). Regression: 70/70 API,
-    84/84 frontend, typecheck + production build clean.
+    sidebar (previously x:270 / sidebar span won). Regression: 72/72 API,
+    105/105 frontend, typecheck + production build clean.
+
+### Notes feature pack — math, MedPedia hub, share excerpts, server export & block editor (Aug 2026)
+
+Five connected upgrades to the study-notes system:
+
+-   **Math in notes (KaTeX)** — `remark-math` + `rehype-katex` in the
+    `MarkdownNote` pipeline; `$inline$` and `$$display$$` LaTeX render in the
+    reader, the admin preview, the block editor and the PDF export (KaTeX CDN
+    stylesheet injected into the print window when the note contains math).
+    Seed notes now carry real formulas (anion gap, Winter's formula, GFR /
+    clearance, filtration fraction, Starling forces).
+-   **Notes Hub (MedPedia)** — the `/notes` landing is now a wiki-style
+    knowledge base: gradient hero with instant search + live stats (notes /
+    subjects / total reading time), subject quick-nav chips with counts and
+    color dots, a Featured row, a Recently-updated list, and the full
+    filterable grid below. Pure client-side aggregation over the existing
+    published-notes API.
+-   **Custom share excerpts** — selecting text inside the reader raises a
+    floating "Share selection / Copy" bar; "Share selection" opens the share
+    modal in custom-excerpt mode (your passage, not the auto-derived
+    excerpt) and rasterizes it at the chosen platform size; Copy is a
+    one-click clipboard action.
+-   **Server-side export** — `GET /api/study-notes/:id/export?format=html|html-preview|md`
+    (authenticated; published notes for students, any status for admins).
+    The server renders the note with `marked` (GFM) + `katex.renderToString`
+    into a branded, self-contained HTML document (site name/logo/socials from
+    platform settings, mermaid hydrated from CDN, print-ready `@page` CSS) —
+    the reader's Export menu offers "Open web version", "Download markdown",
+    and the existing client-side branded PDF. Content is HTML-escaped before
+    rendering and `javascript:` hrefs are neutralized (XSS tests included).
+-   **Canva-style admin editor** — the admin note editor is now a visual
+    block editor (`NoteBlockEditor`) with a markdown ⇄ block model
+    (`note-blocks.ts`, lossless round-trip): drag-to-reorder cards with
+    move/duplicate/delete, an add-block palette (heading, paragraph, list,
+    checklist, callout with tone picker, table, mermaid, math with live
+    KaTeX preview, image with Media Library upload, divider, code), a
+    live student preview pane, a raw-markdown Source tab, and a mermaid
+    **connector builder** that edits flowchart nodes/edges (id, label,
+    shape, edge labels) visually and regenerates the source.
+-   New deps: frontend `katex`, `remark-math`, `rehype-katex`; API `marked`,
+    `katex`. New tests: 21 frontend (KaTeX rendering, block parse/serialize
+    round-trip, flowchart builder, editor helpers) + 2 API (export contract,
+    HTML escaping / href sanitization). Browser-verified end to end with zero
+    console errors.
 
 ### Full-app walkthrough & link audit — Aug 2026
 
@@ -300,7 +344,7 @@ user_scopes, role_scopes) + `users.userType` · `0016` flashcard deck
 taxonomy · `0017` clinical cases + case completions · `0018` study
 notes library (study_notes + study_note_bookmarks).
 
-Tests: 70 API integration tests + 84 frontend tests (settings precedence, overrides, imports,
+Tests: 72 API integration tests + 105 frontend tests (settings precedence, overrides, imports,
 bulk deck import incl. Anki .apkg with media + per-note-type field
 mapping + per-card edit/skip + oversized-execute-payload regression +
 previewId/delta execute flow,
@@ -632,7 +676,7 @@ Database-driven, layered authorization replacing the flat role-string model:
 
 ## P0.25 Testing `[PARTIAL]`
 
--   70 API integration tests + 84 frontend tests (incl. note utilities /
+-   72 API integration tests + 105 frontend tests (incl. note utilities /
     MarkdownNote renderer) + typechecks + build `[COMPLETED]`.
 -   Remaining (Phase 30): settings resolver unit tests, email variables,
     template versioning, announcement targeting, payment idempotency

@@ -1,6 +1,9 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { clsx } from "clsx";
 import MermaidDiagram from "./MermaidDiagram";
 import {
@@ -26,6 +29,7 @@ import {
 //   • Blockquotes that open with a marker word/emoji become colored callouts
 //     (Tip / Mnemonic / Trap / High-Yield / Clinical Pearl / Warning)
 //   • ```mermaid fenced blocks render as live diagrams
+//   • LaTeX math — $inline$ and $$display$$ via remark-math + rehype-katex
 //   • Images render rounded with optional captions, lazy-loaded
 //   • h2/h3 get slug anchors for the table of contents
 //   • Task lists render with real checkboxes
@@ -260,7 +264,11 @@ const components: any = {
 export default function MarkdownNote({ content, className }: { content: string; className?: string }) {
   return (
     <div className={clsx("note-body", className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={components}
+      >
         {content}
       </ReactMarkdown>
     </div>

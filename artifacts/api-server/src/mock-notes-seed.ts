@@ -203,13 +203,15 @@ Look at **pH**: < 7.35 acidemia, > 7.45 alkalemia.
 ## Step 3 — Compensation appropriate?
 | Disorder | Expected compensation |
 |---|---|
-| Metabolic acidosis | pCO₂ = 1.5(HCO₃) + 8 ± 2 (Winter's) |
-| Metabolic alkalosis | pCO₂ ↑ 0.7 mmHg per 1 mEq HCO₃ |
-| Respiratory acidosis (acute) | HCO₃ ↑ 1 per 10 CO₂ |
-| Respiratory acidosis (chronic) | HCO₃ ↑ 4 per 10 CO₂ |
+| Metabolic acidosis | $pCO_2 = 1.5 \\times HCO_3^- + 8 \\pm 2$ (Winter's) |
+| Metabolic alkalosis | $pCO_2$ ↑ 0.7 mmHg per 1 mEq $HCO_3^-$ |
+| Respiratory acidosis (acute) | $HCO_3^-$ ↑ 1 per 10 $CO_2$ |
+| Respiratory acidosis (chronic) | $HCO_3^-$ ↑ 4 per 10 $CO_2$ |
 
 ## Step 4 — Anion gap?
-**AG = Na⁺ − (Cl⁻ + HCO₃⁻)**, normal 8–12.
+$$Anion\\ gap = Na^+ - (Cl^- + HCO_3^-)$$
+
+Normal **8–12 mEq/L**.
 
 **MUDPILES** (high anion gap): Methanol, Uremia, DKA, Paraldehyde, INH, Lactic acidosis, Ethylene glycol, Salicylates.
 
@@ -420,14 +422,16 @@ flowchart TD
     content: `# Renal Physiology
 
 ## GFR & clearance
-- **GFR** = Kf × (Pgc − Pbs − πgc)
+- **GFR** $= K_f \\times (P_{gc} - P_{bs} - \\pi_{gc})$ — Starling forces across the glomerulus
 - **Normal GFR ≈ 125 mL/min** (180 L/day filtered)
-- **Clearance** = (U × V) / P — the volume of plasma cleared per unit time
+- **Clearance** $= \\frac{U \\times V}{P}$ — the volume of plasma cleared per unit time
 - **Inulin** is the gold standard for GFR (freely filtered, not reabsorbed/secreted)
 - **PAH** clearance ≈ renal plasma flow (secreted)
 
 ## Filtration fraction
-- FF = GFR / RPF ≈ 125/625 = **0.2 (20%)**
+- **FF** $= \\frac{GFR}{RPF} \\approx \\frac{125}{625} = 0.2\\ (20\\%)$
+
+> **🧠 Mnemonic — "ABC of clearance":** **A**ll solutes filtered → **B**ut only some reabsorbed/secreted → **C**learance is the net plasma volume "cleaned". If clearance of a substance > GFR it is being *secreted* (PAH); if < GFR it is being *reabsorbed* (glucose, urea).
 
 ## Nephron segments — what's reabsorbed where
 | Segment | Reabsorbs |

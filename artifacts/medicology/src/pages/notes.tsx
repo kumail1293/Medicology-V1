@@ -11,7 +11,8 @@ import { extractHeadings, readingTime } from "@/lib/note-utils";
 import { exportNotePdf, getHandleFromUrl } from "@/lib/note-share";
 import {
   BookOpen, Search, X, Bookmark, BookmarkCheck, ArrowLeft, Play,
-  Tag, Filter, Share2, FileDown, Clock, ListTree, Loader2,
+  Tag, Filter, Share2, FileDown, Clock, ListTree, Loader2, Copy,
+  Layers, Star, ArrowRight, BookMarked, Globe, FileCode2, Printer,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -148,11 +149,93 @@ function NoteReadingView({ note, isBookmarked, onBookmark, onClose }: {
   const subjectColor = SUBJECT_COLORS[note.subject] || 'bg-muted text-muted-foreground';
   const [progress, setProgress] = useState(0);
   const [showShare, setShowShare] = useState(false);
+  const [shareExcerpt, setShareExcerpt] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportMenu, setExportMenu] = useState(false);
+  const [selection, setSelection] = useState<{ text: string; x: number; y: number } | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const headings = useMemo(() => extractHeadings(note.content), [note.content]);
   const mins = useMemo(() => readingTime(note.content), [note.content]);
+
+  // Track text selection inside the note body so readers can share a custom
+  // passage as a branded image (or copy it) without leaving the reader.
+  const onBodyMouseUp = useCallback(() => {
+    const sel = window.getSelection();
+    const text = sel ? sel.toString().trim() : "";
+    const body = bodyRef.current;
+    if (!sel || !body || sel.isCollapsed || text.length < 8 || text.length > 1400) {
+      setSelection(null);
+      return;
+    }
+    // Only react to selections that touch the note body.
+    const range = sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+    if (!range || !body.contains(range.commonAncestorContainer)) {
+      setSelection(null);
+      return;
+    }
+    const rect = range.getBoundingClientRect();
+    setSelection({
+      text,
+      x: Math.min(Math.max(rect.left + rect.width / 2, 90), window.innerWidth - 90),
+      y: Math.max(rect.top - 12, 70),
+    });
+  }, []);
+
+  const copySelection = useCallback(async () => {
+    if (!selection) return;
+    try {
+      await navigator.clipboard.writeText(selection.text);
+      toast({ title: "Copied", description: "Selected passage copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: "Your browser blocked clipboard access.", variant: "destructive" });
+    }
+    setSelection(null);
+  }, [selection, toast]);
+
+  const shareSelection = useCallback(() => {
+    if (!selection) return;
+    setShareExcerpt(selection.text);
+    setShowShare(true);
+    setSelection(null);
+  }, [selection]);
+
+  const openFullShare = useCallback(() => {
+    setShareExcerpt(null);
+    setShowShare(true);
+  }, []);
+
+  // Server-side export — the API renders a branded, self-contained HTML
+  // document (KaTeX math server-rendered, mermaid hydrated client-side) that
+  // can be printed to PDF from any device, plus a raw markdown download.
+  const serverExport = useCallback(async (format: "html" | "md") => {
+    setExportMenu(false);
+    const token = localStorage.getItem("medicology_token");
+    const url = `/api/study-notes/${note.id}/export?format=${format}`;
+    try {
+      // The export endpoint requires the Authorization header — always fetch
+      // with the token so it is never exposed in a URL.
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const obj = URL.createObjectURL(blob);
+      if (format === "html") {
+        const w = window.open(obj, "_blank", "noopener");
+        if (!w) {
+          toast({ title: "Popup blocked", description: "Allow pop-ups to open the web version.", variant: "destructive" });
+        }
+      } else {
+        const link = document.createElement("a");
+        link.href = obj;
+        link.download = `${note.slug || `note-${note.id}`}.md`;
+        link.click();
+      }
+      // Give the tab/download a beat before releasing the blob URL.
+      setTimeout(() => URL.revokeObjectURL(obj), 15_000);
+    } catch {
+      toast({ title: "Export failed", description: "Could not export the note.", variant: "destructive" });
+    }
+  }, [note.id, note.slug, toast]);
 
   const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -230,22 +313,50 @@ function NoteReadingView({ note, isBookmarked, onBookmark, onClose }: {
             <span className="hidden sm:inline">{isBookmarked ? 'Saved' : 'Save'}</span>
           </button>
           <button
-            onClick={() => setShowShare(true)}
+            onClick={openFullShare}
             title="Share as image"
             className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary transition-all"
           >
             <Share2 size={15} />
             <span className="hidden sm:inline">Share</span>
           </button>
-          <button
-            onClick={handlePdf}
-            disabled={exporting}
-            title="Download as PDF"
-            className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-50"
-          >
-            {exporting ? <Loader2 size={15} className="animate-spin" /> : <FileDown size={15} />}
-            <span className="hidden sm:inline">PDF</span>
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setExportMenu((s) => !s)}
+              title="Export options"
+              className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary transition-all"
+            >
+              <FileDown size={15} />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+            {exportMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setExportMenu(false)} />
+                <div className="absolute right-0 z-20 mt-1.5 w-56 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+                  <button
+                    onClick={() => void serverExport("html")}
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-xs font-medium hover:bg-muted/60"
+                  >
+                    <Globe size={14} className="text-primary" /> Open web version (server-rendered, print → PDF)
+                  </button>
+                  <button
+                    onClick={() => void serverExport("md")}
+                    className="flex w-full items-center gap-2.5 border-t border-border/60 px-3.5 py-2.5 text-left text-xs font-medium hover:bg-muted/60"
+                  >
+                    <FileCode2 size={14} className="text-primary" /> Download markdown (.md)
+                  </button>
+                  <button
+                    onClick={() => { setExportMenu(false); handlePdf(); }}
+                    disabled={exporting}
+                    className="flex w-full items-center gap-2.5 border-t border-border/60 px-3.5 py-2.5 text-left text-xs font-medium hover:bg-muted/60 disabled:opacity-50"
+                  >
+                    {exporting ? <Loader2 size={14} className="animate-spin text-primary" /> : <Printer size={14} className="text-primary" />}
+                    Branded PDF (this browser)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => setLocation(`/create-test?subject=${encodeURIComponent(note.subject)}`)}
             className="flex items-center gap-1.5 text-sm font-bold bg-primary text-primary-foreground px-4 py-1.5 rounded-xl hover:bg-primary/90 transition-all"
@@ -285,7 +396,7 @@ function NoteReadingView({ note, isBookmarked, onBookmark, onClose }: {
 
             {/* Body */}
             <div className="bg-card border border-border rounded-2xl p-5 sm:p-8 shadow-sm">
-              <div ref={bodyRef}>
+              <div ref={bodyRef} onMouseUp={onBodyMouseUp}>
                 <MarkdownNote content={note.content} />
               </div>
             </div>
@@ -333,7 +444,41 @@ function NoteReadingView({ note, isBookmarked, onBookmark, onClose }: {
         </div>
       </div>
 
-      <NoteShareModal note={note} open={showShare} onClose={() => setShowShare(false)} />
+      {/* Floating selection actions */}
+      {selection && (
+        <div
+          className="fixed z-50 flex items-center gap-1 rounded-xl border border-border bg-card p-1 shadow-xl"
+          style={{ left: selection.x, top: selection.y, transform: "translate(-50%, -100%)" }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <button
+            onClick={shareSelection}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+          >
+            <Share2 size={12} /> Share selection
+          </button>
+          <button
+            onClick={() => void copySelection()}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Copy size={12} /> Copy
+          </button>
+          <button
+            onClick={() => setSelection(null)}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Dismiss"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      <NoteShareModal
+        note={note}
+        open={showShare}
+        onClose={() => setShowShare(false)}
+        excerpt={shareExcerpt}
+      />
     </motion.div>
   );
 }
@@ -408,124 +553,249 @@ export default function NotesPage() {
     ? notes.filter(n => bookmarked.includes(n.id))
     : notes;
 
+  // ── MedPedia hub derived data ────────────────────────────────────────────
+  const bySubject = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const n of notes) map.set(n.subject, (map.get(n.subject) ?? 0) + 1);
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [notes]);
+
+  const featuredNotes = useMemo(() => notes.filter(n => n.featured).slice(0, 4), [notes]);
+  const recentNotes = useMemo(() => [...notes].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5), [notes]);
+  const totalMinutes = useMemo(() => notes.reduce((sum, n) => sum + readingTime(n.content), 0), [notes]);
+  const activeFilter = subjectFilter !== '' || search !== '' || showBookmarkedOnly;
+
+  const subjectDot = (subject: string) => SUBJECT_COLORS[subject] || 'text-primary';
+
+  const scrollToNotes = () => document.getElementById('all-notes')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   return (
     <>
-      <PageTransition className="max-w-5xl mx-auto pb-24 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-display font-extrabold tracking-tight flex items-center gap-3">
-              <BookOpen size={28} className="text-primary" />
-              Notes Library
-            </h1>
-            <p className="text-muted-foreground mt-1">High-yield study notes curated by faculty</p>
-          </div>
-          {bookmarked.length > 0 && (
-            <button
-              onClick={() => setShowBookmarkedOnly(!showBookmarkedOnly)}
-              className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-xl border font-semibold text-sm transition-all',
-                showBookmarkedOnly
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-border hover:border-primary/50 text-muted-foreground'
-              )}
-            >
-              <BookmarkCheck size={15} />
-              {showBookmarkedOnly ? 'All Notes' : `Bookmarked (${bookmarked.length})`}
-            </button>
-          )}
-        </div>
-
-        {/* Filter Bar */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search by title, content, or tag…"
-              className="w-full pl-9 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
+      <PageTransition className="max-w-6xl mx-auto pb-24 space-y-10">
+        {/* ── Hero / search ───────────────────────────────────────────────── */}
+        <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary/12 via-card to-accent/8 p-6 sm:p-10">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 -left-10 h-56 w-56 rounded-full bg-accent/10 blur-3xl" />
           <div className="relative">
-            <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <select
-              value={subjectFilter}
-              onChange={e => setSubjectFilter(e.target.value)}
-              className="appearance-none pl-8 pr-8 py-2.5 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[180px]"
-            >
-              <option value="">All Subjects</option>
-              {availableSubjects.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                <BookOpen size={20} />
+              </span>
+              <span className="text-xs font-extrabold uppercase tracking-[0.22em] text-primary">MedPedia</span>
+            </div>
+            <h1 className="mt-3 font-display text-3xl sm:text-4xl font-extrabold tracking-tight">
+              The Medicology Knowledge Base
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              High-yield study notes curated by faculty — tables, mnemonics, diagrams &amp; clinical pearls across every subject.
+            </p>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1 max-w-xl">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search notes, topics, tags…"
+                  className="w-full rounded-2xl border border-border bg-card py-3 pl-11 pr-10 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                {search && (
+                  <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {!isLoading && (
+                  <>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                      <Layers size={12} className="text-primary" /> {notes.length} notes
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                      <BookMarked size={12} className="text-primary" /> {bySubject.length} subjects
+                    </span>
+                    <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                      <Clock size={12} className="text-primary" /> {totalMinutes} min of reading
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Subject quick-nav */}
+            {!isLoading && bySubject.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => { setSubjectFilter(''); scrollToNotes(); }}
+                  className={clsx('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
+                    subjectFilter === '' && !search ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:border-primary/40')}
+                >
+                  All
+                </button>
+                {bySubject.map(([subject, count]) => (
+                  <button
+                    key={subject}
+                    onClick={() => { setSubjectFilter(subject); setShowBookmarkedOnly(false); scrollToNotes(); }}
+                    className={clsx('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
+                      subjectFilter === subject ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:border-primary/40')}
+                  >
+                    <span className={clsx('h-1.5 w-1.5 rounded-full bg-current', subjectDot(subject))} />
+                    {subject}
+                    <span className="text-[10px] opacity-60">{count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {(subjectFilter || search || showBookmarkedOnly) && (
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs text-muted-foreground">Filters:</span>
-            {subjectFilter && (
-              <span className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
-                {subjectFilter}
-                <button onClick={() => setSubjectFilter('')}><X size={11} /></button>
-              </span>
-            )}
-            {search && (
-              <span className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
-                "{search}"
-                <button onClick={() => setSearch('')}><X size={11} /></button>
-              </span>
-            )}
-            {showBookmarkedOnly && (
-              <span className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
-                Bookmarked only
-                <button onClick={() => setShowBookmarkedOnly(false)}><X size={11} /></button>
-              </span>
-            )}
-          </div>
+        {/* ── Featured ────────────────────────────────────────────────────── */}
+        {!isLoading && featuredNotes.length > 0 && (
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <Star size={14} className="text-amber-500" />
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-muted-foreground">Featured</h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {featuredNotes.map(note => (
+                <NoteCard
+                  key={note.id}
+                  note={note}
+                  isBookmarked={bookmarked.includes(note.id)}
+                  onBookmark={e => { e.stopPropagation(); toggleBookmark(note.id); }}
+                  onClick={() => setSelectedNote(note)}
+                />
+              ))}
+            </div>
+          </section>
         )}
 
-        {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, i) => <NoteSkeleton key={i} />)}
+        {/* ── Recently updated ────────────────────────────────────────────── */}
+        {!isLoading && recentNotes.length > 0 && (
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <Clock size={14} className="text-primary" />
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-muted-foreground">Recently updated</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {recentNotes.map(note => {
+                const subjectColor = SUBJECT_COLORS[note.subject] || 'bg-muted text-muted-foreground';
+                return (
+                  <button
+                    key={note.id}
+                    onClick={() => setSelectedNote(note)}
+                    className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5 text-left transition-all hover:border-primary/40 hover:shadow-md"
+                  >
+                    <span className={clsx('shrink-0 rounded-lg px-2 py-1 text-[10px] font-bold', subjectColor)}>{note.subject}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold group-hover:text-primary transition-colors">{note.title}</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        Updated {new Date(note.updatedAt).toLocaleDateString()} · {readingTime(note.content)} min read
+                      </span>
+                    </span>
+                    <ArrowRight size={14} className="shrink-0 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-0.5" />
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ── All notes ──────────────────────────────────────────────────── */}
+        <section id="all-notes" className="scroll-mt-8">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-extrabold uppercase tracking-wider text-muted-foreground">
+              {activeFilter ? 'Filtered notes' : 'Browse all notes'}
+            </h2>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Filter size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <select
+                  value={subjectFilter}
+                  onChange={e => setSubjectFilter(e.target.value)}
+                  className="appearance-none rounded-xl border border-border bg-card py-2 pl-8 pr-8 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="">All Subjects</option>
+                  {availableSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              {bookmarked.length > 0 && (
+                <button
+                  onClick={() => setShowBookmarkedOnly(!showBookmarkedOnly)}
+                  className={clsx(
+                    'flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-all',
+                    showBookmarkedOnly ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary/50'
+                  )}
+                >
+                  <BookmarkCheck size={13} />
+                  {showBookmarkedOnly ? 'All Notes' : `Bookmarked (${bookmarked.length})`}
+                </button>
+              )}
+            </div>
           </div>
-        ) : displayedNotes.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="text-5xl mb-4">📚</div>
-            <h3 className="text-lg font-bold mb-2">
-              {showBookmarkedOnly ? 'No bookmarked notes' : 'No notes found'}
-            </h3>
-            <p className="text-muted-foreground text-sm">
-              {showBookmarkedOnly
-                ? 'Bookmark notes while reading to find them here'
-                : search || subjectFilter
-                  ? 'Try adjusting your filters'
-                  : 'Notes will appear here once published by admin'}
+
+          {(subjectFilter || search || showBookmarkedOnly) && (
+            <div className="mb-3 flex flex-wrap gap-2 items-center">
+              <span className="text-xs text-muted-foreground">Filters:</span>
+              {subjectFilter && (
+                <span className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
+                  {subjectFilter}
+                  <button onClick={() => setSubjectFilter('')}><X size={11} /></button>
+                </span>
+              )}
+              {search && (
+                <span className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
+                  "{search}"
+                  <button onClick={() => setSearch('')}><X size={11} /></button>
+                </span>
+              )}
+              {showBookmarkedOnly && (
+                <span className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
+                  Bookmarked only
+                  <button onClick={() => setShowBookmarkedOnly(false)}><X size={11} /></button>
+                </span>
+              )}
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(6)].map((_, i) => <NoteSkeleton key={i} />)}
+            </div>
+          ) : displayedNotes.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="text-5xl mb-4">📚</div>
+              <h3 className="text-lg font-bold mb-2">
+                {showBookmarkedOnly ? 'No bookmarked notes' : 'No notes found'}
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                {showBookmarkedOnly
+                  ? 'Bookmark notes while reading to find them here'
+                  : search || subjectFilter
+                    ? 'Try adjusting your filters'
+                    : 'Notes will appear here once published by admin'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {displayedNotes.map(note => (
+                <NoteCard
+                  key={note.id}
+                  note={note}
+                  isBookmarked={bookmarked.includes(note.id)}
+                  onBookmark={e => { e.stopPropagation(); toggleBookmark(note.id); }}
+                  onClick={() => setSelectedNote(note)}
+                />
+              ))}
+            </div>
+          )}
+
+          {!isLoading && displayedNotes.length > 0 && (
+            <p className="text-center text-xs text-muted-foreground mt-4">
+              {displayedNotes.length} note{displayedNotes.length !== 1 ? 's' : ''} found
             </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {displayedNotes.map(note => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                isBookmarked={bookmarked.includes(note.id)}
-                onBookmark={e => { e.stopPropagation(); toggleBookmark(note.id); }}
-                onClick={() => setSelectedNote(note)}
-              />
-            ))}
-          </div>
-        )}
-
-        {!isLoading && displayedNotes.length > 0 && (
-          <p className="text-center text-xs text-muted-foreground">
-            {displayedNotes.length} note{displayedNotes.length !== 1 ? 's' : ''} found
-          </p>
-        )}
+          )}
+        </section>
       </PageTransition>
 
       {/* Portal the reading view to document.body so its `fixed inset-0` is

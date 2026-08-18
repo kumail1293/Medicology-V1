@@ -1,15 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import MarkdownNote from "@/components/MarkdownNote";
-import MediaPicker from "@/components/MediaPicker";
+import NoteBlockEditor from "@/components/NoteBlockEditor";
 import {
   BookOpen, Plus, Pencil, Trash2, Search, Star, StarOff, Eye, EyeOff,
-  Loader2, FileText, X, Table2, Lightbulb, Brain, AlertTriangle, Target,
-  Stethoscope, GitBranch, ImagePlus, ListChecks, Minus, Eye as PreviewIcon, PenLine,
+  Loader2, FileText, X, Eye as PreviewIcon, PenLine,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { apiFetch } from "@/lib/api";
-import type { MediaItem } from "@/lib/media";
 
 interface StudyNote {
   id: number;
@@ -39,20 +37,6 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const inputCls = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary";
-const textareaCls = `${inputCls} min-h-[320px] resize-y font-mono text-xs leading-relaxed`;
-
-/* ── Snippet palette — markdown building blocks inserted at the cursor ─────── */
-const SNIPPETS: { label: string; icon: React.ComponentType<{ size?: number; className?: string }>; insert: string }[] = [
-  { label: "Table", icon: Table2, insert: `\n| Feature | Type A | Type B |\n|---|---|---|\n| Item 1 |  |  |\n| Item 2 |  |  |\n` },
-  { label: "Tip", icon: Lightbulb, insert: `\n> **💡 Tip:** Write the high-yield tip here.\n` },
-  { label: "Mnemonic", icon: Brain, insert: `\n> **🧠 Mnemonic:** Write the mnemonic here.\n` },
-  { label: "Trap", icon: AlertTriangle, insert: `\n> **⚠️ Trap:** Describe the common mistake / distractor.\n` },
-  { label: "High-Yield", icon: Target, insert: `\n> **📌 High-Yield:** What must be remembered for exams.\n` },
-  { label: "Clinical Pearl", icon: Stethoscope, insert: `\n> **🩺 Clinical Pearl:** Clinical correlation worth knowing.\n` },
-  { label: "Diagram", icon: GitBranch, insert: `\n\`\`\`mermaid\nflowchart TD\n  A[Start] --> B{Decision?}\n  B -->|Yes| C[Action]\n  B -->|No| D[Alternative]\n\`\`\`\n` },
-  { label: "Checklist", icon: ListChecks, insert: `\n- [ ] First item\n- [ ] Second item\n` },
-  { label: "Divider", icon: Minus, insert: `\n---\n` },
-];
 
 export default function AdminNotesPage() {
   const { toast } = useToast();
@@ -64,8 +48,6 @@ export default function AdminNotesPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editorTab, setEditorTab] = useState<"write" | "preview">("write");
-  const [mediaOpen, setMediaOpen] = useState(false);
-  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   // Form state
   const [title, setTitle] = useState("");
@@ -137,28 +119,6 @@ export default function AdminNotesPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const insertAtCursor = (text: string) => {
-    const el = contentRef.current;
-    if (!el) {
-      setContent((c) => c + text);
-      return;
-    }
-    const start = el.selectionStart ?? content.length;
-    const end = el.selectionEnd ?? content.length;
-    const next = content.slice(0, start) + text + content.slice(end);
-    setContent(next);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.selectionStart = el.selectionEnd = start + text.length;
-    });
-  };
-
-  const onPickMedia = (media: MediaItem) => {
-    const alt = media.altText || media.filename || "image";
-    insertAtCursor(`\n![${alt}](${media.url})\n`);
-    setMediaOpen(false);
   };
 
   const remove = async (n: StudyNote) => {
@@ -346,14 +306,14 @@ export default function AdminNotesPage() {
                 {field("Tags (comma separated)", <input className={inputCls} value={tags} onChange={(e) => setTags(e.target.value)} placeholder="cardiology, high-yield" />)}
               </div>
 
-              {/* Rich content editor */}
+              {/* Rich content editor — visual block editor with live preview */}
               <div>
                 <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-muted-foreground">Content * — rich markdown</span>
+                  <span className="text-xs font-medium text-muted-foreground">Content * — visual editor</span>
                   <div className="flex rounded-lg border border-border p-0.5">
                     <button onClick={() => setEditorTab("write")}
                       className={clsx("flex items-center gap-1 rounded-md px-3 py-1 text-xs font-semibold", editorTab === "write" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
-                      <PenLine size={12} /> Write
+                      <PenLine size={12} /> Edit
                     </button>
                     <button onClick={() => setEditorTab("preview")}
                       className={clsx("flex items-center gap-1 rounded-md px-3 py-1 text-xs font-semibold", editorTab === "preview" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
@@ -362,40 +322,19 @@ export default function AdminNotesPage() {
                   </div>
                 </div>
 
-                {/* Snippet palette */}
-                <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Insert:</span>
-                  {SNIPPETS.map((s) => {
-                    const Icon = s.icon;
-                    return (
-                      <button key={s.label} onClick={() => { setEditorTab("write"); insertAtCursor(s.insert); }}
-                        title={`Insert ${s.label}`}
-                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
-                        <Icon size={11} /> {s.label}
-                      </button>
-                    );
-                  })}
-                  <button onClick={() => setMediaOpen(true)}
-                    title="Insert image from the Media Library"
-                    className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
-                    <ImagePlus size={11} /> Image…
-                  </button>
-                </div>
-
                 {editorTab === "write" ? (
-                  <textarea ref={contentRef} className={textareaCls} value={content} onChange={(e) => setContent(e.target.value)}
-                    placeholder={"# Heading\n\nWrite the note in markdown — headings, tables, lists, **callouts** and ```mermaid diagrams all render.\n\n> **💡 Tip:** Start with a high-yield hook.\n\n> **🧠 Mnemonic:** Make it stick."} />
+                  <NoteBlockEditor value={content} onChange={setContent} />
                 ) : (
-                  <div className="max-h-[440px] overflow-y-auto rounded-lg border border-border bg-background p-4">
+                  <div className="max-h-[520px] overflow-y-auto rounded-lg border border-border bg-background p-4">
                     {content.trim() ? (
                       <MarkdownNote content={content} />
                     ) : (
-                      <p className="py-8 text-center text-xs text-muted-foreground">Nothing to preview yet — switch to Write and add content.</p>
+                      <p className="py-8 text-center text-xs text-muted-foreground">Nothing to preview yet — switch to Edit and add content.</p>
                     )}
                   </div>
                 )}
                 <p className="mt-1 text-[11px] text-muted-foreground/70">
-                  Tables, tip/mnemonic/trap/high-yield callouts, <code className="font-mono">```mermaid</code> diagrams and images all render on the student side.
+                  Drag blocks to reorder · headings, lists, callouts, tables, mermaid diagrams (with a visual connector builder), LaTeX math &amp; Media Library images all render on the student side.
                 </p>
               </div>
 
@@ -424,7 +363,6 @@ export default function AdminNotesPage() {
         </div>
       )}
 
-      <MediaPicker open={mediaOpen} onClose={() => setMediaOpen(false)} onSelect={onPickMedia} />
     </div>
   );
 }

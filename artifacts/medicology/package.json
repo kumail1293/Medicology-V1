@@ -105,9 +105,12 @@
     "@tiptap/starter-kit": "^2.27.2",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
+    "katex": "^0.18.4",
     "mermaid": "^11.16.1",
     "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "sql.js": "^1.14.1",
     "xlsx": "^0.18.5"
   }

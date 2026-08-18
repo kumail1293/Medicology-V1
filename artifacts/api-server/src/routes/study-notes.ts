@@ -4,6 +4,7 @@ import { studyNotesTable, studyNoteBookmarksTable } from "@workspace/db";
 import { eq, and } from "../utils/drizzle.js";
 import { authenticate, requireAdmin, requirePermission } from "../middleware/auth.js";
 import { recordAudit } from "../utils/audit.js";
+import { renderNoteExport, renderNoteHtml } from "../utils/note-export.js";
 
 export const studyNotesRouter = Router();
 export const studyNotesAdminRouter = Router();
@@ -70,6 +71,38 @@ studyNotesRouter.get("/", authenticate, async (req: any, res: any) => {
     );
 
     res.json({ notes: rows.map((r: any) => toNote(r, bookmarkedIds)) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Server-side export — branded self-contained HTML (print → PDF) or raw
+// markdown. Any authenticated user may export published notes; admins may
+// export any status.
+studyNotesRouter.get("/:id/export", authenticate, async (req: any, res: any) => {
+  try {
+    const id = Number(req.params.id);
+    const format = String(req.query.format ?? "html").toLowerCase();
+    const [row] = await db.select().from(studyNotesTable).where(eq(studyNotesTable.id, id));
+    if (!row) return res.status(404).json({ error: "Study note not found" });
+    if (row.status !== "published" && !req.user?.isAdmin) {
+      return res.status(403).json({ error: "This note is not published" });
+    }
+    if (format === "md") {
+      res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${row.slug || `note-${row.id}`}.md"`);
+      return res.send(row.content);
+    }
+    if (format === "html" || format === "html-preview") {
+      if (format === "html-preview") {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.send(renderNoteHtml(row.content));
+      }
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${row.slug || `note-${row.id}`}.html"`);
+      return res.send(await renderNoteExport(row));
+    }
+    return res.status(400).json({ error: "format must be html, html-preview or md" });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

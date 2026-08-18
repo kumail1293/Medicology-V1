@@ -2832,3 +2832,87 @@ test('study buddies: request flow works and DELETE enforces relationship ownersh
   const la2: any = await listA2.json();
   assert.equal(la2.buddies.length, 0);
 });
+
+test('study notes: server-side export returns branded HTML with KaTeX + mermaid, and markdown download', async () => {
+  const { token } = await registerUser('export@test.com');
+
+  // Find the renal note (contains LaTeX math now).
+  const list = await fetch(`${BASE}/study-notes`, { headers: { Authorization: `Bearer ${token}` } });
+  const data: any = await list.json();
+  const note = data.notes.find((n: any) => n.slug === 'renal-physiology-clearance') ?? data.notes[0];
+
+  // HTML export — branded document.
+  const htmlRes = await fetch(`${BASE}/study-notes/${note.id}/export?format=html`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(htmlRes.status, 200);
+  assert.match(htmlRes.headers.get('content-type') ?? '', /text\/html/);
+  const html = await htmlRes.text();
+  assert.ok(html.includes('<!DOCTYPE html>'), 'is a full document');
+  const escapedTitle = note.title.replace(/&/g, '&amp;');
+  assert.ok(html.includes(escapedTitle), 'contains the title (HTML-escaped)');
+  assert.ok(html.includes('Medicology'), 'contains brand name');
+  assert.ok(html.includes('mermaid@11') || html.includes('mermaid.min.js'), 'includes mermaid runtime');
+  assert.ok(html.includes('katex.min.css'), 'includes KaTeX stylesheet');
+  assert.ok(html.includes('class="katex"'), 'renders math server-side');
+
+  // html-preview — body fragment only.
+  const fragRes = await fetch(`${BASE}/study-notes/${note.id}/export?format=html-preview`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(fragRes.status, 200);
+  const frag = await fragRes.text();
+  assert.ok(!frag.includes('<!DOCTYPE html>'), 'fragment has no document shell');
+  assert.ok(frag.includes('katex'), 'fragment contains math');
+
+  // Markdown download.
+  const mdRes = await fetch(`${BASE}/study-notes/${note.id}/export?format=md`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(mdRes.status, 200);
+  assert.match(mdRes.headers.get('content-type') ?? '', /text\/markdown/);
+  const md = await mdRes.text();
+  assert.equal(md, note.content, 'markdown export is verbatim content');
+
+  // Bad format → 400.
+  const bad = await fetch(`${BASE}/study-notes/${note.id}/export?format=pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(bad.status, 400);
+
+  // Missing note → 404; unauthenticated → 401.
+  const missing = await fetch(`${BASE}/study-notes/999999/export`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(missing.status, 404);
+  const unauth = await fetch(`${BASE}/study-notes/${note.id}/export`);
+  assert.equal(unauth.status, 401);
+});
+
+test('study notes: server-side export escapes HTML and sanitizes links', async () => {
+  const adminLogin = await fetch(`${BASE}/auth/login`, json({}, { email: 'admin@medicology.net', password: process.env.ADMIN_PASSWORD || 'admin123' }));
+  const admin: any = await adminLogin.json();
+
+  const created = await fetch(`${BASE}/admin/study-notes`, json(
+    { Authorization: `Bearer ${admin.token}` },
+    {
+      title: 'XSS Export Probe',
+      slug: 'xss-export-probe',
+      subject: 'Medicine',
+      status: 'published',
+      content: '# Probe\n\n<script>window.pwned=1</script>\n\n[bad](javascript:alert(1)) and $Na^+$',
+      tags: ['test'],
+    }
+  ));
+  assert.equal(created.status, 201);
+  const note: any = await created.json();
+
+  const res = await fetch(`${BASE}/study-notes/${note.id}/export?format=html`, {
+    headers: { Authorization: `Bearer ${admin.token}` },
+  });
+  const html = await res.text();
+  assert.ok(!html.includes('<script>window.pwned'), 'script tags escaped');
+  assert.ok(html.includes('&lt;script&gt;'), 'escaped script text present');
+  assert.ok(!html.includes('href="javascript:'), 'javascript: hrefs neutralized');
+  assert.ok(html.includes('katex'), 'math still rendered');
+});

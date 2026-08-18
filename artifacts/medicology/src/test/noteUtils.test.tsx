@@ -130,6 +130,19 @@ describe("MarkdownNote renderer", () => {
     const h2 = container.querySelector("h2");
     expect(h2?.id).toBe("raas-pathway-drug-targets");
   });
+
+  it("renders LaTeX math with KaTeX", () => {
+    const md = [
+      "Inline: $Na^+ - (Cl^- + HCO_3^-)$",
+      "",
+      "$$Anion\\ gap = Na^+ - (Cl^- + HCO_3^-)$$",
+    ].join("\n");
+    const { container } = render(<MarkdownNote content={md} />);
+    expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2);
+    const text = container.textContent ?? "";
+    expect(text).toContain("Anion");
+    expect(text).toContain("Cl");
+  });
 });
 
 describe("share presets", () => {

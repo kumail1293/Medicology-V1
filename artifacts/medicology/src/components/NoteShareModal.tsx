@@ -31,7 +31,7 @@ function shade(hex: string, percent: number): string {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
-function ShareCard({ note, preset, cardRef }: { note: NoteLike; preset: SharePreset; cardRef: React.RefObject<HTMLDivElement | null> }) {
+function ShareCard({ note, preset, cardRef, excerptOverride }: { note: NoteLike; preset: SharePreset; cardRef: React.RefObject<HTMLDivElement | null>; excerptOverride?: string }) {
   const config = usePlatformConfig();
   const branding = config.branding ?? {};
   const primary = branding.primaryColor || "#0d9488";
@@ -43,7 +43,11 @@ function ShareCard({ note, preset, cardRef }: { note: NoteLike; preset: SharePre
     .filter((s) => ["instagram", "x", "twitter", "youtube", "tiktok", "facebook", "linkedin"].includes(s.platform))
     .slice(0, 4);
 
-  const excerpt = useMemo(() => getExcerpt(note.content, preset.excerptChars), [note.content, preset.excerptChars]);
+  // Custom selection wins; otherwise auto-derive from the note body.
+  const excerpt = useMemo(() => {
+    if (excerptOverride && excerptOverride.trim()) return excerptOverride.trim();
+    return getExcerpt(note.content, preset.excerptChars);
+  }, [note.content, preset.excerptChars, excerptOverride]);
   const title = note.title;
   const titleEm =
     title.length > 80 ? preset.titleSize * 0.72
@@ -106,7 +110,7 @@ function ShareCard({ note, preset, cardRef }: { note: NoteLike; preset: SharePre
           {title}
         </h1>
         {excerpt && (
-          <p style={{ margin: "1em 0 0", fontSize: "1.02em", lineHeight: 1.6, color: "rgba(255,255,255,0.88)", maxWidth: "94%", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: preset.excerptLines, overflow: "hidden" }}>
+          <p style={{ margin: "1em 0 0", fontSize: excerptOverride ? "0.94em" : "1.02em", lineHeight: 1.6, color: "rgba(255,255,255,0.88)", maxWidth: "94%", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: excerptOverride ? preset.excerptLines + 3 : preset.excerptLines, overflow: "hidden" }}>
             {excerpt}
           </p>
         )}
@@ -149,7 +153,13 @@ function ShareCard({ note, preset, cardRef }: { note: NoteLike; preset: SharePre
   );
 }
 
-export default function NoteShareModal({ note, open, onClose }: { note: NoteLike | null; open: boolean; onClose: () => void }) {
+export default function NoteShareModal({ note, open, onClose, excerpt }: {
+  note: NoteLike | null;
+  open: boolean;
+  onClose: () => void;
+  /** Custom share text — when provided, the card shows this instead of the auto excerpt. */
+  excerpt?: string | null;
+}) {
   const { toast } = useToast();
   const [presetId, setPresetId] = useState("instagram-post");
   const [downloading, setDownloading] = useState(false);
@@ -191,7 +201,9 @@ export default function NoteShareModal({ note, open, onClose }: { note: NoteLike
               <Share2 size={18} className="text-primary" /> Share as image
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Branded card with the Medicology logo, handles &amp; links — sized for each platform.
+              {excerpt
+                ? "Sharing your selected passage — branded with the Medicology logo, handles &amp; links."
+                : "Branded card with the Medicology logo, handles &amp; links — sized for each platform."}
             </p>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -234,7 +246,7 @@ export default function NoteShareModal({ note, open, onClose }: { note: NoteLike
                 style={{ width: preset.width * previewScale, height: preset.height * previewScale, overflow: "hidden", position: "relative" }}
               >
                 <div style={{ transform: `scale(${previewScale})`, transformOrigin: "top left", position: "absolute", top: 0, left: 0 }}>
-                  <ShareCard note={note} preset={preset} cardRef={cardRef} />
+                  <ShareCard note={note} preset={preset} cardRef={cardRef} excerptOverride={excerpt ?? undefined} />
                 </div>
               </div>
             </div>
