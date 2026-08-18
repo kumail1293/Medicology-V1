@@ -103,7 +103,11 @@
     "@tiptap/pm": "^2.27.2",
     "@tiptap/react": "^2.27.2",
     "@tiptap/starter-kit": "^2.27.2",
+    "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
+    "mermaid": "^11.16.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "sql.js": "^1.14.1",
     "xlsx": "^0.18.5"
   }

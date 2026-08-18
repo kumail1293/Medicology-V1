@@ -129,6 +129,55 @@ errors.** What was found and fixed:
 -   **Dashboard** — stat cards and the Exam Readiness ring show skeleton
     loaders while analytics fetch instead of raw zeros.
 
+### Notes upgrade — rich rendering, share-as-PNG & branded PDF (Aug 2026)
+
+Notes are no longer a raw markdown dump — they now render like a
+reference page (Amboss/UWorld/Osmosis style) and export as branded
+assets for social sharing.
+
+-   **Rich markdown renderer** (`MarkdownNote`) — new `react-markdown` +
+    `remark-gfm` pipeline with textbook typography: GFM tables in styled
+    cards, **callout cards** for blockquotes that open with a marker word
+    or emoji (`💡 Tip`, `🧠 Mnemonic`, `⚠️ Trap`, `📌 High-Yield`,
+    `🩺 Clinical Pearl`, `🔴 Warning`), ` ```mermaid ` fenced blocks
+    rendered as live diagrams (lazy-loaded `mermaid`, themed to
+    light/dark, static under `prefers-reduced-motion`), lazy images with
+    captions, task-list checkboxes, and slug-anchored h2/h3 headings.
+-   **Student reading view** — sticky header with bookmark / share /
+    PDF / practice actions, a reading-progress bar, a side table of
+    contents (auto-extracted, click-to-scroll), reading-time estimate,
+    and the bottom "Practice related MCQs" CTA.
+-   **Share as PNG** — share modal with platform presets sized per
+    network (Instagram Post 1080×1350, Instagram Story 1080×1920,
+    X/Twitter 1200×675, Facebook 1200×630, LinkedIn 1200×627, Square
+    1080×1080) and a live preview. The card is a branded design (brand
+    gradient, logo chip, subject chip, title, excerpt, tags, handles
+    from settings — `@medicologyworld`, `medicology.net`) rasterized
+    with `html-to-image` at exact pixel dimensions.
+-   **Download PDF** — opens a dedicated print window with a light,
+    branded layout (logo + brand + title header, domain / email /
+    social-handles footer, `@page` margins, print-safe tables/callouts/
+    diagrams) — identical output in light and dark app themes. Uses a
+    separate window so the app-wide print-protection (exam security)
+    is untouched.
+-   **Admin Notes editor** — Write/Preview tabs (live render of the
+    same component students see), a snippet palette that inserts markdown
+    blocks at the cursor (table, tip/mnemonic/trap/high-yield callouts,
+    mermaid diagram, checklist, divider) and an image picker wired to the
+    Media Library (`MediaPicker`).
+-   **Content** — 4 new high-yield notes (Hemostasis & the coagulation
+    cascade, RAAS pathway + drug targets, Heart Failure HFrEF/HFpEF
+    algorithm, Bugs & Drugs coverage) and 3 retrofits (Acid-Base,
+    Gram Stain, Chest Pain) now include mermaid flowcharts and structured
+    mnemonics/traps — 16 seeded notes total.
+-   New deps (frontend): `react-markdown`, `remark-gfm`, `mermaid`
+    (lazy chunk), `html-to-image`. New unit + component tests: callout
+    classification, heading extraction, excerpts, presets, and rendered
+    callouts/tables/checklists/anchors. Browser-verified end to end:
+    reading view (4 callouts, table, mermaid SVG, TOC), both PNG
+    exports, and the branded PDF window — zero console errors besides
+    benign Google-Fonts CORS noise during headless PNG font-embedding.
+
 ### Full-app walkthrough & link audit — Aug 2026
 
 Automated browser walkthrough of every page on both sides (35 admin
@@ -221,7 +270,7 @@ user_scopes, role_scopes) + `users.userType` · `0016` flashcard deck
 taxonomy · `0017` clinical cases + case completions · `0018` study
 notes library (study_notes + study_note_bookmarks).
 
-Tests: 70 integration tests (settings precedence, overrides, imports,
+Tests: 70 API integration tests + 84 frontend tests (settings precedence, overrides, imports,
 bulk deck import incl. Anki .apkg with media + per-note-type field
 mapping + per-card edit/skip + oversized-execute-payload regression +
 previewId/delta execute flow,
@@ -553,7 +602,8 @@ Database-driven, layered authorization replacing the flat role-string model:
 
 ## P0.25 Testing `[PARTIAL]`
 
--   27 integration tests + typechecks + build `[COMPLETED]`.
+-   70 API integration tests + 84 frontend tests (incl. note utilities /
+    MarkdownNote renderer) + typechecks + build `[COMPLETED]`.
 -   Remaining (Phase 30): settings resolver unit tests, email variables,
     template versioning, announcement targeting, payment idempotency
     replay, import edge cases, security-sensitive behavior.
